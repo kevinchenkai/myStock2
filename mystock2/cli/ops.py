@@ -288,7 +288,7 @@ def cmd_coach_run(args) -> int:
                 except RuleUnknown:
                     rules[e.code] = None
             n_total = 0
-            for kind in ("ai",):
+            for kind in ("ai", "ai_veto"):                       # 每条线从自己的状态生成机械基础单（§6A.1）
                 if kind not in b.lines:
                     continue
                 state, equity = state_at_open(ro, loc, b, kind, target)
@@ -427,6 +427,78 @@ def cmd_scoreboard_run(args) -> int:
     return 0
 
 
+def cmd_veto_export(args) -> int:
+    """导出否决输入包（人工通道）。导出本身是一次受控揭示：先记录人类计划再导出（§6A.2、M9 顺序约束）。"""
+    from mystock2.assistant.veto import FIELD_WHITELIST, build_pack, record_packet
+
+    cfg = load_config(args.config)
+    loc = load_local(args.local_dir)
+    ro = _conn_ro(cfg)
+    b = load_batch(ro, args.batch)
+    target = date.fromisoformat(args.target)
+    if not args.confirm_fields:
+        print("将外发的字段（白名单）：\n  " + "\n  ".join(FIELD_WHITELIST) + "\n\n不含账号、客户号、成交编号与绝对金额。确认后加 --confirm-fields 重新执行。", file=sys.stderr)
+        return 2
+    missing_plan = [c for c in b.codes if not ro.execute("SELECT 1 FROM intent WHERE batch_id=? AND line_id=? AND target_session=? AND code=?",
+                                                         (b.batch_id, b.lines["human_plan"], target.isoformat(), c)).fetchone()]
+    if missing_plan and not args.no_human_plan:
+        print(f"导出会揭示 AI 单：请先为 {missing_plan} 记录人类计划（intent add，含 no_trade），或加 --no-human-plan 接受「揭示前无记录」后果。", file=sys.stderr)
+        return 2
+    line_id = b.lines["ai_veto"]
+    rows = ro.execute("SELECT * FROM ticket WHERE batch_id=? AND line_id=? AND kind='line_sim' AND market=? AND target_session=? AND status='frozen' ORDER BY code, visible_at, rowid",
+                      (b.batch_id, line_id, b.market, target.isoformat())).fetchall()
+    base = {r["code"]: r for r in rows}
+    if not base:
+        print("没有可导出的机械基础单（先 coach run）", file=sys.stderr)
+        return 2
+    now = ensure_utc(args.now) if args.now else utc_now()
+    st, equity = state_at_open(ro, loc, b, "ai_veto", target)
+    md = DbMarketData(ro)
+    summary = []
+    for code in sorted(base):
+        q = st.qty(code)
+        px = md.close(code, cal.prev_session(b.market, target))
+        summary.append({"code": code, "position_qty": str(q), "cash_pct": str((st.cash / equity).quantize(Decimal("0.0001"))) if equity else None,
+                        "exposure_pct": str(((q * px) / equity).quantize(Decimal("0.0001"))) if (equity and px) else None})
+    from mystock2.market.bars import get_daily
+    ohlcv = {c: [{"date": r["session_date"], "open": r["open"], "high": r["high"], "low": r["low"], "close": r["close"], "volume": r["volume"]}
+                 for r in get_daily(ro, c, cal.prev_session(b.market, target) - timedelta(days=40), cal.prev_session(b.market, target))[-20:]] for c in base}
+    events = json.loads(Path(args.events).read_text(encoding="utf-8")) if args.events else []
+    pack = build_pack(market=b.market, target_session=target, base_tickets=list(base.values()), line_state_summary=summary, ohlcv=ohlcv, events=events,
+                      input_cutoff_at=now)
+    with _opener(cfg, "assistant") as aw, _opener(cfg, "coach") as cw:
+        record_packet(aw, pack, batch_id=b.batch_id, line_id=line_id, exported_at=now)
+        reveal(cw, batch_id=b.batch_id, market=b.market, target_session=target, channel="veto_export", version_hashes=list(pack.base_hashes.values()), at=now)
+    out = Path(args.out) if args.out else REPO_ROOT / "exports" / f"veto_{pack.pack_id}.md"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(pack.markdown, encoding="utf-8")
+    print(f"pack_id={pack.pack_id} file={out} evidence={len(pack.evidence_ids)}（已写暴露日志 channel=veto_export；此后记录的人类计划标 seen_ai=1）")
+    return 0
+
+
+def cmd_veto_import(args) -> int:
+    from mystock2.assistant.veto import PROMPT_VERSION, import_veto
+
+    cfg = load_config(args.config)
+    loc = load_local(args.local_dir)
+    ro = _conn_ro(cfg)
+    row = ro.execute("SELECT * FROM veto_packet WHERE pack_id=?", (args.pack,)).fetchone()
+    if not row:
+        print(f"未知输入包：{args.pack}", file=sys.stderr)
+        return 2
+    b = load_batch(ro, row["batch_id"])
+    target = date.fromisoformat(row["target_session"])
+    st, _ = state_at_open(ro, loc, b, "ai_veto", target)
+    now = ensure_utc(args.now) if args.now else utc_now()
+    text = Path(args.response).read_text(encoding="utf-8")
+    with _opener(cfg, "assistant") as aw, _opener(cfg, "coach") as cw:
+        res = import_veto(aw, cw, ro, pack_id=args.pack, response_text=text, provider="manual", model_id=args.model_id, prompt_version=args.prompt_version or PROMPT_VERSION,
+                          now=now, deadline_at=cal.project_deadline(b.market, target), strategy_version=loc.strategy_params().version,
+                          protocol_version=loc.protocol.get("protocol_version", "pilot"), state_ref=st.hash())
+    print(f"status={res.status} reason={res.reason} tickets={len(res.tickets)}")
+    return 0 if res.status == "applied" else 1
+
+
 def cmd_replay(args) -> int:
     from mystock2.replay.behavior import behavior_metrics
     from mystock2.replay.cards import build_cards, fills_and_fees, render_card_text
@@ -508,6 +580,20 @@ def register(sub) -> None:
         x.add_argument("--account", required=True)
         x.add_argument("--code")
         x.set_defaults(fn=cmd_replay)
+    vt = sub.add_parser("veto", help="LLM 否决（人工通道）").add_subparsers(dest="vcmd", required=True)
+    ve = vt.add_parser("export", help="导出否决输入包（会揭示 AI 单）")
+    for k, kw in (("--batch", {"required": True}), ("--target", {"required": True}), ("--events", {"help": "JSON 文件：带 published_at 的资料列表"}),
+                  ("--out", {}), ("--now", {})):
+        ve.add_argument(k, **kw)
+    ve.add_argument("--confirm-fields", action="store_true", help="确认外发字段白名单")
+    ve.add_argument("--no-human-plan", action="store_true", help="接受在未记录人类计划时导出（后果：揭示前无记录）")
+    ve.add_argument("--local-dir", **ld)
+    ve.set_defaults(fn=cmd_veto_export)
+    vi = vt.add_parser("import", help="导入人工否决结果（严格 JSON）")
+    for k, kw in (("--pack", {"required": True}), ("--response", {"required": True}), ("--model-id", {}), ("--prompt-version", {}), ("--now", {})):
+        vi.add_argument(k, **kw)
+    vi.add_argument("--local-dir", **ld)
+    vi.set_defaults(fn=cmd_veto_import)
     sc = sub.add_parser("scoreboard", help="记分牌").add_subparsers(dest="scmd", required=True)
     rn = sc.add_parser("run", help="重算各线并写入新 run")
     rn.add_argument("--batch", required=True)

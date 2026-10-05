@@ -67,7 +67,16 @@ def test_core_has_no_third_party_service_clients():
 
 
 def test_web_never_opens_sqlite_directly_for_writing():
-    web = PKG / "web"
-    for py in web.rglob("*.py"):
-        text = py.read_text(encoding="utf-8")
-        assert "connect_writer" not in text and "connect_migrator" not in text, f"{py} 使用了写连接"
+    """AST 检查：web 代码里不得出现对写连接/迁移的名字引用或导入（字符串常量不算）。"""
+    forbidden = {"connect_writer", "connect_migrator", "migrate"}
+    for py in (PKG / "web").rglob("*.py"):
+        tree = ast.parse(py.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            names = set()
+            if isinstance(node, ast.Name):
+                names.add(node.id)
+            elif isinstance(node, ast.Attribute):
+                names.add(node.attr)
+            elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                names |= {a.name.split(".")[-1] for a in node.names}
+            assert not (names & forbidden), f"{py.relative_to(PKG.parent)} 引用了写连接/迁移：{names & forbidden}"

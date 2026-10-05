@@ -60,6 +60,9 @@ TABLE_OWNERS: dict[str, str] = {
     "intent": "coach",
     "intent_exposure": "coach",
     "protocol_freeze": "coach",
+    # assistant（M9）
+    "veto_packet": "assistant",
+    "llm_call": "assistant",
 }
 
 _WRITE_ACTIONS = {sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE, sqlite3.SQLITE_DELETE}

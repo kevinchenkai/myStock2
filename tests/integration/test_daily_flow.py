@@ -154,3 +154,41 @@ def test_replay_cli_prints_cards_and_metrics_with_sample_sizes(env):
     assert r.returncode == 0 and "【事实】" in r.stdout and "动机未记录" in r.stdout and "事后诊断" in r.stdout
     r = cli(env, "replay", "behavior", "--account", "A1")
     assert r.returncode == 0 and "不足" in r.stdout and "n=" in r.stdout
+
+
+def test_veto_cli_flow_sealed_export_exposure_and_ai_vs_ai_veto_lines(env):
+    loc = ["--local-dir", env["local"]]
+    assert cli(env, "protocol", "freeze", *loc).returncode == 0
+    assert cli(env, "batch", "create", "--id", "B2", "--market", "US", "--d0", T.isoformat(), "--currency", "USD", "--budget", "10000",
+               "--lines", "ai,ai_veto,human_plan,buyhold", *loc).returncode == 0
+    r = cli(env, "coach", "run", "--batch", "B2", "--market", "US", "--stage", "close", "--as-of", T.isoformat(), "--now", NOW_CLOSE, *loc)
+    assert "tickets_frozen=2" in r.stdout                                              # ai 与 ai_veto 各从自己的状态生成基础单
+    # 导出：未确认字段 → 拒绝并列出白名单；未记录人类计划 → 拒绝
+    r = cli(env, "veto", "export", "--batch", "B2", "--target", TARGET.isoformat(), *loc)
+    assert r.returncode == 2 and "白名单" in r.stderr and "tickets[].limit_price" in r.stderr
+    r = cli(env, "veto", "export", "--batch", "B2", "--target", TARGET.isoformat(), "--confirm-fields", "--now", "2026-03-05T12:00:00+00:00", *loc)
+    assert r.returncode == 2 and "先为" in r.stderr
+    # 先记录人类计划（no_trade），再导出
+    assert cli(env, "intent", "add", "--batch", "B2", "--target", TARGET.isoformat(), "--code", CODE, "--action", "no_trade", "--now", "2026-03-05T11:00:00+00:00", *loc).returncode == 0
+    out = Path(env["db"]).parent / "pack.md"
+    r = cli(env, "veto", "export", "--batch", "B2", "--target", TARGET.isoformat(), "--confirm-fields", "--now", "2026-03-05T12:00:00+00:00", "--out", str(out), *loc)
+    assert r.returncode == 0 and "channel=veto_export" in r.stdout, r.stderr
+    pack_id = [x for x in r.stdout.split() if x.startswith("pack_id=")][0].split("=")[1]
+    assert pack_id in out.read_text(encoding="utf-8")
+    assert "exposures=1" in cli(env, "coach", "status", "--batch", "B2").stdout          # 导出本身是一次受控揭示
+    # 导入人工否决（取消买单）
+    resp = {"pack_id": pack_id, "verdict": "downgrade", "adjustments": [{"code": CODE, "type": "cancel_buy"}], "flags": ["earnings_within_2d"],
+            "evidence_ids": [], "note": "x"}
+    f = Path(env["db"]).parent / "resp.json"
+    f.write_text(json.dumps(resp), encoding="utf-8")
+    r = cli(env, "veto", "import", "--pack", pack_id, "--response", str(f), "--now", "2026-03-05T12:20:00+00:00", *loc)
+    assert r.returncode == 1 and "evidence_required" in r.stdout                       # 有标签/调整必须引用证据：被拒，机械单照常
+    resp["evidence_ids"] = []
+    resp["flags"] = []
+    f.write_text(json.dumps(resp), encoding="utf-8")
+    r = cli(env, "veto", "import", "--pack", pack_id, "--response", str(f), "--model-id", "m-1", "--now", "2026-03-05T12:30:00+00:00", *loc)
+    assert r.returncode == 1 and "evidence_required" in r.stdout                       # 有 adjustment 也必须引用证据
+    out_score = json.loads(cli(env, "scoreboard", "run", "--batch", "B2", "--end", TARGET.isoformat(), *loc).stdout)
+    ai, veto = out_score["lines"]["B2:ai"], out_score["lines"]["B2:ai_veto"]
+    assert ai["fills"] == veto["fills"] >= 1                                           # 否决被拒 → ai_veto 线与 ai 线一致
+    assert dbmod.connect_ro(env["db"]).execute("SELECT COUNT(*) c FROM llm_call WHERE status='rejected'").fetchone()["c"] == 2
