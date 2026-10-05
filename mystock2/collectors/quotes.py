@@ -15,7 +15,7 @@ from mystock2.core import calendars as cal
 from mystock2.core.db import atomic
 from mystock2.core.timeutil import MARKET_TZ, iso_utc, utc_now
 from mystock2.instruments.code_map import futu_to_yf, market_of
-from mystock2.market.bars import DailyBar, HourlyBar, put_daily, put_hourly
+from mystock2.market.bars import BarError, DailyBar, HourlyBar, _check_ohlc, put_daily, put_hourly
 from mystock2.market.fx import put_rate
 
 FINAL_BUFFER = timedelta(minutes=15)     # 收盘后多久才认为日线为终值（保守；供应商口径由 M0a 核实）
@@ -50,12 +50,17 @@ def collect_daily(conn: sqlite3.Connection, sources: list[QuoteSource], code: st
             attempts.append((src.name, "error"))
             continue
         # 只保留日历内的交易日（供应商可能返回非交易日或未走完的当日 bar）
-        keep, dropped = [], 0
+        keep, dropped, invalid = [], 0, []
         for b in bars:
-            if cal.is_session(market, b.session_date):
-                keep.append(b)
-            else:
+            if not cal.is_session(market, b.session_date):
                 dropped += 1
+                continue
+            try:                                              # 供应商偶有 OHLC 自相矛盾的行：只丢这一行（留作缺口，不修补不记零），不拖垮整个标的
+                _check_ohlc(b.open, b.high, b.low, b.close)
+            except BarError:
+                invalid.append(b.session_date.isoformat())
+                continue
+            keep.append(b)
         if not keep:
             with atomic(conn):
                 _log(conn, run_id, code, "daily", src.name, "empty", detail=f"dropped_non_session={dropped}", at=now)
@@ -68,10 +73,10 @@ def collect_daily(conn: sqlite3.Connection, sources: list[QuoteSource], code: st
             counts = put_daily(conn, final, source=src.name, received_at=now, quality="ok") if final else {}
             if partial:
                 put_daily(conn, partial, source=src.name, received_at=now, quality="partial")
-            _log(conn, run_id, code, "daily", src.name, "partial" if partial else "ok", rows=len(keep),
-                 detail=f"final={len(final)} partial={len(partial)} dropped_non_session={dropped} {counts}", at=now)
+            _log(conn, run_id, code, "daily", src.name, "partial" if (partial or invalid) else "ok", rows=len(keep),
+                 detail=f"final={len(final)} partial={len(partial)} dropped_non_session={dropped} rejected_invalid_ohlc={invalid} {counts}", at=now)
         attempts.append((src.name, "ok"))
-        return {"status": "partial" if partial else "ok", "source": src.name, "rows": len(keep), "attempts": attempts}
+        return {"status": "partial" if (partial or invalid) else "ok", "rejected_invalid_ohlc": invalid, "source": src.name, "rows": len(keep), "attempts": attempts}
     return {"status": "failed", "source": None, "rows": 0, "attempts": attempts}
 
 
@@ -89,6 +94,19 @@ def collect_hourly(conn, sources: list[QuoteSource], code: str, start: date, end
         if not bars:
             with atomic(conn):
                 _log(conn, run_id, code, "hourly", src.name, "empty", at=now)
+            attempts.append((src.name, "empty"))
+            continue
+        good = []
+        for b in bars:
+            try:
+                _check_ohlc(b.open, b.high, b.low, b.close)
+                good.append(b)
+            except BarError:
+                pass                                          # 同日线：坏行不入库（留作缺口）
+        bars = good
+        if not bars:
+            with atomic(conn):
+                _log(conn, run_id, code, "hourly", src.name, "empty", detail="all rows invalid", at=now)
             attempts.append((src.name, "empty"))
             continue
         with atomic(conn):

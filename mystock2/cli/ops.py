@@ -637,7 +637,8 @@ def cmd_collect_futu(args) -> int:
                 out["deals"] = collect_deals(w, api, account_id=args.account_id, acc_id=args.acc_id, markets=markets, start=date.fromisoformat(args.start),
                                              end=date.fromisoformat(args.end), min_interval=interval)
             if "fees" in what:
-                out["fees"] = collect_order_fees(w, api, account_id=args.account_id, acc_id=args.acc_id, min_interval=interval)
+                out["fees"] = collect_order_fees(w, api, account_id=args.account_id, acc_id=args.acc_id, min_interval=interval,
+                                                   assume_market_currency=args.assume_market_currency)
             if "snapshot" in what:
                 out["snapshot"] = collect_snapshot(w, api, account_id=args.account_id, acc_id=args.acc_id, markets=markets, captured_at=utc_now(), min_interval=interval)
             if "cashflow" in what:
@@ -678,7 +679,8 @@ def cmd_ledger(args) -> int:
 
     def snap(sid):
         if sid in (None, "latest"):
-            return ro.execute("SELECT * FROM account_snapshot WHERE account_id=? ORDER BY captured_at DESC LIMIT 1", (args.account_id,)).fetchone()
+            # 默认只取带真实采集时刻的快照：V1 日快照只有日期（captured_at 是当日 23:59:59Z 的占位），不能当开账点或对账点
+            return ro.execute("SELECT * FROM account_snapshot WHERE account_id=? AND source!='v1-date-only' ORDER BY captured_at DESC LIMIT 1", (args.account_id,)).fetchone()
         return ro.execute("SELECT * FROM account_snapshot WHERE snapshot_id=? AND account_id=?", (sid, args.account_id)).fetchone()
 
     if args.lcmd == "open":
@@ -729,8 +731,51 @@ def cmd_replay(args) -> int:
     return 0
 
 
+def cmd_forecast_run(args) -> int:
+    """预测留档：对名单（或 --codes）在 [from, to] 的每个交易日生成次日预测（baseline / lgbm）。
+
+    历史区间一律 `source_tag=rebuilt`（事后重建：用「现在已有」的行情，不等于当时可得，**不得与前向样本混算正式指标**）；
+    只有最近一个交易日、且以真实时钟运行时才可 `--tag forward`（教练流程里的前向预测由 `coach run` 生成）。
+    """
+    from mystock2.forecast.baseline import ForecastUnavailable
+    from mystock2.forecast.run import generate
+    from mystock2.instruments.code_map import market_of
+
+    cfg = load_config(args.config)
+    codes = args.codes.split(",") if args.codes else [e.code for e in load_universe(Path(args.local_dir or REPO_ROOT / "config" / "local") / "universe.yaml", ()).entries]
+    start, end = date.fromisoformat(args.start), date.fromisoformat(args.end)
+    params = None                                                          # 基线参数取默认（预测留档不依赖协议文件）；lgbm 同
+    now = _now(args)
+    stats: dict[str, dict] = {}
+    with _opener(cfg, "core") as rl, _opener(cfg, "market") as mw, _opener(cfg, "forecast") as fw:
+        with run_log(rl, "forecast run", {"codes": codes, "start": args.start, "end": args.end, "model": args.model, "tag": args.tag}) as run:
+            for code in codes:
+                st = stats.setdefault(code, {"ok": 0, "unavailable": 0})
+                d = start
+                while d <= end:
+                    if cal.is_session(market_of(code), d):
+                        try:
+                            generate(mw, fw, code, d, input_cutoff_at=now, source_tag=args.tag, now=now, model=args.model,
+                                     params=params if args.model == "baseline" else None)
+                            st["ok"] += 1
+                        except ForecastUnavailable:
+                            st["unavailable"] += 1
+                    d += timedelta(days=1)
+            run.note(**{c: v for c, v in stats.items()})
+            print(f"run_id={run.run_id}")
+    print(json.dumps(stats, ensure_ascii=False, indent=2))
+    return 0
+
+
 def register(sub) -> None:
     ld = {"help": "本地私有配置目录（默认 config/local/）"}
+    fc = sub.add_parser("forecast", help="预测留档").add_subparsers(dest="fcmd", required=True)
+    fr = fc.add_parser("run", help="对区间内每个交易日生成并留档次日预测（历史区间为 rebuilt）")
+    for a_, kw in (("--start", {"required": True}), ("--end", {"required": True}), ("--codes", {"help": "逗号分隔；缺省为名单内全部"}),
+                   ("--model", {"default": "baseline", "choices": ["baseline", "lgbm"]}), ("--tag", {"default": "rebuilt", "choices": ["rebuilt", "forward"]}),
+                   ("--local-dir", ld)):
+        fr.add_argument(a_, **kw)
+    fr.set_defaults(fn=cmd_forecast_run)
     b = sub.add_parser("batch", help="比较批次").add_subparsers(dest="bcmd", required=True)
     c = b.add_parser("create", help="创建批次（冻结完整状态包）")
     for a, kw in (("--id", {"required": True}), ("--market", {"required": True}), ("--d0", {"required": True}), ("--currency", {"required": True}),
@@ -797,7 +842,8 @@ def register(sub) -> None:
     cq.set_defaults(fn=cmd_collect_quotes)
     cf = cl.add_parser("futu", help="富途只读采集（需授权；未经真实验证）")
     for k, kw in (("--account-id", {"required": True}), ("--acc-id", {"required": True, "type": int}), ("--start", {"required": True}), ("--end", {"required": True}),
-                  ("--what", {"default": "deals,fees,snapshot"}), ("--cashflow-map", {"help": "YAML：资金流水类型→入账方式（DEPOSIT/WITHDRAW/INTEREST/TAX/RECON_ONLY）"})):
+                  ("--what", {"default": "deals,fees,snapshot"}), ("--assume-market-currency", {"action": "store_true", "help": "订单费用接口无币种字段：按成交市场币种入账（2026-10-05 首跑核实：港股印花税 0.1%、美股佣金 0.99 与市场币种一致）"}),
+                  ("--cashflow-map", {"help": "YAML：资金流水类型→入账方式（DEPOSIT/WITHDRAW/INTEREST/TAX/RECON_ONLY/DIVIDEND/DIVIDEND_WHT）"})):
         cf.add_argument(k, **kw)
     cf.set_defaults(fn=cmd_collect_futu)
     v1 = sub.add_parser("v1", help="V1 数据").add_subparsers(dest="v1cmd", required=True)

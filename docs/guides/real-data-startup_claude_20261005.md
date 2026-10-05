@@ -26,7 +26,7 @@
 ## 1 环境与私有配置（本机，不涉账户）
 
 ```bash
-conda env create -f environment.yml && conda activate mk2 && pip install -e .
+# 与 V1 共用默认环境 mk（Python 3.10；futu-api/yfinance/Flask/numpy/lightgbm 均已在其中），在仓库根目录直接运行，无需切换环境
 cp config.example.yaml config.yaml          # web.port 开发期 8889；V1 仍在 8888
 mkdir -p config/local
 cp config/universe.example.yaml config/local/universe.yaml     # 改成真实名单（tier/max_weight/max_lots）

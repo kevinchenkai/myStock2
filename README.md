@@ -18,8 +18,8 @@
 ## 快速开始（开发）
 
 ```bash
-conda env create -f environment.yml      # 环境名 mk2（Python 3.11）
-conda activate mk2 && pip install -e .
+# 与 V1 共用默认环境 mk（Python 3.10，已含全部依赖）：在仓库根目录直接运行，无需切换环境或安装
+conda activate mk                        # 若默认环境已是 mk 则不需要
 cp config.example.yaml config.yaml       # 私有配置，已被 .gitignore；Web 开发期端口 8889
 python -m mystock2 db migrate            # 建库（data/mystock2.db，已被忽略）
 python -m mystock2 universe check --file config/universe.example.yaml

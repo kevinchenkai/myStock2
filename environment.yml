@@ -1,9 +1,9 @@
-name: mk2
+name: mk
 channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.11
+  - python=3.10
   - pip
   - pip:
       - PyYAML>=6.0
@@ -15,4 +15,4 @@ dependencies:
       - ruff>=0.5
       - numpy>=1.26      # LightGBM 候选线与测试
       - lightgbm>=4.0    # M8 候选线（原生 API，不依赖 scikit-learn；缺失时明确失败，不静默回退）
-      # 后续里程碑按需加入：futu-api（M2a）、scikit-learn/lightgbm（M8），加入时锁定版本并说明理由
+      - futu-api==10.10.7008   # M2a 采集器（只读查询）；与负责人 V1 的 mk 环境同版本线

@@ -35,6 +35,8 @@ def reconcile(conn: sqlite3.Connection, account_id: str, snapshot_id: str,
     snap = conn.execute("SELECT * FROM account_snapshot WHERE snapshot_id=? AND account_id=?", (snapshot_id, account_id)).fetchone()
     if not snap:
         raise ValueError(f"快照不存在：{snapshot_id}")
+    if snap["source"] == "v1-date-only":
+        raise ValueError("V1 日快照没有采集时刻（captured_at 只是占位），不能用于对账；请用带真实时刻的快照（collect futu --what snapshot）")
     proj = project(conn, account_id, as_of=snap["captured_at"])
     rep = ReconcileReport(snapshot_id)
     rep.warnings = list(proj.warnings)

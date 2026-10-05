@@ -171,3 +171,22 @@ def test_cash_flows_require_explicit_mapping_unknown_goes_pending_and_trade_flow
     bad.cash_flow = lambda acc, dd: (_ for _ in ()).throw(ConnectionError("x"))
     r2 = collect_cash_flows(led, bad, account_id=ACCT, acc_id=1, days=[d], type_map=tmap, **NOSLEEP)
     assert not r2.ok and "cash_flow 2026-03-03" in r2.failed_scopes[0]
+
+
+def test_dividend_and_withholding_tax_pair_into_one_dividend_group_and_unparseable_goes_pending(led):
+    api = FakeApi()
+    d = date(2026, 9, 10)
+    api.flows[d] = [      # 合成测试值（格式取自真实首跑观察：备注含 (代码) dividend）
+        {"cashflow_id": "C1", "clearing_date": "2026-09-10", "currency": "USD", "cashflow_type": "现金分红", "cashflow_amount": 41.86,
+         "cashflow_remark": "SYNTH CORP COM(SYN) dividend, USD 0.91 per share"},
+        {"cashflow_id": "C2", "clearing_date": "2026-09-10", "currency": "USD", "cashflow_type": "非美国居民预扣税", "cashflow_amount": -4.19,
+         "cashflow_remark": "NRA withholding tax - SYNTH CORP COM(SYN) dividend, USD 0.91 per share"},
+        {"cashflow_id": "C3", "clearing_date": "2026-09-10", "currency": "HKD", "cashflow_type": "现金分红", "cashflow_amount": 100, "cashflow_remark": "某某 派息"},
+    ]
+    tmap = {"现金分红": "DIVIDEND", "非美国居民预扣税": "DIVIDEND_WHT"}
+    rep = collect_cash_flows(led, api, account_id=ACCT, acc_id=1, days=[d], type_map=tmap, **NOSLEEP)
+    assert rep.rows == 3 and rep.pending == 1 and rep.inserted == 3          # 应收、支付、预扣税 3 个事件
+    p = project(led, ACCT)
+    assert p.cash == {"USD": D("37.67")} and not p.receivable                 # 现金＝总额−预扣税；应收结清
+    again = collect_cash_flows(led, api, account_id=ACCT, acc_id=1, days=[d], type_map=tmap, **NOSLEEP)
+    assert again.inserted == 0 and again.duplicate == 3                       # 幂等

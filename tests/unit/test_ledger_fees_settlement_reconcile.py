@@ -136,3 +136,11 @@ def test_reconcile_unknown_snapshot_raises(tmp_path):
     conn = make_db(tmp_path)
     with pytest.raises(ValueError):
         reconcile(conn, ACCT, "nope")
+
+
+def test_date_only_v1_snapshot_cannot_be_reconciled(tmp_path):
+    conn = make_db(tmp_path)
+    opening.record_opening(conn, ACCT, T0, {"US.NVDA": "10"}, {"USD": "1000"})
+    sid = opening.create_snapshot(conn, ACCT, D2, "v1-date-only", {"US.NVDA": {"qty": "10"}}, {"USD": {"cash": "1000"}})
+    with pytest.raises(ValueError, match="没有采集时刻"):
+        reconcile(conn, ACCT, sid)                                                  # 当日 23:59:59Z 占位时刻会让盘中成交造成虚假差异

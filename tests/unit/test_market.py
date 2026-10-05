@@ -200,3 +200,11 @@ def test_get_daily_prefers_ok_over_later_partial(mk):
     put_daily(mk, [bar(c="10.9", h="11.5")], source="s1", received_at=t2, quality="partial")
     got = get_daily(mk, CODE, date(2026, 3, 3), date(2026, 3, 3))
     assert got[0]["close"] == "10.5" and got[0]["quality"] == "ok"      # 终值不被更晚的残缺行覆盖
+
+
+def test_vendor_row_with_inconsistent_ohlc_is_rejected_alone_and_leaves_a_gap(mk):
+    now = after_close(date(2026, 3, 5))
+    bad = bar("2026-03-04", o="10", h="11", lo="10.2", c="10.8")            # 开盘价低于最低价：供应商自相矛盾（真实首跑出现过）
+    res = collect_daily(mk, [FakeSource("v", [bar("2026-03-03"), bad, bar("2026-03-05")])], CODE, date(2026, 3, 2), date(2026, 3, 5), run_id="r1", now=now)
+    assert res["status"] == "partial" and res["rejected_invalid_ohlc"] == ["2026-03-04"]
+    assert [r["session_date"] for r in get_daily(mk, CODE, date(2026, 3, 1), date(2026, 3, 31))] == ["2026-03-03", "2026-03-05"]   # 好行入库，坏行是缺口

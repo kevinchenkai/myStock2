@@ -22,7 +22,7 @@ Codex 与 Claude 共用此文件；只保留长期有效的规则。运行与命
 - **V2 将替代 V1**；**V1（`kevinchenkai/myStock`）代码已由负责人锁定只读**，开发期间继续在 8888 运行：agent 不得修改 V1 代码、不写 V1 数据库、不重启 V1。V1 数据库只读导入；V1 代码可借用（拷贝＋重写测试，不跨仓库 import）也可全新生成，逐模块择优，须守账本不变量。
 - **端口**：开发期 V2 Web 用 **8889**（回环）；V2 完成并满足切换条件后，由负责人在切换日明确授权，V1 → 8887、V2 → 8888（见实施方案 §3.7）。切换的任何动作（改 V1 端口、重启 V1、启动 V2 于 8888、停用 V1）均须当日明确授权。
 - 密钥、真实账户数据、`config.yaml`、`config.*.local.yaml`、`data/`、`*.db*` 不得提交或公开；文档里需要举例时用合成值并标注「合成测试值」。发往外部模型的内容只含脱敏摘要。
-- 验证与改动匹配：Python 用 conda 环境 `mk2`（Python 3.11；`conda env create -f environment.yml && pip install -e .`），测试 `python -m pytest -q`，静态检查 `python -m ruff check .`；文档改动运行 `python scripts/check_docs.py`；提交前运行 `git diff --check`。新增表须在 `mystock2/core/db.py` 的 `TABLE_OWNERS` 登记写入者（测试强制）；新增子包须在 `tests/test_import_boundaries.py` 声明依赖。
+- 验证与改动匹配：Python 用与 V1 共用的默认 conda 环境 `mk`（Python 3.10，兼容 3.10–3.11；在仓库根目录 `python -m mystock2 …` 直接运行，无需安装；负责人不想切换环境，不要再引入需要单独环境的依赖或语法），测试 `python -m pytest -q`，静态检查 `python -m ruff check .`；文档改动运行 `python scripts/check_docs.py`；提交前运行 `git diff --check`。新增表须在 `mystock2/core/db.py` 的 `TABLE_OWNERS` 登记写入者（测试强制）；新增子包须在 `tests/test_import_boundaries.py` 声明依赖。
 - 交付说明改了什么、验证结果和未解决事项；后续问题登记到 `docs/OPEN_ITEMS.md`。不虚报执行、测试或收益；声明「未做某项高风险动作」前须确认属实——错误的声明比不声明更糟。
 
 ## 协作与维护

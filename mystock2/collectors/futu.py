@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import re
 import sqlite3
 import time
 from collections.abc import Callable
@@ -28,6 +29,7 @@ from mystock2.ledger.events import (
     ensure_account,
     fill_key,
     flow_key,
+    post_dividend,
     post_event,
     queue_pending,
 )
@@ -37,7 +39,9 @@ WINDOW_DAYS = 80                    # 工程选择：官方默认窗口 90 天�
 FEE_BATCH = 400                     # order_fee_query 每次最多 400 个订单（官方文档，未实测）
 PRICE_Q, QTY_Q = Decimal("0.0001"), Decimal("0.000001")
 
-# 资金流水的入账方式（必须显式映射；值：DEPOSIT / WITHDRAW / INTEREST / TAX / RECON_ONLY）。未映射的类型进待匹配队列。
+# 资金流水的入账方式（必须显式映射；值：DEPOSIT / WITHDRAW / INTEREST / TAX / RECON_ONLY / DIVIDEND / DIVIDEND_WHT）。未映射的类型进待匹配队列。
+# DIVIDEND＝股息总额、DIVIDEND_WHT＝同日同标的预扣税（成对入账为 post_dividend 情形①；接口无除息日：应收与支付同日，是已声明的局限）。
+_DIV_CODE = re.compile(r"\(([A-Z0-9.]+)\)\s*dividend", re.I)
 CashflowMap = dict[str, str]
 
 
@@ -232,10 +236,22 @@ def collect_cash_flows(ledger, api: TradeApi, *, account_id: str, acc_id: int, d
             rep.ok = False
             rep.failed_scopes.append(f"cash_flow {d}: {type(exc).__name__}: {exc}")
             continue
+        divs: dict[tuple[str, str], dict] = {}                      # (标的, 币种) → {"gross": f, "wht": f}
         for f in flows:
             rep.rows += 1
             ctype = str(f.get("cashflow_type"))
             rule = type_map.get(ctype)
+            if rule in ("DIVIDEND", "DIVIDEND_WHT"):
+                m = _DIV_CODE.search(str(f.get("cashflow_remark", "")))
+                ccy = str(f.get("currency", "")).upper()
+                code = f"US.{m.group(1).upper()}" if (m and ccy == "USD") else None      # 港股备注格式未核实：不猜
+                if code is None:
+                    queue_pending(ledger, SourceDraft("futu", f"cashflow:{f.get('cashflow_id')}", {k: str(v) for k, v in f.items()}),
+                                  f"{ctype}：无法从备注确定标的/币种（未核实格式，不猜）")
+                    rep.pending += 1
+                else:
+                    divs.setdefault((code, ccy), {})["gross" if rule == "DIVIDEND" else "wht"] = f
+                continue
             ccy = str(f.get("currency", "")).upper()
             amount = dec(str(f["cashflow_amount"]))          # 官方：正＝流入，负＝流出
             src = SourceDraft("futu", f"cashflow:{f.get('cashflow_id')}", {k: str(v) for k, v in f.items()})
@@ -265,6 +281,22 @@ def collect_cash_flows(ledger, api: TradeApi, *, account_id: str, acc_id: int, d
                 rep.pending += 1
             except LedgerError as exc:
                 rep.conflicts.append(f"{f.get('cashflow_id')}: {exc}")
+        for (code, ccy), g in divs.items():
+            gross, wht = g.get("gross"), g.get("wht")
+            if gross is None:                                        # 只有预扣税、没有股息：不入账，进待匹配
+                queue_pending(ledger, SourceDraft("futu", f"cashflow:{wht.get('cashflow_id')}", {k: str(v) for k, v in wht.items()}),
+                              "预扣税没有同日同标的股息总额")
+                rep.pending += 1
+                continue
+            at = f"{gross.get('clearing_date', d)}T00:00:00Z"
+            src = SourceDraft("futu", f"cashflow:{gross.get('cashflow_id')}", {k: str(v) for k, v in gross.items()})
+            try:
+                res = post_dividend(ledger, account_id, f"{gross.get('clearing_date', d)}:{code}", code, ccy, accrual_at=at, gross=str(dec(str(gross["cashflow_amount"]))),
+                                    payment_at=at, withholding_tax=str(abs(dec(str(wht["cashflow_amount"])))) if wht else None, source=src)
+                rep.inserted += sum(r.status == "inserted" for r in res)
+                rep.duplicate += sum(r.status == "duplicate" for r in res)
+            except LedgerError as exc:
+                rep.conflicts.append(f"dividend {code} {at}: {exc}")
     return rep
 
 

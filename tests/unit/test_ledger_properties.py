@@ -2,8 +2,11 @@
 import random
 from decimal import Decimal
 
-from hypothesis import HealthCheck, given, settings
-from hypothesis import strategies as st
+import pytest
+
+pytest.importorskip("hypothesis")        # 共用环境 mk 未装 hypothesis 时跳过（mk2/dev 环境照常运行）
+from hypothesis import HealthCheck, given, settings  # noqa: E402
+from hypothesis import strategies as st  # noqa: E402
 
 from mystock2.ledger import opening
 from mystock2.ledger.events import EventDraft, post_event
