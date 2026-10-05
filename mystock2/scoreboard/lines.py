@@ -22,11 +22,11 @@ LINE_KINDS = ("human_actual", "human_plan", "buyhold", "ai", "ai_lgbm", "ai_veto
 
 
 def create_batch(conn: sqlite3.Connection, batch_id: str, protocol: ExecProtocol, start_date: date, initial: LineState, e0: Decimal,
-                 line_kinds: list[str]) -> str:
+                 line_kinds: list[str], meta: dict | None = None) -> str:
     bad = [k for k in line_kinds if k not in LINE_KINDS]
     if bad:
         raise ValueError(f"未知策略线类型：{bad}")
-    state_json = json.dumps(initial.to_dict(), sort_keys=True)
+    state_json = json.dumps({**initial.to_dict(), "_meta": meta or {}}, sort_keys=True)
     with atomic(conn):
         if conn.execute("SELECT 1 FROM comparison_batch WHERE batch_id=?", (batch_id,)).fetchone():
             raise ValueError(f"批次已存在：{batch_id}（修改＝新批次）")

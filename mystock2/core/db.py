@@ -55,6 +55,11 @@ TABLE_OWNERS: dict[str, str] = {
     "line_state": "scoreboard",
     "sim_fill": "scoreboard",
     "run_cost": "scoreboard",
+    # coach（M6）
+    "ticket": "coach",
+    "intent": "coach",
+    "intent_exposure": "coach",
+    "protocol_freeze": "coach",
 }
 
 _WRITE_ACTIONS = {sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE, sqlite3.SQLITE_DELETE}

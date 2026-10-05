@@ -73,6 +73,9 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--file", help="名单文件（默认 config/local/universe.yaml）")
     c.add_argument("--known", nargs="*", help="已知完整代码，用于给裸代码提供候选")
     c.set_defaults(fn=_cmd_universe_check)
+    from mystock2.cli import ops
+
+    ops.register(sub)
     return p
 
 
