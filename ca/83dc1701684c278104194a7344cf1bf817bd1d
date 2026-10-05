@@ -1,0 +1,30 @@
+docs/records/v1-audit_claude_20261005.md
+  s_97d138eaf84b50::t_8387131b2242a9 1-37,39-44,46-153
+  s_97d138eaf84b50::t_02269bea2538b6 45
+  s_97d138eaf84b50::t_fb373617e77c7d 38
+docs/records/v1-feature-parity_claude_20261005.md
+  s_97d138eaf84b50::t_11f0d737bcc16f 1-114
+docs/records/module-sources_claude_20261005.md
+  s_97d138eaf84b50::t_02269bea2538b6 21
+  s_97d138eaf84b50::t_06e0d82e77c896 1-20,22-89
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_26199568f32ddb 21,30,36,49
+docs/plans/mystock-v2-implementation-plan_claude_20261005.md
+  s_97d138eaf84b50::t_38c5014b52db48 5,716-739,767
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "ca83dc1701684c278104194a7344cf1bf817bd1d",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
