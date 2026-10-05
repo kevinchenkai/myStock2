@@ -1,0 +1,5 @@
+# 费用档案模板（合成占位，非真实费率）。真实费率由负责人按自己券商条款填入 config/local/fees.yaml（被忽略）。
+# basis: order（同一订单多笔成交合并计费，最低费只收一次）| fill（逐笔）
+rules:
+  - {profile_id: synthetic-us, market: US, side: ANY, basis: order, currency: USD, pct_fee: "0", min_fee: "0", flat_fee: "0", tax_pct: "0", round_step: "0.01", valid_from: "2026-01-01"}
+  - {profile_id: synthetic-hk, market: HK, side: ANY, basis: order, currency: HKD, pct_fee: "0", min_fee: "0", flat_fee: "0", tax_pct: "0", round_step: "0.01", valid_from: "2026-01-01"}

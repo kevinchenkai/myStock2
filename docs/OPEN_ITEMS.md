@@ -60,3 +60,6 @@
 | M3-a | `snapshot_position.cost_basis` 口径：Web 按**每股**处理；V1 导入器与 Futu 采集器按每股成本价（V1/富途 `cost_price`）写入，口径一致，**真实首跑须核对** | 待核对（真实数据） |
 | M3-b | 盈亏成本口径（移动平均；无证据/估算/精确三类按比例消耗；见 `ledger/pnl.py` 头注释）需负责人确认 | 待确认 |
 | M8 | LightGBM+CQR 候选线：预测器与评估框架完成；探索性评估未过门槛（+0.57%，3/6），**不晋级**；回执 [m8-lgbm-cqr](records/m8-lgbm-cqr_claude_20261005.md) | 完成（负结果） |
+| M10 | 交接文档：[真实数据启动指南](guides/real-data-startup_claude_20261005.md)、[切换运行手册](guides/cutover-runbook_claude_20261005.md)；**`quoted` 近实时、公开导出白名单（D8）、切换执行均未做** | 文档完成，执行待决定/授权 |
+| M3b | 操作单（密封）/记分牌/复盘/数据状态视图 | 进行中（子任务） |
+| CLI | 新增：`collect quotes/futu`、`v1 import`、`ledger open/reconcile/status`、`batch`、`protocol`、`coach`、`intent`、`veto`、`scoreboard`、`replay` | ✅ |

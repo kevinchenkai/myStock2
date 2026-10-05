@@ -1,21 +1,49 @@
-# 协议预注册包模板（实施方案 §7；M6 冻结）。全部为占位——真实冻结版放 config/local/protocol.yaml（忽略）。
-# 冻结后修改 = 新协议版本 = 新比较批次。
+# 协议预注册包模板（实施方案 §7；M6 冻结）。全部为占位——真实冻结版放 config/local/protocol.yaml（被忽略，不提交）。
+# 冻结后修改 = 新协议版本 = 新比较批次。`python -m mystock2 protocol freeze` 会拒绝缺必填项的协议（--pilot 登记为 pilot）
+# 与 protocol_version 仍为 TEMPLATE 的协议。数值均**必须由负责人填写**，本模板不预设任何数值。
 protocol_version: "TEMPLATE"
+strategy_version: "inv-policy-v1"
+
 comparison:
-  d0: null                 # 开账日（D3）
-  budget_B: {}             # 每币种预算，如 {HKD: ..., USD: ...}（D3，私有）
+  d0: null                  # 开账日（D3）
+  budget_B: {}              # 每币种预算，如 {USD: ..., HKD: ...}（D3，私有）
   decision_time_local: {HK: "08:30", US: "09:00"}   # 项目截止（本地时间）
-  selection_rule: "last_frozen_visible_before_deadline"
+
 human_plan:
-  constraint_handling: null   # truncate | reject（预注册二选一）
+  constraint_handling: null # truncate | reject（预注册二选一，D12）
   missing_plan_rule: "no_order"
-strategy:
-  q_buy: null
-  q_sell: null
-  k: null
-  min_gain: null
-  max_hold_days: null        # D6；缺失则不生成可执行数量
-  exit_order: {type: null, limit_rule: null, unfilled: null}
+
+strategy:                   # 缺任一必填项 → 不生成可执行数量
+  k: null                   # 边际安全倍数（区间宽度 ≥ k × 往返成本）
+  q_buy: null               # 买价在 [预测低, 预测高] 中的位置（0~1）
+  q_sell: null              # 卖价位置
+  min_gain: null            # 最低获利比例（可选；时间止损优先于它）
+  max_hold_days: null       # D6
+  exit_q: null              # 时间止损退出单的价格位置
+  exit_order: {type: "limit", unfilled: "carry"}    # carry 次日续发 | void 作废
+  budget_slice: null        # 每标的每日买入预算占交易仓权益的比例
+  allow_add: null           # 已持有时是否允许加仓（D4）
+  slippage_bps: "0"
+
+settlement:                 # 结算周期（交易日数）必须显式填写并以交易所/券商规则核实（M0a：美股 T+1 已核实；港股 T+2 须核实），未填则拒绝运行
+  US: null
+  HK: null
+
+execution:                  # exec-v1 参数（ADR 0002）；改动 = 新协议版本
+  max_participation: "0.10"
+  fee_multiplier: "1"
+  slippage_bps: "0"
+
+baseline:                   # 透明基线预测器参数（版本参数，冻结后不依据事后高低点调整）
+  window: 20
+  train_days: 250
+  alpha_low: 0.10
+  alpha_high: 0.90
+  min_train: 60
+
+buyhold:
+  weights: {}               # 留空＝交易仓标的等权；可预注册覆盖
+
 evaluation:
   primary: "daily_paired_diff_vs_E0"
   alpha: null

@@ -499,6 +499,35 @@ def cmd_veto_import(args) -> int:
     return 0 if res.status == "applied" else 1
 
 
+def cmd_collect_quotes(args) -> int:
+    """公开行情采集（yfinance：日线/小时线/汇率；无需账户授权）。逐标的主备源、失败/空/陈旧写回执，不记零。
+
+    小时线官方只承诺约 60 天回溯，必须**每天**运行以从首日起归档（WP4.3）。
+    """
+    from mystock2.collectors.quotes import YFinanceSource, collect_daily, collect_fx, collect_hourly
+
+    cfg = load_config(args.config)
+    loc = load_local(args.local_dir) if not args.codes else None
+    codes = args.codes.split(",") if args.codes else [e.code for e in loc.universe.entries]
+    start, end = date.fromisoformat(args.start), date.fromisoformat(args.end)
+    sources = [YFinanceSource()]
+    results = {}
+    with _opener(cfg, "core") as rl, _opener(cfg, "market") as w:
+        with run_log(rl, "collect quotes", {"codes": codes, "start": args.start, "end": args.end, "hourly": args.hourly}) as run:
+            for code in codes:
+                results[code] = collect_daily(w, sources, code, start, end, run_id=run.run_id)
+                if args.hourly:
+                    results[f"{code}:hourly"] = collect_hourly(w, sources, code, start, end, run_id=run.run_id)
+            for pair in (args.fx.split(",") if args.fx else []):
+                results[pair] = collect_fx(w, sources, pair, start, end, run_id=run.run_id)
+            failed = [k for k, v in results.items() if v["status"] == "failed"]
+            if failed:
+                run.partial("重试：" + ",".join(failed))
+            print(f"run_id={run.run_id}")
+    print(json.dumps(results, ensure_ascii=False, indent=2, default=str))
+    return 0 if not any(v["status"] == "failed" for v in results.values()) else 1
+
+
 def cmd_collect_futu(args) -> int:
     """富途采集（只读查询；**需负责人授权连接真实账户**；采集器尚未对真实 OpenD 验证，首跑先小范围）。"""
     from mystock2.collectors.futu import (
@@ -551,6 +580,48 @@ def cmd_v1_import(args) -> int:
     print(json.dumps({**rep.__dict__, "max_price_rounding": str(rep.max_price_rounding), "total_notional_rounding": str(rep.total_notional_rounding),
                       "dry_run": args.dry_run}, ensure_ascii=False, indent=2, default=str))
     return 0 if not rep.conflicts else 1
+
+
+def cmd_ledger(args) -> int:
+    """账本命令：开账、对账、状态（只读 SQL 取快照，写入走 ledger 写连接）。"""
+    from mystock2.ledger.events import open_pending
+    from mystock2.ledger.opening import record_opening
+    from mystock2.ledger.projection import project
+    from mystock2.ledger.reconcile import reconcile
+
+    cfg = load_config(args.config)
+    ro = _conn_ro(cfg)
+
+    def snap(sid):
+        if sid in (None, "latest"):
+            return ro.execute("SELECT * FROM account_snapshot WHERE account_id=? ORDER BY captured_at DESC LIMIT 1", (args.account_id,)).fetchone()
+        return ro.execute("SELECT * FROM account_snapshot WHERE snapshot_id=? AND account_id=?", (sid, args.account_id)).fetchone()
+
+    if args.lcmd == "open":
+        sn = snap(args.snapshot)
+        if sn is None:
+            print("找不到快照（先 collect futu --what snapshot）", file=sys.stderr)
+            return 2
+        positions = {r["code"]: r["qty"] for r in ro.execute("SELECT code, qty FROM snapshot_position WHERE snapshot_id=?", (sn["snapshot_id"],))}
+        cash = {r["currency"]: r["cash"] for r in ro.execute("SELECT currency, cash FROM snapshot_cash WHERE snapshot_id=?", (sn["snapshot_id"],))}
+        with _opener(cfg, "ledger") as w:
+            ids = record_opening(w, args.account_id, sn["captured_at"], positions, cash, snapshot_id=sn["snapshot_id"])
+        print(f"opening_at={sn['captured_at']} positions={len(positions)} cash_ccys={sorted(cash)} events={len(ids)}（开账点不可改；此前成交只作描述）")
+        return 0
+    if args.lcmd == "reconcile":
+        sn = snap(args.snapshot)
+        if sn is None:
+            print("找不到快照", file=sys.stderr)
+            return 2
+        rep = reconcile(ro, args.account_id, sn["snapshot_id"])
+        print(json.dumps({"snapshot": sn["snapshot_id"], "ok": rep.ok, "position_diffs": rep.position_diffs, "cash_diffs": rep.cash_diffs,
+                          "open_pending": rep.open_pending, "incomplete_fx_groups": rep.incomplete_fx_groups, "warnings": rep.warnings}, ensure_ascii=False, indent=2))
+        return 0 if rep.ok else 1
+    p = project(ro, args.account_id)
+    print(json.dumps({"opening_at": p.opening_at, "positions": {k: str(v) for k, v in p.positions.items()}, "cash": {k: str(v) for k, v in p.cash.items()},
+                      "receivable": {k: str(v) for k, v in p.receivable.items()}, "external_flow": {k: str(v) for k, v in p.external_flow.items()},
+                      "pre_opening_events": p.pre_opening_events, "pending": len(open_pending(ro)), "warnings": p.warnings}, ensure_ascii=False, indent=2))
+    return 0
 
 
 def cmd_replay(args) -> int:
@@ -629,6 +700,13 @@ def register(sub) -> None:
     fh.add_argument("--local-dir", **ld)
     fh.set_defaults(fn=cmd_human_plan_freeze)
     cl = sub.add_parser("collect", help="采集").add_subparsers(dest="ccl", required=True)
+    cq = cl.add_parser("quotes", help="公开行情采集（yfinance）")
+    for k, kw in (("--start", {"required": True}), ("--end", {"required": True}), ("--codes", {"help": "逗号分隔的富途代码（默认取名单）"}),
+                  ("--fx", {"help": "逗号分隔币对，如 USDHKD,USDCNY"})):
+        cq.add_argument(k, **kw)
+    cq.add_argument("--hourly", action="store_true", help="同时采集小时线（须每天运行以从首日归档）")
+    cq.add_argument("--local-dir", help="本地私有配置目录（默认 config/local/）")
+    cq.set_defaults(fn=cmd_collect_quotes)
     cf = cl.add_parser("futu", help="富途只读采集（需授权；未经真实验证）")
     for k, kw in (("--account-id", {"required": True}), ("--acc-id", {"required": True, "type": int}), ("--start", {"required": True}), ("--end", {"required": True}),
                   ("--what", {"default": "deals,fees,snapshot"}), ("--cashflow-map", {"help": "YAML：资金流水类型→入账方式（DEPOSIT/WITHDRAW/INTEREST/TAX/RECON_ONLY）"})):
@@ -640,6 +718,13 @@ def register(sub) -> None:
     vi1.add_argument("--account-id", required=True, help="遗留账户占位（须与将来 Futu 采集同一 account_id）")
     vi1.add_argument("--dry-run", action="store_true")
     vi1.set_defaults(fn=cmd_v1_import)
+    lg = sub.add_parser("ledger", help="账本").add_subparsers(dest="lcmd", required=True)
+    for name, h in (("open", "以某个券商快照开账（不可改）"), ("reconcile", "对账：账本重建 vs 券商快照"), ("status", "账本投影摘要")):
+        x = lg.add_parser(name, help=h)
+        x.add_argument("--account-id", required=True)
+        if name != "status":
+            x.add_argument("--snapshot", help="快照 id（默认最新）")
+        x.set_defaults(fn=cmd_ledger)
     rp = sub.add_parser("replay", help="复盘（事后诊断）").add_subparsers(dest="rcmd", required=True)
     for name, h in (("cards", "逐笔复盘卡"), ("behavior", "行为指标（含样本量）")):
         x = rp.add_parser(name, help=h)

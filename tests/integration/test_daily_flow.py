@@ -192,3 +192,28 @@ def test_veto_cli_flow_sealed_export_exposure_and_ai_vs_ai_veto_lines(env):
     ai, veto = out_score["lines"]["B2:ai"], out_score["lines"]["B2:ai_veto"]
     assert ai["fills"] == veto["fills"] >= 1                                           # 否决被拒 → ai_veto 线与 ai 线一致
     assert dbmod.connect_ro(env["db"]).execute("SELECT COUNT(*) c FROM llm_call WHERE status='rejected'").fetchone()["c"] == 2
+
+
+def test_collect_quotes_cli_uses_source_fallback_and_writes_receipts(env, monkeypatch, capsys):
+    from mystock2.cli import main
+    from mystock2.collectors import quotes as q
+    from mystock2.market.bars import DailyBar as DB
+
+    class Fake:
+        name = "fake"
+
+        def daily(self, code, start, end):
+            return [DB(code, date(2026, 3, 3), "10", "11", "9", "10.5", "10.5", "100")]
+
+        def hourly(self, code, start, end):
+            return []
+
+        def fx_daily(self, pair, start, end):
+            return [(date(2026, 3, 3), "7.8")]
+    monkeypatch.setattr(q, "YFinanceSource", Fake)
+    rc = main(["--config", env["cfg"], "collect", "quotes", "--codes", "US.AAPL", "--start", "2026-03-02", "--end", "2026-03-04", "--fx", "USDHKD", "--hourly"])
+    out = json.loads(capsys.readouterr().out.split("\n", 1)[1])
+    assert rc == 1 and out["US.AAPL"]["status"] in ("ok", "partial") and out["USDHKD"]["status"] == "ok" and out["US.AAPL:hourly"]["status"] == "failed"   # 小时线空：如实失败，不记零
+    ro = dbmod.connect_ro(env["db"])
+    assert ro.execute("SELECT COUNT(*) c FROM collection_log WHERE kind='hourly' AND status='empty'").fetchone()["c"] == 1
+    assert ro.execute("SELECT status FROM run_log WHERE command='collect quotes'").fetchone()["status"] == "partial"

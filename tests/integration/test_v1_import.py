@@ -134,3 +134,35 @@ def test_connection_cannot_write_to_v1(v1_path):
     ro = open_v1_readonly(v1_path)
     with pytest.raises(sqlite3.OperationalError):
         ro.execute("INSERT INTO deals(deal_id) VALUES ('X')")
+
+
+def test_ledger_cli_open_reconcile_and_status(tmp_path):
+    import subprocess
+    import sys
+
+    import yaml
+
+    from mystock2.core.config import REPO_ROOT
+    from mystock2.ledger.events import ensure_account
+    db = tmp_path / "l.db"
+    dbmod.migrate(db)
+    cfg = tmp_path / "c.yaml"
+    cfg.write_text(yaml.safe_dump({"futu": {"host": "127.0.0.1", "port": 11111, "trd_env": "REAL"}, "collect": {"markets": ["US"]}, "db": {"path": str(db)},
+                                   "web": {"host": "127.0.0.1", "port": 8889}}), encoding="utf-8")
+    led = dbmod.connect_writer(db, "ledger")
+    ensure_account(led, "A1", "futu", "REAL")
+    sid = opening.create_snapshot(led, "A1", "2026-03-02T21:00:00Z", "futu", {"US.NVDA": {"qty": "10"}}, {"USD": {"cash": "1000"}})
+    led.close()
+
+    def run(*a):
+        return subprocess.run([sys.executable, "-m", "mystock2", "--config", str(cfg), *a], capture_output=True, text=True, cwd=REPO_ROOT)
+    r = run("ledger", "open", "--account-id", "A1")
+    assert r.returncode == 0 and "opening_at=2026-03-02T21:00:00Z" in r.stdout
+    st = run("ledger", "status", "--account-id", "A1")
+    assert '"US.NVDA": "10"' in st.stdout and '"USD": "1000"' in st.stdout
+    led = dbmod.connect_writer(db, "ledger")
+    post_event(led, EventDraft(fill_key("A1", "N1"), "A1", "FILL", "2026-03-03T15:00:00Z", "USD", code="US.NVDA", price="100", qty_delta="1", cash_delta="-100", ref_deal_id="N1"))
+    led.close()
+    rec = run("ledger", "reconcile", "--account-id", "A1", "--snapshot", sid)
+    assert rec.returncode == 0 and '"ok": true' in rec.stdout                     # 快照在成交之前：对账只看快照时点之前的事件
+    assert run("ledger", "reconcile", "--account-id", "A1", "--snapshot", "nope").returncode == 2

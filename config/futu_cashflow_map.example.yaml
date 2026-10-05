@@ -1,0 +1,5 @@
+# 富途资金流水类型 → 入账方式（必须显式映射；未映射的类型进待匹配队列，不猜）。
+# 值：DEPOSIT / WITHDRAW / INTEREST / TAX（入账）| RECON_ONLY（成交、换汇等已由其他来源记账，只用于对账）
+# 键须与真实接口返回的 cashflow_type 字符串一致——首跑前先用 `collect futu --what cashflow` 看未映射项再填写。
+EXAMPLE_TYPE_A: DEPOSIT
+EXAMPLE_TYPE_B: WITHDRAW

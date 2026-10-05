@@ -13,6 +13,7 @@ from mystock2.instruments.code_map import market_of
 
 CODES = ["US.NVDA", "US.TSLA", "US.PDD", "HK.00700", "HK.09988", "HK.01810"]
 src = YFinanceSource()
+P = lgbm_cqr.LGBMParams(n_rounds=100, min_train=200)   # 固定参数，不做事后调整
 end = date(2026, 10, 2)
 out = {}
 for code in CODES:
@@ -23,7 +24,6 @@ for code in CODES:
     n = len(bars)
     start = max(500, n - 400)         # 最近约 400 个交易日做评估起点
     t0 = time.time()
-    P = lgbm_cqr.LGBMParams(n_rounds=100, min_train=200)
     base = rolling_eval(bars, lambda h: baseline.predict(h), start=start, step=5)
     cand = rolling_eval(bars, lambda h: lgbm_cqr.predict(h, P), start=start, step=5)
     out[code] = {
