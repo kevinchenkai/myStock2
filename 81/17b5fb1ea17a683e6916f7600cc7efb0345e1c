@@ -1,0 +1,219 @@
+tests/integration/test_web_readonly.py
+  s_97d138eaf84b50::t_0c868bed7e8cae 21,60-62,68-71,103
+  s_97d138eaf84b50::t_aa967c80602973 260-276
+tests/unit/test_web_series.py
+  s_97d138eaf84b50::t_9b99ce3851c918 13,42-49,51-53,123,125-126
+mystock2/web/views/holdings/panel.js
+  s_97d138eaf84b50::t_c540eee5bdaf5b 17
+docs/records/m3b-web-ops-views_claude_20261005.md
+  s_97d138eaf84b50::t_caef58b375d2ca 8,44
+  s_97d138eaf84b50::t_7745f57b8e1402 1-7,9-43,45,47-64
+  s_97d138eaf84b50::t_cb25904b02f9de 46
+mystock2/scoreboard/providers.py
+  s_97d138eaf84b50::t_49849cb3858f1a 16,35-36,50,52-56
+tests/unit/test_db.py
+  s_97d138eaf84b50::t_9b99ce3851c918 81
+tests/integration/test_v1_import.py
+  s_97d138eaf84b50::t_9b99ce3851c918 68,96,109,117,154,160,164
+tests/unit/test_web_views.py
+  s_97d138eaf84b50::t_9fea4a65ade8da 158
+  s_97d138eaf84b50::t_9b99ce3851c918 138,223,328-329
+mystock2/ledger/events.py
+  s_97d138eaf84b50::t_4d492e4bd65e78 339-340
+  s_97d138eaf84b50::t_52f0d6dbdbdd2e 315,319-322
+  s_97d138eaf84b50::t_f9651b6eea02dc 431-432
+  s_97d138eaf84b50::t_c25911006ef209 249-252,268-269,275-286,328-329,367,416-430,433-436
+mystock2/web/views/scoreboard/view.yaml
+  s_97d138eaf84b50::t_f9ecc3c4ff19d8 1-14
+tests/unit/test_web_common.py
+  s_97d138eaf84b50::t_9b99ce3851c918 75
+  s_97d138eaf84b50::t_637e487df2a9b4 15
+tests/unit/test_web_framework.py
+  s_97d138eaf84b50::t_9fea4a65ade8da 15,107,168,171-175
+  s_97d138eaf84b50::t_9b99ce3851c918 138
+tests/integration/test_daily_flow.py
+  s_97d138eaf84b50::t_9b99ce3851c918 152,154
+  s_97d138eaf84b50::t_c2aa6e68320336 222-288
+  s_97d138eaf84b50::t_a9a68e31211884 56-59
+mystock2/web/views/replay/panel.js
+  s_97d138eaf84b50::t_1fa20b0dcb87e0 1-78
+mystock2/web/views/replay/view.yaml
+  s_97d138eaf84b50::t_1fa20b0dcb87e0 1-20
+tests/unit/test_replay.py
+  s_97d138eaf84b50::t_9b99ce3851c918 27
+mystock2/scoreboard/human_actual.py
+  s_97d138eaf84b50::t_8f78cc4275d14c 46-48
+tests/unit/test_market.py
+  s_97d138eaf84b50::t_c6e5f26dfba0d6 195-202
+tests/unit/test_coach_decide.py
+  s_97d138eaf84b50::t_c6e5f26dfba0d6 176-186
+  s_97d138eaf84b50::t_49849cb3858f1a 164-175
+mystock2/coach/decide.py
+  s_97d138eaf84b50::t_49849cb3858f1a 175-178
+  s_97d138eaf84b50::t_4d492e4bd65e78 135-139
+tests/unit/coach_helpers.py
+  s_97d138eaf84b50::t_ef51289a58acf1 1-15
+mystock2/market/bars.py
+  s_97d138eaf84b50::t_4d492e4bd65e78 106-109
+  s_97d138eaf84b50::t_fd2992dc88a1fa 76,78-79,133-134
+mystock2/web/sealing.py
+  s_97d138eaf84b50::t_25ed648e7f4f8c 1-86
+mystock2/web/views/data_status/panel.js
+  s_97d138eaf84b50::t_331322845abcbd 1-93
+mystock2/coach/tickets.py
+  s_97d138eaf84b50::t_b5306abe643f6b 63-66,80-85,121,123-125,129-130,136-140,143-144
+tests/unit/test_timeutil.py
+  s_97d138eaf84b50::t_9b99ce3851c918 18-19
+mystock2/web/views/data_status/query.py
+  s_97d138eaf84b50::t_331322845abcbd 59
+  s_97d138eaf84b50::t_dd76885d261563 1-58,60-244
+mystock2/assistant/veto.py
+  s_97d138eaf84b50::t_974088d83918ce 60-65,70,72-74,243,246,248,259-260,282-283,288-294
+  s_97d138eaf84b50::t_1a2a13c1154d04 37,71
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_68ad09041aaeb9 65,68
+  s_97d138eaf84b50::t_caef58b375d2ca 64,67,69-75
+mystock2/web/views/tickets/panel.js
+  s_97d138eaf84b50::t_15f40a36228a27 1-42,45-51
+  s_97d138eaf84b50::t_c2a658a74b3418 43-44
+mystock2/web/views/holdings/query.py
+  s_97d138eaf84b50::t_c540eee5bdaf5b 7-8,19,40-48,62,119
+tests/unit/test_ledger_pnl.py
+  s_97d138eaf84b50::t_9b99ce3851c918 9,18-20,32,42,54-55,66-67,76-77,86-88,98-100,109-111,121-122,130-133,141,146,151,156,162,164,166
+tests/unit/test_web_frontend.py
+  s_97d138eaf84b50::t_9fea4a65ade8da 16
+  s_97d138eaf84b50::t_dbfaf4e8cc6f64 149-167
+tests/unit/test_veto.py
+  s_97d138eaf84b50::t_1a2a13c1154d04 60,85,270
+  s_97d138eaf84b50::t_974088d83918ce 161-162
+  s_97d138eaf84b50::t_ef51289a58acf1 20,36-37
+  s_97d138eaf84b50::t_e1eba9e30bc602 265-269,271-300
+mystock2/web/views/tickets/query.py
+  s_97d138eaf84b50::t_657b9a3b444f1c 5,24-25,93-94,98
+  s_97d138eaf84b50::t_d851cf449ed7f1 1-4,6-11,13-23,26-67,69-70,74-92,95-97,100-134,137-167,169-174
+  s_97d138eaf84b50::t_5772a5645867b7 12,135-136,168
+  s_97d138eaf84b50::t_c2a658a74b3418 68,71-73,99
+docs/adr/0002-execution-protocol.md
+  s_97d138eaf84b50::t_caef58b375d2ca 33
+mystock2/cli/ops.py
+  s_97d138eaf84b50::t_1cf9d70ae9b993 652
+  s_97d138eaf84b50::t_b1538a9a8764b5 336,373,396,440,466,534,576-578
+  s_97d138eaf84b50::t_ebca7987075d29 653
+  s_97d138eaf84b50::t_6ce5b11a00ff4b 235-260,268-274,276-284,287-288,299,340,375,377-378,425,437,460,481,494,499,517,572,737,753-754,772,780,787,829,835,842
+  s_97d138eaf84b50::t_4d492e4bd65e78 172,176-181
+  s_97d138eaf84b50::t_4289b400c9d390 13,37,49-81,145-146,155-156,221
+  s_97d138eaf84b50::t_1a2a13c1154d04 541-544
+mystock2/web/views/scoreboard/panel.js
+  s_97d138eaf84b50::t_9259a79e026a44 1-64,66-71,73-90,92-100,102-109,111
+  s_97d138eaf84b50::t_1a94dd41cb47be 91
+  s_97d138eaf84b50::t_fe1afb9fbe7ac2 65,72,101,110
+mystock2/collectors/futu.py
+  s_97d138eaf84b50::t_b09489468fbdf8 11,153-163,167,169,171,173,184-185,191-199,204,206-207,211,213-214,332
+  s_97d138eaf84b50::t_af5438d944fe09 172,200-203,210
+tests/integration/test_futu_collector.py
+  s_97d138eaf84b50::t_af5438d944fe09 143
+  s_97d138eaf84b50::t_b09489468fbdf8 126,128,131,133-142,144-147
+  s_97d138eaf84b50::t_9b99ce3851c918 77-78,104,107,122
+tests/unit/test_coach_tickets_intents.py
+  s_97d138eaf84b50::t_ef51289a58acf1 27,43-44,49
+  s_97d138eaf84b50::t_49849cb3858f1a 149-150
+  s_97d138eaf84b50::t_c6e5f26dfba0d6 249,326-330
+  s_97d138eaf84b50::t_fe1afb9fbe7ac2 131-148,151-160
+mystock2/scoreboard/lines.py
+  s_97d138eaf84b50::t_4289b400c9d390 52,56
+  s_97d138eaf84b50::t_adb598e4259065 10,13,18,94-96
+mystock2/web/views/data_status/view.yaml
+  s_97d138eaf84b50::t_dd76885d261563 1-24
+config/views.yaml
+  s_97d138eaf84b50::t_927670d14850c9 22-27
+tests/unit/test_web_opsdata.py
+  s_97d138eaf84b50::t_0a2d47b24395af 88
+  s_97d138eaf84b50::t_9b99ce3851c918 99-100,105,127,153-158,164,167-168,177-180
+  s_97d138eaf84b50::t_3f877e2b82453c 1-17,19-30,32-41,43-84,86-87,89-97,101-104,106-114,116-123,125-126,128-130,132-135,137-152,159-161,163,165-166,169-172,174-176,181-182,184-201
+  s_97d138eaf84b50::t_b908c5d8b41371 18,115,131,162,173,183
+  s_97d138eaf84b50::t_e9901c5cdd5e0e 42
+  s_97d138eaf84b50::t_7f5367f2ca2ad8 31,124
+  s_97d138eaf84b50::t_6d256f355461a6 85,98,136
+mystock2/scoreboard/matcher.py
+  s_97d138eaf84b50::t_adb598e4259065 54-55,69-71,73-74
+tests/unit/test_ledger_events.py
+  s_97d138eaf84b50::t_99ab8ba4038c32 184-186,188-189
+  s_97d138eaf84b50::t_9b99ce3851c918 195-196,204,216,219,231,248,256
+mystock2/coach/intents.py
+  s_97d138eaf84b50::t_49849cb3858f1a 152-153,158
+  s_97d138eaf84b50::t_4d492e4bd65e78 156
+mystock2/web/views/tickets/view.yaml
+  s_97d138eaf84b50::t_d851cf449ed7f1 1-19
+docs/records/code-review-disposition_claude_r1_20261005.md
+  s_97d138eaf84b50::t_68ad09041aaeb9 1-22
+mystock2/core/timeutil.py
+  s_97d138eaf84b50::t_d06e6241e2ae70 44-48,50
+mystock2/web/static/app.css
+  s_97d138eaf84b50::t_736530875def31 106-110
+  s_97d138eaf84b50::t_4d0cb60ca965e9 8,15,22
+mystock2/web/views/scoreboard/query.py
+  s_97d138eaf84b50::t_f9ecc3c4ff19d8 1-14,16-196,198-246
+  s_97d138eaf84b50::t_9259a79e026a44 15,197
+tests/unit/test_scoreboard.py
+  s_97d138eaf84b50::t_9b99ce3851c918 323,330
+  s_97d138eaf84b50::t_8f78cc4275d14c 423-435
+  s_97d138eaf84b50::t_80fb98e2deb3ad 8,23,358-422
+docs/records/code-review_grok_r1_20261005.md
+  s_97d138eaf84b50::t_68ad09041aaeb9 1-51
+tests/unit/test_web_ops_views.py
+  s_97d138eaf84b50::t_8fc618da247db8 8,78,110,575
+  s_97d138eaf84b50::t_e9901c5cdd5e0e 51,55,136,212,245,484,501
+  s_97d138eaf84b50::t_d98f691f872a72 1-7,9,11-36,38-50,52-54,56-77,79-107,109,111-115,117-135,137-172,177-182,184-196,200,203,206-211,213-244,246-268,270-335,338-399,401-412,414-427,429-445,447-483,485-491,493-500,502-574,576,583,586
+  s_97d138eaf84b50::t_738b99402a5b36 10,108,173-176,197-199,201-202,204-205,269,336-337,413,428,446,492
+  s_97d138eaf84b50::t_deedc3c74fd806 400
+  s_97d138eaf84b50::t_dda6d2ea77ab84 37,116,183,577-582,584-585,587-590
+tests/unit/test_web_fixtures.py
+  s_97d138eaf84b50::t_9b99ce3851c918 29,104-116,130,137
+mystock2/scoreboard/types.py
+  s_97d138eaf84b50::t_17b4c8c49c991b 36,55,77-78,82,90-91
+mystock2/scoreboard/engine.py
+  s_97d138eaf84b50::t_adb598e4259065 35-38,46,77,80-85,120,122-125,157-158,190
+mystock2/web/views/replay/query.py
+  s_97d138eaf84b50::t_736530875def31 73-75
+  s_97d138eaf84b50::t_1fa20b0dcb87e0 1-72,76-176
+tests/unit/test_ledger_fees_settlement_reconcile.py
+  s_97d138eaf84b50::t_145903b5b424a2 129
+  s_97d138eaf84b50::t_9b99ce3851c918 77
+mystock2/ledger/projection.py
+  s_97d138eaf84b50::t_9032924c7380b3 71,77-79,83-88
+  s_97d138eaf84b50::t_4d492e4bd65e78 103
+docs/records/code-review_gpt_r1_20261005.md
+  s_97d138eaf84b50::t_68ad09041aaeb9 1-51
+tests/unit/test_hardening.py
+  s_97d138eaf84b50::t_52f0d6dbdbdd2e 145-160
+  s_97d138eaf84b50::t_c2771121a6558d 63-64
+  s_97d138eaf84b50::t_99ab8ba4038c32 1-62,65-144
+tests/unit/ledger_helpers.py
+  s_97d138eaf84b50::t_9b99ce3851c918 10-13
+migrations/0007_hardening.sql
+  s_97d138eaf84b50::t_9c9a55112ce7a9 1-7
+mystock2/core/db.py
+  s_97d138eaf84b50::t_8cb5ce415df9c0 68-70,84,89,121-122,128
+mystock2/ledger/opening.py
+  s_97d138eaf84b50::t_ff5de6cb959f51 50-57
+mystock2/ledger/settlement.py
+  s_97d138eaf84b50::t_cb885801b2bb53 39-44,46-47,49-53,55-56
+mystock2/market/fx.py
+  s_97d138eaf84b50::t_0228a418f12554 29-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "8117b5fb1ea17a683e6916f7600cc7efb0345e1c",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "unknown"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
