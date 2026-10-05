@@ -1,0 +1,28 @@
+docs/plans/mystock-v2-implementation-plan_claude_20261005.md
+  s_97d138eaf84b50::t_1eadcb85121806 5,8-9,31,78,175-176,178-179,195-196,234,290,302,305,308,318-319,321,326,361-363,375-378,383-449,451-453,459,463-464,469-470
+  s_97d138eaf84b50::t_c0ff61138644d0 215,256-257,260,506,514,518,526-532,536,565,577-580,597,644-646,681
+docs/plans/plan-review_gpt_r2_20261005.md
+  s_97d138eaf84b50::t_45634699c69676 1-73
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_dbd2cce061fcc9 5,32,35,41
+docs/README.md
+  s_97d138eaf84b50::t_62ee2049226c01 9,11
+docs/plans/plan-review-log_claude_20261005.md
+  s_97d138eaf84b50::t_cc166823056de1 5,8,67-102,105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "eca78f82567251afabdded0a081c9570e3769361",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
