@@ -2,7 +2,7 @@
 
 Codex 与 Claude 共用此文件；只保留长期有效的规则。运行与命令见 [README](README.md)，文档入口见 [docs/README.md](docs/README.md)，现行实施方案见 [docs/plans](docs/plans/)。
 
-> 阶段：立项与方案评审期（尚无应用代码）。方案获批前不编码；验证命令、环境名等在 M1 落地后补入本文件。
+> 阶段：实施中（方案 v1.0 已定稿，2026-10-05）。按 [实施方案](docs/plans/mystock-v2-implementation-plan_claude_20261005.md) §4 的里程碑推进；验证命令在 M1 落地后补入本文件。遇到实际问题再修订方案（升版本号并登记）。
 
 ## 目标与边界
 
