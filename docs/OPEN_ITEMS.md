@@ -2,7 +2,7 @@
 
 > **跨轮次的唯一待办来源。** 开新一轮前先读这里；一轮结束时把没做完的登记进来。约定见 [COLLABORATION.md](COLLABORATION.md) §4。
 > 关闭一项时标记完成并写明关闭它的提交／文档，**不要删行**。
-> 最后更新：2026-10-05（方案 v0.6；gpt-6.1 五轮、grok-4.7 一轮评审已处置）。
+> 最后更新：2026-10-05（方案 v0.7；gpt-6.1 六轮、grok-4.7 两轮评审已处置）。
 
 | 状态 | 含义 |
 | --- | --- |
@@ -38,5 +38,5 @@
 
 | 编号 | 事项 | 状态 |
 | --- | --- | --- |
-| RV-01 | gpt-6.1 评审（五轮；对 v0.6 的确认性复核待执行）：第一轮（[原文](plans/plan-review_gpt_20261005.md)）、第二轮（[原文](plans/plan-review_gpt_r2_20261005.md)）、第三、四轮（[原文](plans/plan-review_gpt_r3_20261005.md)、[原文](plans/plan-review_gpt_r4_20261005.md)）仍「不通过」但 must-fix 逐轮收敛 16→11→1→1→0，v0.2–v0.5.1 已逐条处置（[评审记录](plans/plan-review-log_claude_20261005.md)）；第五轮（[原文](plans/plan-review_gpt_r5_20261005.md)，限定范围）结论「通过」、无新增 must-fix | 进行中 |
-| RV-02 | grok-4.7 评审（经 `cursor-agent`；[原文](plans/plan-review_grok_20261005.md)）：「有条件通过」（4 must-fix），v0.6 已逐条处置；确认性复核待执行 | 进行中 |
+| RV-01 | gpt-6.1 评审（六轮；第六轮 2 项 must-fix，v0.7 已处置，待最后确认）：第一轮（[原文](plans/plan-review_gpt_20261005.md)）、第二轮（[原文](plans/plan-review_gpt_r2_20261005.md)）、第三、四轮（[原文](plans/plan-review_gpt_r3_20261005.md)、[原文](plans/plan-review_gpt_r4_20261005.md)）仍「不通过」但 must-fix 逐轮收敛 16→11→1→1→0，v0.2–v0.5.1 已逐条处置（[评审记录](plans/plan-review-log_claude_20261005.md)）；第五轮（[原文](plans/plan-review_gpt_r5_20261005.md)，限定范围）结论「通过」、无新增 must-fix | 进行中 |
+| RV-02 | grok-4.7 评审（经 `cursor-agent`）：首轮（[原文](plans/plan-review_grok_20261005.md)）「有条件通过」→ 确认轮（[原文](plans/plan-review_grok_r2_20261005.md)）「**通过**」，无阻塞 must-fix | ✅ 已关闭（以 v0.6 为准；v0.7 的改动未再送审，若负责人要求可补一轮） |
