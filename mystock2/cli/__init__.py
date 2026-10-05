@@ -89,6 +89,9 @@ def build_parser() -> argparse.ArgumentParser:
     from mystock2.cli import ops
 
     ops.register(sub)
+    from mystock2.cli import update
+
+    update.register(sub)
     return p
 
 

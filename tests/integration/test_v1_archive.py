@@ -82,7 +82,8 @@ def test_archive_import_is_read_only_and_maps_everything(v1, ml, dbs):
     h = va.import_hourly(m, mw)
     assert (h["read"], h["inserted"], h["skipped_invalid"]) == (3, 2, 1)
     assert va.import_preopen(m, mw) == 1 and va.import_predictions(m, fw) == 1
-    v.close(); m.close()
+    v.close()
+    m.close()
     assert (sha(v1), sha(ml)) == (b1, b2)                                                      # V1 文件字节不变
     o = {r["order_id"]: dict(r) for r in lw.execute("SELECT * FROM broker_order")}
     assert o["O1"]["created_at"] == "2026-03-03T05:00:39.918000Z" and o["O1"]["status"] == "CANCELLED_ALL" and o["O1"]["time_trust"] == "assumed_local_tz"   # 港股本地时间 → UTC

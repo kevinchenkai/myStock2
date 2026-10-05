@@ -22,3 +22,9 @@ db:
 web:
   host: 127.0.0.1
   port: 8889
+
+# 例行更新（python -m mystock2 update --phase hk|us|pre；见 docs/guides/daily-update_claude_20261005.md）。账户号只放本机 config.yaml。
+update:
+  account_id: main        # 账本里的账户占位名（须与导入时的 --account-id 一致）
+  acc_id: 0               # 富途 acc_id（真实值只写本机 config.yaml）
+  lookback_days: 10
