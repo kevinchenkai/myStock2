@@ -1,0 +1,73 @@
+mystock2/web/app.py
+  s_97d138eaf84b50::t_979cdbd2136391 26,187,191-192
+  s_97d138eaf84b50::t_973ebc180fef97 100-101
+tests/unit/test_web_framework.py
+  s_97d138eaf84b50::t_36266b665bf58d 15,107
+  s_97d138eaf84b50::t_6fc070a1ced3e1 160
+mystock2/web/static/app.css
+  s_97d138eaf84b50::t_c14eff0ddb85ce 143
+  s_97d138eaf84b50::t_8325ba894903d0 126-142,144-154
+config/views.yaml
+  s_97d138eaf84b50::t_f22bd780e88a43 32-33
+mystock2/web/names.py
+  s_97d138eaf84b50::t_979cdbd2136391 1-67
+mystock2/web/views/pnl/query.py
+  s_97d138eaf84b50::t_68459c05ec053e 15,64
+tests/unit/test_web_frontend.py
+  s_97d138eaf84b50::t_29fae421b1887b 228-315,317-338
+  s_97d138eaf84b50::t_36266b665bf58d 16
+  s_97d138eaf84b50::t_8fcf940c3a86c1 316,339-340
+  s_97d138eaf84b50::t_973ebc180fef97 122
+mystock2/web/static/ui.js
+  s_97d138eaf84b50::t_ec91d9883fdf55 70-84,86,163-165,239-245,254-256,270,302-308,327,449
+  s_97d138eaf84b50::t_c14eff0ddb85ce 89,130
+docs/records/m3d-names-stock-detail_claude_20261005.md
+  s_97d138eaf84b50::t_718999d28334cd 1-61
+mystock2/web/views/stock/view.yaml
+  s_97d138eaf84b50::t_5ff3b8ed298a83 1-14
+mystock2/web/views/stock/panel.js
+  s_97d138eaf84b50::t_c14eff0ddb85ce 115,149,161
+  s_97d138eaf84b50::t_3be071162ec493 12-15,25,146
+  s_97d138eaf84b50::t_14df0331f24d96 1-11,16-24,26-114,116-145,147-148,150-160,162-195
+mystock2/web/static/app.js
+  s_97d138eaf84b50::t_8325ba894903d0 47,71,86-92,127,147-210,222
+mystock2/web/views/trades/query.py
+  s_97d138eaf84b50::t_68459c05ec053e 13,28
+mystock2/web/views/replay/query.py
+  s_97d138eaf84b50::t_50e8702966cef6 149,170-171
+tests/unit/test_web_stock.py
+  s_97d138eaf84b50::t_51abdb8d5ba2c1 1-13,16-80,82-85,88-92,99-178,180-183,190-314,317-490
+  s_97d138eaf84b50::t_fb5804f9128374 14
+  s_97d138eaf84b50::t_df30ecd97d0723 179
+  s_97d138eaf84b50::t_5474e2f8342a75 15,184-189,491
+  s_97d138eaf84b50::t_29d2efa7f55616 81,86-87,93-98,315-316
+mystock2/web/views/holdings/query.py
+  s_97d138eaf84b50::t_e10b30ca199f16 21
+  s_97d138eaf84b50::t_fea69696575165 66,76-77,87
+mystock2/web/views/stock/query.py
+  s_97d138eaf84b50::t_94575192f9d258 521-523
+  s_97d138eaf84b50::t_f22bd780e88a43 17,205-206,208-209,247,296-297,378-380
+  s_97d138eaf84b50::t_5ff3b8ed298a83 1-16,18-204,207,210-246,248-295,298-377,381-520,524-543
+mystock2/web/views/replay/panel.js
+  s_97d138eaf84b50::t_4b964581478e9e 16
+mystock2/web/rowcells.py
+  s_97d138eaf84b50::t_536b6e04ebb5df 1-96
+tests/unit/test_web_ops_views.py
+  s_97d138eaf84b50::t_7dc1a553d7b3c4 446
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "3941b6deed25719a72f9bd0676a100702e5c1632",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
