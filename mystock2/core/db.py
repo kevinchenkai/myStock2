@@ -39,6 +39,12 @@ TABLE_OWNERS: dict[str, str] = {
     "account_snapshot": "ledger",
     "snapshot_position": "ledger",
     "snapshot_cash": "ledger",
+    "broker_order": "ledger",
+    "instrument_name": "ledger",
+    "instrument_profile": "market",
+    "quote_preopen": "market",
+    "capital_flow_daily": "market",
+    "v1_prediction_archive": "forecast",
     # market / forecast（M4）
     "quote_daily": "market",
     "quote_hourly": "market",

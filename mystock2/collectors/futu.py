@@ -18,7 +18,9 @@ from decimal import ROUND_HALF_EVEN, Decimal
 from typing import Protocol
 
 from mystock2.collectors.v1_import import _local_to_utc
-from mystock2.core.money import dec
+from mystock2.core.db import atomic
+from mystock2.core.money import dec, to_db
+from mystock2.core.timeutil import iso_utc, utc_now
 from mystock2.instruments.code_map import CodeError, market_of
 from mystock2.ledger.events import (
     EventDraft,
@@ -65,6 +67,7 @@ class FutuApiError(RuntimeError):
 
 class TradeApi(Protocol):
     def deals(self, acc_id: int, market: str, start: date, end: date) -> list[dict]: ...
+    def orders(self, acc_id: int, market: str, start: date, end: date) -> list[dict]: ...
     def positions(self, acc_id: int, market: str) -> list[dict]: ...
     def funds(self, acc_id: int) -> dict[str, dict]: ...
     def order_fees(self, acc_id: int, order_ids: list[str]) -> dict[str, list[dict]]: ...
@@ -142,16 +145,84 @@ def collect_deals(ledger, api: TradeApi, *, account_id: str, acc_id: int, market
     return rep
 
 
+def collect_orders(ledger, api: TradeApi, *, account_id: str, acc_id: int, markets: list[str], start: date, end: date, window_days: int = WINDOW_DAYS,
+                   sleep: Callable[[float], None] = time.sleep, min_interval: float = 3.2) -> CollectReport:
+    """订单（意图，含已撤/失败）→ broker_order；只用于复盘，不进账本和式。同一订单再次到达则更新为较新的状态。名称顺带入 instrument_name（富途优先）。"""
+    rep = CollectReport("orders")
+    ensure_account(ledger, account_id, "futu", "REAL")
+    now = iso_utc(utc_now())
+    for market in markets:
+        for ws, we in _windows(start, end, window_days):
+            sleep(min_interval)
+            try:
+                rows = api.orders(acc_id, market, ws, we)
+            except Exception as exc:  # noqa: BLE001
+                rep.ok = False
+                rep.failed_scopes.append(f"{market} {ws}~{we}: {type(exc).__name__}: {exc}")
+                continue
+            for r in rows:
+                rep.rows += 1
+                try:
+                    code = r["code"]
+                    mk = market_of(code)
+                    side = str(r["side"]).upper()
+                    if side not in ("BUY", "SELL") or not r.get("order_id"):
+                        raise ValueError(f"side/order_id {side}/{r.get('order_id')}")
+                    created = _local_to_utc(mk, r["create_time"])
+                    updated = _local_to_utc(mk, r["updated_time"]) if r.get("updated_time") else None
+                except (KeyError, CodeError, ValueError, TypeError) as exc:
+                    rep.notes.append(f"skipped:{r.get('order_id')}:{exc}")
+                    continue
+                oid = str(r["order_id"])
+                def _n(x, step):
+                    return None if x is None else to_db(_q(abs(float(x)) if step == QTY_Q else x, step))
+                vals = dict(market=mk, code=code, side=side, order_type=str(r.get("order_type") or ""), status=str(r.get("status") or "UNKNOWN"),
+                            price=_n(r.get("price"), PRICE_Q), qty=_n(r.get("qty"), QTY_Q), dealt_qty=_n(r.get("dealt_qty"), QTY_Q),
+                            dealt_avg_price=_n(r.get("dealt_avg_price"), PRICE_Q) if r.get("dealt_avg_price") else None, created_at=created, updated_at=updated)
+                with atomic(ledger):
+                    cur = ledger.execute("SELECT status, updated_at, source FROM broker_order WHERE account_id=? AND order_id=?", (account_id, oid)).fetchone()
+                    if cur is None:
+                        ledger.execute("INSERT INTO broker_order(account_id, order_id, market, code, side, order_type, status, price, qty, dealt_qty, dealt_avg_price, created_at, "
+                                       "updated_at, time_trust, source, first_seen_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                                       (account_id, oid, mk, code, side, vals["order_type"], vals["status"], vals["price"], vals["qty"], vals["dealt_qty"], vals["dealt_avg_price"],
+                                        created, updated, "assumed_local_tz", "futu", now))
+                        rep.inserted += 1
+                    elif (updated or "") > (cur["updated_at"] or "") or (cur["status"] != vals["status"] and cur["source"] == "v1"):
+                        ledger.execute("UPDATE broker_order SET status=?, dealt_qty=?, dealt_avg_price=?, updated_at=?, source='futu' WHERE account_id=? AND order_id=?",
+                                       (vals["status"], vals["dealt_qty"], vals["dealt_avg_price"], updated, account_id, oid))
+                        rep.inserted += 1
+                    else:
+                        rep.duplicate += 1
+                if r.get("stock_name"):
+                    upsert_names(ledger, {code: str(r["stock_name"])}, "futu")
+    return rep
+
+
+def upsert_names(ledger, names: dict[str, str], source: str) -> None:
+    """标的名称（展示用）。富途直采优先于 V1；同来源取较新的。"""
+    now = iso_utc(utc_now())
+    with atomic(ledger):
+        for code, name in names.items():
+            if not name or name == "None":
+                continue
+            ledger.execute("INSERT INTO instrument_name(code, name, source, updated_at) VALUES (?,?,?,?) "
+                           "ON CONFLICT(code) DO UPDATE SET name=excluded.name, source=excluded.source, updated_at=excluded.updated_at "
+                           "WHERE instrument_name.source!='futu' OR excluded.source='futu'", (code, name, source, now))
+
+
 def collect_snapshot(ledger, api: TradeApi, *, account_id: str, acc_id: int, markets: list[str], captured_at, sleep=time.sleep, min_interval: float = 3.2) -> CollectReport:
     """持仓（逐市场）＋逐币种现金 → account_snapshot（只追加、幂等）。**读取失败则不写快照**（缺失显式，不记零）。"""
     rep = CollectReport("snapshot")
     ensure_account(ledger, account_id, "futu", "REAL")
     positions: dict[str, dict] = {}
     try:
+        names: dict[str, str] = {}
         for m in markets:
             sleep(min_interval)
             for p in api.positions(acc_id, m):
                 market_of(p["code"])
+                if p.get("stock_name"):
+                    names[p["code"]] = str(p["stock_name"])
                 positions[p["code"]] = {"qty": str(_q(p["qty"], QTY_Q)), "sellable_qty": str(_q(p["can_sell_qty"], QTY_Q)) if p.get("can_sell_qty") is not None else None,
                                         "cost_basis": str(_q(p["cost_price"], PRICE_Q)) if p.get("cost_price") else None,     # 历史列：券商 cost_price＝摊薄成本（首跑核实，可为负）
                                         "average_cost": str(_q(p["average_cost"], PRICE_Q)) if p.get("average_cost") else None,
@@ -162,6 +233,7 @@ def collect_snapshot(ledger, api: TradeApi, *, account_id: str, acc_id: int, mar
         rep.ok = False
         rep.failed_scopes.append(f"snapshot: {type(exc).__name__}: {exc}")
         return rep
+    upsert_names(ledger, names, "futu")
     cash = {ccy.upper(): {k: (str(_q(v, Decimal('0.01'))) if v is not None else None) for k, v in d.items()} for ccy, d in funds.items()}
     create_snapshot(ledger, account_id, captured_at, "futu", {c: {k: v for k, v in p.items() if v is not None} for c, p in positions.items()},
                     {c: {k: v for k, v in d.items() if v is not None} for c, d in cash.items()})
@@ -379,6 +451,19 @@ class FutuTradeApi:
         finally:
             ctx.close()
 
+    def orders(self, acc_id: int, market: str, start: date, end: date) -> list[dict]:
+        import futu as ft
+        ctx = self._ctx(market)
+        try:
+            ret, df = ctx.history_order_list_query(status_filter_list=[], code="", start=f"{start} 00:00:00", end=f"{end} 23:59:59", acc_id=acc_id, trd_env=ft.TrdEnv.REAL)
+            if ret != ft.RET_OK:
+                raise FutuApiError(str(df))
+            return [{"order_id": r.order_id, "code": r.code, "stock_name": getattr(r, "stock_name", None), "side": str(r.trd_side), "order_type": str(r.order_type),
+                     "status": str(r.order_status), "price": r.price, "qty": r.qty, "dealt_qty": r.dealt_qty, "dealt_avg_price": r.dealt_avg_price,
+                     "create_time": r.create_time, "updated_time": r.updated_time} for r in df.itertuples()] if df is not None and len(df) else []
+        finally:
+            ctx.close()
+
     def positions(self, acc_id: int, market: str) -> list[dict]:
         import futu as ft
         ctx = self._ctx(market)
@@ -386,7 +471,7 @@ class FutuTradeApi:
             ret, df = ctx.position_list_query(acc_id=acc_id, trd_env=ft.TrdEnv.REAL)
             if ret != ft.RET_OK:
                 raise FutuApiError(str(df))
-            return [{"code": r.code, "qty": r.qty, "can_sell_qty": r.can_sell_qty, "cost_price": r.cost_price,
+            return [{"code": r.code, "stock_name": getattr(r, "stock_name", None), "qty": r.qty, "can_sell_qty": r.can_sell_qty, "cost_price": r.cost_price,
                      "average_cost": getattr(r, "average_cost", None), "diluted_cost": getattr(r, "diluted_cost", None)} for r in df.itertuples()] if df is not None and len(df) else []
         finally:
             ctx.close()

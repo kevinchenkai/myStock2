@@ -636,6 +636,10 @@ def cmd_collect_futu(args) -> int:
             if "deals" in what:
                 out["deals"] = collect_deals(w, api, account_id=args.account_id, acc_id=args.acc_id, markets=markets, start=date.fromisoformat(args.start),
                                              end=date.fromisoformat(args.end), min_interval=interval)
+            if "orders" in what:
+                from mystock2.collectors.futu import collect_orders
+                out["orders"] = collect_orders(w, api, account_id=args.account_id, acc_id=args.acc_id, markets=markets, start=date.fromisoformat(args.start),
+                                               end=date.fromisoformat(args.end), min_interval=interval)
             if "fees" in what:
                 out["fees"] = collect_order_fees(w, api, account_id=args.account_id, acc_id=args.acc_id, min_interval=interval,
                                                    assume_market_currency=args.assume_market_currency)
@@ -667,8 +671,22 @@ def cmd_v1_import(args) -> int:
     cfg = load_config(args.config)
     with _opener(cfg, "ledger") as w:
         rep = run_import(args.v1_db, w, account_id=args.account_id, dry_run=args.dry_run)
-    print(json.dumps({**rep.__dict__, "max_price_rounding": str(rep.max_price_rounding), "total_notional_rounding": str(rep.total_notional_rounding),
-                      "dry_run": args.dry_run}, ensure_ascii=False, indent=2, default=str))
+    out = {**rep.__dict__, "max_price_rounding": str(rep.max_price_rounding), "total_notional_rounding": str(rep.total_notional_rounding), "dry_run": args.dry_run}
+    if args.archive and not args.dry_run:                    # 其余 V1 数据：订单、名称、档案、资金流向，以及（给了 ML 库时）小时线/盘前价/V1 前向预测
+        from mystock2.collectors import v1_archive as va
+        v1 = va.open_ro(args.v1_db)
+        ml = va.open_ro(args.v1_ml_db) if args.v1_ml_db else None
+        try:
+            with _opener(cfg, "ledger") as lw, _opener(cfg, "market") as mw, _opener(cfg, "forecast") as fw:
+                out["archive"] = {"names": va.import_names(v1, lw), "orders": va.import_orders(v1, lw, account_id=args.account_id), "profiles": va.import_profiles(v1, mw),
+                                  "capital_flow": va.import_capital_flow(v1, mw)}
+                if ml is not None:
+                    out["archive"].update(hourly=va.import_hourly(ml, mw), preopen=va.import_preopen(ml, mw), v1_predictions=va.import_predictions(ml, fw))
+        finally:
+            v1.close()
+            if ml is not None:
+                ml.close()
+    print(json.dumps(out, ensure_ascii=False, indent=2, default=str))
     return 0 if not rep.conflicts else 1
 
 
@@ -869,6 +887,8 @@ def register(sub) -> None:
     vi1.add_argument("--v1-db", required=True)
     vi1.add_argument("--account-id", required=True, help="遗留账户占位（须与将来 Futu 采集同一 account_id）")
     vi1.add_argument("--dry-run", action="store_true")
+    vi1.add_argument("--archive", action="store_true", help="同时迁移订单/名称/档案/资金流向（以及 --v1-ml-db 里的小时线/盘前价/V1 前向预测）")
+    vi1.add_argument("--v1-ml-db", help="V1 的 ML 库（data/ml/mystock_ml.db）的只读备份路径")
     vi1.set_defaults(fn=cmd_v1_import)
     lg = sub.add_parser("ledger", help="账本").add_subparsers(dest="lcmd", required=True)
     for name, h in (("open", "以某个券商快照开账（不可改）"), ("reconcile", "对账：账本重建 vs 券商快照"), ("status", "账本投影摘要")):
