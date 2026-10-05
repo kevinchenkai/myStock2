@@ -47,10 +47,10 @@ def _txt(x) -> str | None:
 
 
 def _utc_from_naive(text: str) -> str:
-    """无时区的 UTC 文本（V1 的 ts_utc / synced_at）→ 规范 UTC。"""
-    t = text.strip().replace("T", " ")
-    fmt = "%Y-%m-%d %H:%M:%S.%f" if "." in t else "%Y-%m-%d %H:%M:%S"
-    return iso_utc(datetime.strptime(t, fmt).replace(tzinfo=UTC))
+    """V1 的时间文本 → 规范 UTC：无时区的按 UTC；带时区（`+00:00`/`Z`）的先换算。"""
+    t = text.strip().replace("Z", "+00:00")
+    dt = datetime.fromisoformat(t)
+    return iso_utc(dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC))
 
 
 def import_names(v1: sqlite3.Connection, ledger: sqlite3.Connection) -> int:

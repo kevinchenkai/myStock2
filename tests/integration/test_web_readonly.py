@@ -19,6 +19,7 @@ from mystock2.core import db as dbmod
 from mystock2.core.config import REPO_ROOT
 from tests.unit.test_web_fixtures import build_demo_db, make_app, make_config
 from tests.unit.test_web_opsdata import TARGET, build_ops_db
+from tests.unit.test_web_stock import seed_dividends, seed_flows, seed_names, seed_orders, seed_profile, seed_rebuilt
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 WRITE_SQL = ("INSERT", "UPDATE", "DELETE", "REPLACE", "CREATE", "DROP", "ALTER", "VACUUM", "ATTACH", "REINDEX", "ANALYZE")
@@ -29,6 +30,16 @@ def run(conn, params):
     return {"n": conn.execute("SELECT COUNT(*) AS n FROM ledger_event").fetchone()["n"],
             "_freshness": C.freshness([C.source("账本", None, None)])}
 '''
+
+
+def seed_stock_sources(db):
+    """股票详情用到的全部来源都写进合成库（名称/订单/档案/资金流/事后重建与前向预测/股息），让遍历覆盖该视图的每一个块。"""
+    seed_names(db)
+    seed_orders(db)
+    seed_profile(db)
+    seed_flows(db)
+    seed_rebuilt(db, "US.NVDA", with_forward_target=TARGET)
+    seed_dividends(db)
 
 
 def digest(path: Path) -> str:
@@ -57,7 +68,7 @@ def all_get_urls(app):
                 url = rule.rule.replace("<view_id>", vid)
                 urls.append((url, {}))
                 if rule.rule.startswith("/api/v/"):
-                    urls += [(url, {"base_ccy": "HKD"}), (url, {"base_ccy": "CNY", "pair": "USDCNY"}), (url, {"code": "US.NVDA"}), (url, {"account": "zz"}),
+                    urls += [(url, {"base_ccy": "HKD"}), (url, {"base_ccy": "CNY", "pair": "USDCNY"}), (url, {"code": "US.NVDA"}), (url, {"code": "HK.00700"}), (url, {"code": "US.TSLA"}), (url, {"code": "bad"}), (url, {"account": "zz"}),
                              (url, {"batch": "B1", "market": "US", "target": TARGET}), (url, {"batch": "B1", "run": "R1"}), (url, {"target": "2026-03-04"}),
                              (url, {"gap_days": "60", "runs": "5"})]
         else:
@@ -69,6 +80,7 @@ def all_get_urls(app):
 def env(tmp_path, request):
     """含批次/操作单/记分牌 run/暴露记录的合成库：密封与已揭示两种状态都要遍历一遍（新视图也必须只读）。"""
     db = build_ops_db(tmp_path, reveal_target=request.param == "revealed")
+    seed_stock_sources(db)
     extra = tmp_path / "extra"
     (extra / "demo_view").mkdir(parents=True)
     (extra / "demo_view" / "view.yaml").write_text(yaml.safe_dump({"title": "示例视图"}, allow_unicode=True), encoding="utf-8")
@@ -264,13 +276,14 @@ def test_traversal_covers_the_ops_views_and_sealed_content_stays_sealed(env):
     from tests.unit.test_web_opsdata import LEAK_VALUES
     db, app = env
     urls = all_get_urls(app)
-    for vid in ("tickets", "scoreboard", "replay", "data_status"):
+    for vid in ("tickets", "scoreboard", "replay", "data_status", "stock"):
         assert any(u == f"/api/v/{vid}" for u, _ in urls), vid
+    assert any(u == "/api/v/stock" and q.get("code") == "US.NVDA" for u, q in urls)
     revealed = bool(dbmod.connect_ro(db).execute("SELECT 1 FROM intent_exposure").fetchone())
     client = app.test_client()
     if not revealed:
         for url, q in urls:
-            if url.startswith("/api/v/") and url.split("/")[-1] in ("tickets", "holdings", "replay", "data_status", "scoreboard"):
+            if url.startswith("/api/v/") and url.split("/")[-1] in ("tickets", "holdings", "replay", "data_status", "scoreboard", "stock"):
                 text = client.get(url, query_string=q).get_data(as_text=True)
                 for v in LEAK_VALUES:
                     assert v not in text, (url, q, v)

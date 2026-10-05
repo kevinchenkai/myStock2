@@ -7,6 +7,8 @@ import pytest
 
 from mystock2.cli import update as up
 
+NOW = datetime(2026, 10, 5, 22, 0, tzinfo=timezone.utc)      # 周一 15:00 PDT：美股已收盘（20:00Z）2 小时、港股早已收盘
+
 
 @pytest.fixture()
 def env(tmp_path, monkeypatch):
@@ -18,6 +20,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(up, "codes_for", lambda cfg_, market: ["US.NVDA", "US.TSLA"] if market == "US" else ["HK.00700"])
     monkeypatch.setattr(up, "_universe_codes", lambda: {"US.NVDA", "HK.00700"})
     monkeypatch.setattr(up, "freshness", lambda *a, **k: [])
+    monkeypatch.setattr(up, "_now", lambda: NOW)
     monkeypatch.setattr(up, "REPO_ROOT", tmp_path)                       # 不存在的 futu 流水映射文件 → 跳过流水步骤
     notes = []
     monkeypatch.setattr(up, "notify", lambda t, x: notes.append((t, x)))
@@ -30,7 +33,7 @@ def env(tmp_path, monkeypatch):
 
 
 def args(cfg, phase, **kw):
-    return argparse.Namespace(config=str(cfg), phase=phase, lookback=None, no_futu=False, notify=False, **kw)
+    return argparse.Namespace(config=str(cfg), phase=phase, lookback=None, no_futu=False, notify=False, force=False, **kw)
 
 
 def names(calls):
@@ -99,3 +102,36 @@ def test_last_final_session_waits_for_close_plus_buffer():
     # 2026-10-05 周一：美股收盘 20:00Z；19:00Z 时最近已收盘交易日是上周五
     assert up.last_final_session("US", datetime(2026, 10, 5, 19, 0, tzinfo=timezone.utc)).isoformat() == "2026-10-02"
     assert up.last_final_session("US", datetime(2026, 10, 5, 20, 40, tzinfo=timezone.utc)).isoformat() == "2026-10-05"
+
+
+def test_incremental_check_skips_when_target_done_and_fresh_but_reruns_when_stale_failed_or_forced(env, monkeypatch):
+    cfg, calls, _ = env
+    assert up.cmd_update(args(cfg, "us")) == 0 and len(calls) == 6                 # 第一次：完整运行并记录成功
+    calls.clear()
+    assert up.cmd_update(args(cfg, "us")) == 0 and calls == []                       # 备份时间点：同一目标已完成 → 不连富途、不拉行情
+    a = args(cfg, "us")
+    a.force = True
+    assert up.cmd_update(a) == 0 and len(calls) == 6                                 # --force 强制
+    calls.clear()
+    monkeypatch.setattr(up, "freshness", lambda *a_, **k: ["US.NVDA: 最新终值 2026-10-02 < 应有 2026-10-05"])
+    assert up.cmd_update(args(cfg, "us")) == 1 and len(calls) == 6                   # 日线陈旧 → 不跳过（且本次仍陈旧 → 退出码 1）
+    st = up.load_state()["us"]
+    assert st["ok"] is False and st["target"] == "2026-10-05"
+    monkeypatch.setattr(up, "freshness", lambda *a_, **k: [])
+    calls.clear()
+    assert up.cmd_update(args(cfg, "us")) == 0 and len(calls) == 6                   # 上次失败 → 备份时间点重试，成功后记录
+    assert up.load_state()["us"]["ok"] is True
+
+
+def test_success_recorded_too_soon_after_close_does_not_count(env):
+    cfg, calls, _ = env
+    st = {"us": {"target": "2026-10-05", "at": "2026-10-05T20:10:00+00:00", "ok": True}}       # 收盘后 10 分钟的成功：成交/费用可能还没到齐
+    up.save_state(st)
+    assert up.cmd_update(args(cfg, "us")) == 0 and len(calls) == 6
+
+
+def test_pre_phase_is_once_per_day(env):
+    cfg, calls, _ = env
+    assert up.cmd_update(args(cfg, "pre")) == 0 and calls
+    calls.clear()
+    assert up.cmd_update(args(cfg, "pre")) == 0 and calls == []

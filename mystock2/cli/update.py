@@ -24,6 +24,7 @@ from mystock2.core.config import REPO_ROOT, ConfigError, load_config
 from mystock2.instruments.universe import load_universe
 
 LOG_DIR = REPO_ROOT / "data" / "logs"
+SETTLE_AFTER_CLOSE = timedelta(hours=1)    # 收盘后至少过这么久的成功运行才算「已完成」（成交/费用在收盘后还会陆续入账）
 PHASES = {
     "hk": {"market": "HK", "futu": ("deals,orders,fees,snapshot", True), "forecast": True, "reconcile": True},
     "us": {"market": "US", "futu": ("deals,orders,fees,snapshot", True), "forecast": True, "reconcile": True},
@@ -82,6 +83,41 @@ def freshness(cfg, codes: list[str], market: str, now: datetime) -> list[str]:
     return [f"{c}: 最新终值 {have.get(c, '无')} < 应有 {want}" for c in codes if (have.get(c) or "") < want]
 
 
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def target_key(phase: str, market: str, now: datetime) -> str:
+    """本阶段要达成的目标：hk/us＝该市场最近已收盘交易日；pre＝今天（UTC 日期）。"""
+    return now.date().isoformat() if phase == "pre" else last_final_session(market, now).isoformat()
+
+
+def load_state() -> dict:
+    try:
+        return json.loads((LOG_DIR / "state.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(state: dict) -> None:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    (LOG_DIR / "state.json").write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def already_done(phase: str, market: str, now: datetime, state: dict, stale: list[str]) -> str | None:
+    """增量检查：同一目标已成功完成、且日线没有陈旧 → 返回跳过原因；否则 None（需要运行）。
+    hk/us 的成功记录必须发生在收盘 + 1 小时之后才算数（收盘后成交/费用还会陆续到）。"""
+    rec = state.get(phase)
+    key = target_key(phase, market, now)
+    if not rec or not rec.get("ok") or rec.get("target") != key or stale:
+        return None
+    if phase != "pre":
+        close = cal.session(market, date.fromisoformat(key)).close_utc
+        if datetime.fromisoformat(rec["at"]) < close + SETTLE_AFTER_CLOSE:
+            return None
+    return f"目标 {key} 已于 {rec['at']} 成功完成，数据无陈旧，跳过"
+
+
 def notify(title: str, text: str) -> None:
     try:
         subprocess.run(["osascript", "-e", f'display notification "{text}" with title "{title}"'], timeout=10, capture_output=True)
@@ -94,7 +130,7 @@ def cmd_update(args) -> int:
     ph = PHASES[args.phase]
     ucfg = cfg.raw.get("update") or {}
     account, acc_id = ucfg.get("account_id"), ucfg.get("acc_id")
-    now = datetime.now(timezone.utc)
+    now = _now()
     today = now.date()
     lookback = int(args.lookback or ucfg.get("lookback_days", 10))
     start, end = (today - timedelta(days=lookback)).isoformat(), today.isoformat()
@@ -107,6 +143,13 @@ def cmd_update(args) -> int:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         print("另一个更新正在运行，本次跳过", file=sys.stderr)
+        return 0
+
+    state = load_state()
+    stale0 = freshness(cfg, codes, market, now) if codes else []
+    why = None if args.force else already_done(args.phase, market, now, state, stale0)
+    if why:
+        print(json.dumps({"phase": args.phase, "skipped": True, "reason": why}, ensure_ascii=False))
         return 0
 
     steps: list[tuple[str, list[str]]] = []          # (名称, argv)
@@ -146,6 +189,8 @@ def cmd_update(args) -> int:
     (LOG_DIR / f"update_{today.isoformat()}_{args.phase}.json").write_text(json.dumps({**summary, "details": results}, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     bad = bool(failed or stale)
+    state[args.phase] = {"target": target_key(args.phase, market, now), "at": _now().isoformat(), "ok": not bad}
+    save_state(state)
     if bad and args.notify:
         notify("myStock2 更新", f"{args.phase}：失败 {len(failed)} 步，陈旧 {len(stale)} 个标的，详见 data/logs/")
     return 1 if bad else 0
@@ -161,5 +206,6 @@ def register(sub) -> None:
     u.add_argument("--phase", required=True, choices=sorted(PHASES))
     u.add_argument("--lookback", type=int, help="回看天数（默认 config 的 update.lookback_days 或 10）")
     u.add_argument("--no-futu", action="store_true", help="跳过富途步骤（OpenD 未启动时只更新公开行情）")
+    u.add_argument("--force", action="store_true", help="忽略增量检查，强制完整运行")
     u.add_argument("--notify", action="store_true", help="失败/陈旧时弹 macOS 通知")
     u.set_defaults(fn=cmd_update)

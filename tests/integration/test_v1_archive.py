@@ -58,7 +58,7 @@ def ml(tmp_path):
     c.execute("INSERT INTO ml_quotes_1h VALUES ('NVDA','US.NVDA','2026-03-05 14:30:00','2026-03-05 09:30:00',100.0,101.5,99.5,101.0,1000,'x','yfinance',NULL)")
     c.execute("INSERT INTO ml_quotes_1h VALUES ('NVDA','US.NVDA','2026-03-05 20:30:00','2026-03-05 15:30:00',101.0,102.0,100.5,101.8,500,'x','yfinance',NULL)")     # 最后一根 30 分钟
     c.execute("INSERT INTO ml_quotes_1h VALUES ('NVDA','US.NVDA','2026-03-05 15:30:00','2026-03-05 10:30:00',101.0,100.0,102.0,101.0,10,'x','yfinance',NULL)")      # OHLC 自相矛盾：丢
-    c.execute("INSERT INTO ml_preopen_quotes VALUES ('US.NVDA','2026-03-05',100.5,99.0,'2026-03-05 13:00:00','yfinance_1h',NULL,'2026-03-05 13:01:00')")
+    c.execute("INSERT INTO ml_preopen_quotes VALUES ('US.NVDA','2026-03-05',100.5,99.0,'2026-03-05T13:00:00+00:00','yfinance_1h',NULL,'2026-03-05 13:01:00')")
     c.execute("INSERT INTO ml_prediction_versions VALUES ('P1','R1','US.NVDA','2026-03-04','2026-03-05','live','published','2026-03-04 22:00:00',NULL,'2026-03-04 22:05:00',NULL,'{\"l_hat\":1}','h')")
     c.commit()
     c.close()
@@ -82,6 +82,7 @@ def test_archive_import_is_read_only_and_maps_everything(v1, ml, dbs):
     h = va.import_hourly(m, mw)
     assert (h["read"], h["inserted"], h["skipped_invalid"]) == (3, 2, 1)
     assert va.import_preopen(m, mw) == 1 and va.import_predictions(m, fw) == 1
+    assert mw.execute("SELECT available_at FROM quote_preopen").fetchone()[0] == "2026-03-05T13:00:00.000000Z"      # 带时区的文本（真实 V1 数据格式）
     v.close()
     m.close()
     assert (sha(v1), sha(ml)) == (b1, b2)                                                      # V1 文件字节不变

@@ -228,3 +228,17 @@ def test_dividend_code_formats_hk_two_payments_same_day_and_account_fees(led):
     adj = led.execute("SELECT adjust_class FROM ledger_event WHERE event_type='ADJUST'").fetchall()
     assert {r["adjust_class"] for r in adj} == {"INVESTMENT"}                         # 计入业绩，不是外部流水
     assert collect_cash_flows(led, api, account_id=ACCT, acc_id=1, days=[d], type_map=tmap, **NOSLEEP).inserted == 0    # 幂等
+
+
+def test_external_rule_uses_amount_sign_for_direction(led):
+    api = FakeApi()
+    d = date(2026, 4, 1)
+    api.flows[d] = [      # 合成测试值
+        {"cashflow_id": "E1", "clearing_date": "2026-04-01", "currency": "HKD", "cashflow_type": "其他", "cashflow_amount": 5000, "cashflow_remark": ""},
+        {"cashflow_id": "E2", "clearing_date": "2026-04-01", "currency": "HKD", "cashflow_type": "其他", "cashflow_amount": -2000, "cashflow_remark": ""},
+        {"cashflow_id": "E3", "clearing_date": "2026-04-01", "currency": "USD", "cashflow_type": "资产迁移", "cashflow_amount": 100, "cashflow_remark": "Account Upgrade"},
+    ]
+    rep = collect_cash_flows(led, api, account_id=ACCT, acc_id=1, days=[d], type_map={"其他": "EXTERNAL", "资产迁移": "DEPOSIT"}, **NOSLEEP)
+    assert rep.inserted == 3 and rep.pending == 0
+    kinds = {r["event_type"]: r["cash_delta"] for r in led.execute("SELECT event_type, cash_delta FROM ledger_event WHERE currency='HKD'")}
+    assert kinds == {"DEPOSIT": "5000", "WITHDRAW": "-2000"}

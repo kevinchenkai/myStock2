@@ -362,6 +362,8 @@ def collect_cash_flows(ledger, api: TradeApi, *, account_id: str, acc_id: int, d
                 queue_pending(ledger, src, f"未映射的资金流水类型：{ctype}")
                 rep.pending += 1
                 continue
+            if rule == "EXTERNAL":                                       # 方向由金额符号决定：正＝转入（DEPOSIT），负＝转出（WITHDRAW）；类型含义须已由负责人确认
+                rule = "DEPOSIT" if amount > 0 else "WITHDRAW"
             if rule == "RECON_ONLY":                             # 成交/换汇等已由其他来源记账：只用于对账
                 key = f"{ccy}:{ctype}"
                 rep.recon_only[key] = rep.recon_only.get(key, Decimal(0)) + amount
