@@ -218,3 +218,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- myStock2 ---
+.DS_Store
+# 私有配置与真实数据，绝不提交（公开仓库）
+config.yaml
+config.*.local.yaml
+data/
+*.db
+*.db-*
+*.sqlite*
+# LLM 输入包 / 导出物 / 备份
+exports/
+backups/
