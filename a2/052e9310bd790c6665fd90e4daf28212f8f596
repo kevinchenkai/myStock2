@@ -1,0 +1,28 @@
+tests/integration/test_futu_collector.py
+  s_97d138eaf84b50::t_7ac7829d89e3fc 16,103
+  s_97d138eaf84b50::t_b24c5f245fc084 101,111-115
+  s_97d138eaf84b50::t_a0d594addb3751 1-15,17-100,102,104-110,116-164
+mystock2/collectors/futu.py
+  s_97d138eaf84b50::t_b24c5f245fc084 130,156,202
+  s_97d138eaf84b50::t_d0b1ad6d6d97da 1-129,131-155,157-201,203-322
+mystock2/cli/ops.py
+  s_97d138eaf84b50::t_1829e78c1c4cba 502-543,631-636
+docs/records/m2a-ledger-core_claude_20261005.md
+  s_97d138eaf84b50::t_6d480092e5ca0c 42-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "a2052e9310bd790c6665fd90e4daf28212f8f596",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
