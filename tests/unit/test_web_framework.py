@@ -12,7 +12,7 @@ from mystock2.web.app import create_app
 
 from .test_web_fixtures import NOW, build_demo_db, get_view, make_app
 
-BUILTIN = ["account_overview", "holdings", "trades", "pnl", "equity_trend", "fx", "tickets", "scoreboard", "replay", "data_status"]
+BUILTIN = ["account_overview", "holdings", "trades", "pnl", "equity_trend", "fx", "tickets", "scoreboard", "forecast", "replay", "data_status"]
 
 
 def write_view(root: Path, vid: str, query: str, *, meta: dict | None = None, panel: str | None = "MS.registerPanel('%s', function(){});"):
@@ -104,7 +104,7 @@ def test_views_yaml_controls_enabled_hidden_order_and_default_params(tmp_path):
     c = app.test_client()
     js = c.get("/api/views").get_json()
     ids = [v["id"] for v in js["views"]]
-    assert ids == ["fx", "holdings", "pnl", "account_overview", "equity_trend", "tickets", "scoreboard", "replay", "data_status"]   # 列出的在前（按配置顺序），其余按 order；trades 已停用
+    assert ids == ["fx", "holdings", "pnl", "account_overview", "equity_trend", "tickets", "scoreboard", "forecast", "replay", "data_status"]   # 列出的在前（按配置顺序），其余按 order；trades 已停用
     assert next(v for v in js["views"] if v["id"] == "holdings")["hidden"] is True
     fx = next(v for v in js["views"] if v["id"] == "fx")
     assert next(p for p in fx["params"] if p["name"] == "pair")["default"] == "USDCNY"

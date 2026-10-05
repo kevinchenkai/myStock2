@@ -31,6 +31,33 @@ def _fee_kind(row) -> str:
     return bk.rsplit(":", 1)[-1] if bk.startswith("fee:") else row["event_type"].lower()
 
 
+def _opening_cost_evidence(conn, account_id, op, events, t0) -> dict[str, Decimal]:
+    """开账持仓的每股成本证据：**平均成本（average_cost）**，不是摊薄成本（cost_price 可为负，首跑核实）。
+
+    优先用开账快照自带的 average_cost；没有则用开账后**最早**一份带 average_cost 的券商快照，且要求该标的在开账点与该快照之间没有成交
+    （否则平均成本已被改变，不能代表开账时的成本）。都没有 → 不给成本（不猜）。
+    """
+    out: dict[str, Decimal] = {}
+    if not op or t0 is None:
+        return out
+    fill_times: dict[str, list] = {}
+    for e in events:
+        if e["event_type"] == "FILL":
+            fill_times.setdefault(e["code"], []).append(ensure_utc(e["event_at"]))
+    snaps = conn.execute("SELECT snapshot_id, captured_at FROM account_snapshot WHERE account_id=? AND source!='v1-date-only' AND captured_at>=? "
+                         "ORDER BY captured_at, snapshot_id", (account_id, op["opening_at"])).fetchall()
+    for s in snaps:
+        cap = ensure_utc(s["captured_at"])
+        for r in conn.execute("SELECT code, average_cost FROM snapshot_position WHERE snapshot_id=? AND average_cost IS NOT NULL", (s["snapshot_id"],)):
+            code = r["code"]
+            if code in out or dec(r["average_cost"]) <= 0:
+                continue
+            if any(t0 < t <= cap for t in fill_times.get(code, ())):
+                continue
+            out[code] = dec(r["average_cost"])
+    return out
+
+
 def load_trades(conn: sqlite3.Connection, account_id: str) -> LedgerTrades:
     op = conn.execute("SELECT opening_at, snapshot_id FROM account_opening WHERE account_id=?", (account_id,)).fetchone()
     out = LedgerTrades(account_id, op["opening_at"] if op else None, op["snapshot_id"] if op else None)
@@ -58,11 +85,7 @@ def load_trades(conn: sqlite3.Connection, account_id: str) -> LedgerTrades:
         if deal not in fill_deals:
             out.unattributed_fees.extend({"deal_id": deal, **i} for i in items)
 
-    cost_by_code: dict[str, Decimal] = {}
-    if op and op["snapshot_id"]:
-        for r in conn.execute("SELECT code, cost_basis FROM snapshot_position WHERE snapshot_id=?", (op["snapshot_id"],)):
-            if r["cost_basis"] is not None and dec(r["cost_basis"]) > 0:
-                cost_by_code[r["code"]] = dec(r["cost_basis"])      # 假定为每股成本（见 holdings 视图说明）
+    cost_by_code = _opening_cost_evidence(conn, account_id, op, events, t0)
 
     for e in events:
         t = e["event_type"]

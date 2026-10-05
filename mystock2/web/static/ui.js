@@ -43,6 +43,11 @@
     else if (c.ccy || c.v !== undefined) cls.push("amt");
     if (c.dir) cls.push("dir-" + c.dir);
     var span = h("span", { class: cls.join(" "), title: c.title || null, text: c.text });
+    if (c.subs && c.subs.length) {                                  // 副行：若干带涨跌色的小字（如相对基准的位置）
+      return h("div", null, [span, h("div", { class: "small sub" }, c.subs.map(function (x, i) {
+        return h("span", null, [i ? " ／ " : "", h("span", { class: "amt" + (x.dir ? " dir-" + x.dir : ""), text: x.text })]);
+      }))]);
+    }
     if (c.tag) return h("span", null, [span, h("span", { class: "tag", text: c.tag })]);
     return span;
   }
@@ -180,6 +185,98 @@
     window.addEventListener("resize", onResize);
     return { redraw: draw };
   }
+
+  /* ---- 预测带图（纯 SVG）：竖条＝每日实际最低~最高（按涨跌着色），带＝各模型对该日的预测区间，空心圈＝突破点。
+     opts: {dates, actual:[{low,high,close,dir}], models:[{name,color,ring,points:[{low,high,breach_low,breach_high}|null]}], ccy, height, label}
+     价格是十进制字符串；仅绘图时转 Number，读数文本用字符串格式化。 ---- */
+  function bandChart(host, opts) {
+    var xs = opts.dates, act = opts.actual, models = opts.models, ccy = opts.ccy || "";
+    var wrap = h("div", { class: "chart" });
+    var readout = h("div", { class: "readout", "aria-live": "polite", text: "移动鼠标或点按图表查看每日的实际区间与模型预测区间" });
+    host.appendChild(wrap);
+    host.appendChild(readout);
+    function px(s) { return fmtDec(s, 2); }
+    function draw() {
+      wrap.textContent = "";
+      var W = Math.max(280, wrap.clientWidth || host.clientWidth || 320), H = opts.height || 280;
+      var L = 52, R = 8, T = 8, B = 22, pw = W - L - R, ph = H - T - B, n = xs.length;
+      var vals = [];
+      act.forEach(function (a) { vals.push(Number(a.low), Number(a.high)); });
+      models.forEach(function (m) { m.points.forEach(function (p) { if (p) { vals.push(Number(p.low), Number(p.high)); } }); });
+      var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+      if (lo === hi) { lo -= 1; hi += 1; }
+      var pad = (hi - lo) * 0.05; lo -= pad; hi += pad;
+      var step = n > 1 ? pw / (n - 1) : pw;
+      function X(i) { return L + (n > 1 ? i * step : pw / 2); }
+      function Y(v) { return T + ph - (v - lo) / (hi - lo) * ph; }
+      var root = svg("svg", { viewBox: "0 0 " + W + " " + H, role: "img", "aria-label": opts.label || "预测带图", preserveAspectRatio: "xMidYMid meet" });
+      for (var t = 0; t <= 4; t++) {
+        var v = lo + (hi - lo) * t / 4, y = Y(v);
+        root.appendChild(svg("line", { x1: L, x2: W - R, y1: y, y2: y, class: "axis", "stroke-width": 0.5 }));
+        root.appendChild(svg("text", { x: L - 4, y: y + 3, "text-anchor": "end", class: "tick" }, compact(v)));
+      }
+      [0, Math.floor((n - 1) / 2), n - 1].forEach(function (i, k) {
+        if (i < 0 || (k > 0 && i === 0)) return;
+        root.appendChild(svg("text", { x: X(i), y: H - 6, "text-anchor": k === 0 ? "start" : k === 2 ? "end" : "middle", class: "tick" }, xs[i]));
+      });
+      models.forEach(function (m) {                                   // 预测带：连续的有预测的日子成一段，缺失处断开，不插值
+        var seg = [];
+        function flush() {
+          if (seg.length) {
+            var up = seg.map(function (i) { return X(i).toFixed(1) + " " + Y(Number(m.points[i].high)).toFixed(1); });
+            var dn = seg.slice().reverse().map(function (i) { return X(i).toFixed(1) + " " + Y(Number(m.points[i].low)).toFixed(1); });
+            var all = up.concat(dn);
+            root.appendChild(svg("path", { d: "M" + all.join(" L") + " Z", fill: m.color, "fill-opacity": 0.13, stroke: "none" }));
+            root.appendChild(svg("path", { d: "M" + up.join(" L"), fill: "none", stroke: m.color, "stroke-width": 1.1, "stroke-dasharray": m.dash || "none" }));
+            root.appendChild(svg("path", { d: "M" + dn.slice().reverse().join(" L"), fill: "none", stroke: m.color, "stroke-width": 1.1, "stroke-dasharray": m.dash || "none" }));
+          }
+          seg = [];
+        }
+        m.points.forEach(function (p, i) { if (p) seg.push(i); else flush(); });
+        flush();
+      });
+      var bw = Math.max(1, Math.min(3, step * 0.45));
+      act.forEach(function (a, i) {
+        root.appendChild(svg("line", { x1: X(i), x2: X(i), y1: Y(Number(a.high)), y2: Y(Number(a.low)), class: "bar-" + (a.dir || "flat"), "stroke-width": bw }));
+      });
+      models.forEach(function (m) {                                   // 突破点：实际低点跌破预测低点 / 实际高点突破预测高点
+        m.points.forEach(function (p, i) {
+          if (!p) return;
+          if (p.breach_low) root.appendChild(svg("circle", { cx: X(i), cy: Y(Number(act[i].low)), r: m.ring, fill: "none", stroke: m.color, "stroke-width": 1.6 }, svg("title", {}, xs[i] + " " + m.name + "：实际低点跌破预测低点")));
+          if (p.breach_high) root.appendChild(svg("circle", { cx: X(i), cy: Y(Number(act[i].high)), r: m.ring, fill: "none", stroke: m.color, "stroke-width": 1.6 }, svg("title", {}, xs[i] + " " + m.name + "：实际高点突破预测高点")));
+        });
+      });
+      var cursor = svg("line", { x1: 0, x2: 0, y1: T, y2: T + ph, class: "cursor", visibility: "hidden" });
+      root.appendChild(cursor);
+      var hit = svg("rect", { x: L, y: T, width: pw, height: ph, fill: "transparent" });
+      hit.style.touchAction = "pan-y";
+      function at(ev) {
+        var pt = ev.touches ? ev.touches[0] : ev, r = root.getBoundingClientRect();
+        var x = (pt.clientX - r.left) * (W / r.width);
+        var i = n > 1 ? Math.round((x - L) / step) : 0; i = Math.max(0, Math.min(n - 1, i));
+        cursor.setAttribute("x1", X(i)); cursor.setAttribute("x2", X(i)); cursor.setAttribute("visibility", "visible");
+        readout.textContent = "";
+        readout.appendChild(document.createTextNode(xs[i] + "　实际 低 " + px(act[i].low) + " ／ 高 " + px(act[i].high) + " ／ 收 " + px(act[i].close) + " " + ccy));
+        models.forEach(function (m) {
+          var p = m.points[i], txt;
+          if (!p) txt = "不可用（该日没有此模型的预测）";
+          else {
+            txt = "预测 低 " + px(p.low) + " ／ 高 " + px(p.high) + " " + ccy;
+            if (p.breach_low) txt += "　低点跌破";
+            if (p.breach_high) txt += "　高点突破";
+          }
+          readout.appendChild(h("div", null, m.name + "：" + txt));
+        });
+      }
+      ["mousemove", "mousedown", "touchstart", "touchmove"].forEach(function (e) { hit.addEventListener(e, at, { passive: true }); });
+      root.appendChild(hit);
+      wrap.appendChild(root);
+    }
+    draw();
+    var timer = null;
+    window.addEventListener("resize", function () { clearTimeout(timer); timer = setTimeout(function () { if (document.body.contains(wrap)) draw(); }, 120); });
+    return { redraw: draw };
+  }
   function compact(v) {
     var a = Math.abs(v);
     if (a >= 1e9) return (v / 1e9).toFixed(2) + "B";
@@ -198,7 +295,7 @@
 
   window.MS = {
     h: h, svg: svg, cell: cell, badge: badge, card: card, note: note, notes: notes, kv: kv, table: table,
-    fmtDec: fmtDec, fmtMoney: fmtMoney, fmtTime: fmtTime, lineChart: lineChart, legend: legend,
+    fmtDec: fmtDec, fmtMoney: fmtMoney, fmtTime: fmtTime, lineChart: lineChart, bandChart: bandChart, legend: legend,
     registerPanel: function (id, fn) { panels[id] = fn; },
     getPanel: function (id) { return panels[id]; }
   };

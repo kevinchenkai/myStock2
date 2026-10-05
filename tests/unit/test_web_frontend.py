@@ -13,7 +13,7 @@ STATIC = Path(registry.__file__).resolve().parent / "static"
 CSS = (STATIC / "app.css").read_text(encoding="utf-8")
 HTML = (STATIC / "index.html").read_text(encoding="utf-8")
 JS_FILES = sorted(STATIC.glob("*.js")) + sorted(registry.BUILTIN_VIEWS_DIR.glob("*/panel.js"))
-BUILTIN = ["account_overview", "holdings", "trades", "pnl", "equity_trend", "fx", "tickets", "scoreboard", "replay", "data_status"]
+BUILTIN = ["account_overview", "holdings", "trades", "pnl", "equity_trend", "fx", "tickets", "scoreboard", "forecast", "replay", "data_status"]
 
 
 def block(selector_start: str) -> str:

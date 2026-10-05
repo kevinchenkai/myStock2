@@ -100,6 +100,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; } ul.plain li { overflow-wrap: a
 .chart .axis { stroke: var(--line); } .chart .tick { fill: var(--muted); font-size: 10px; }
 .chart .gapband { fill: var(--gap); } .chart .cursor { stroke: var(--muted); stroke-dasharray: 3 3; }
 .chart .flow { fill: var(--muted); }
+.chart .bar-up { stroke: var(--up); } .chart .bar-down { stroke: var(--down); } .chart .bar-flat { stroke: var(--muted); }
 .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0; font-size: 12px; }
 .legend .sw { display: inline-block; width: 18px; height: 0; border-top: 3px solid; vertical-align: middle; margin-right: 4px; }
 .readout { min-height: 3.2em; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }

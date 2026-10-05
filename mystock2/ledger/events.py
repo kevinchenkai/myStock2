@@ -220,6 +220,10 @@ def record_source(conn: sqlite3.Connection, src: SourceDraft, received_at=None) 
 def _link(conn, source_record_id: str | None, event_id: str) -> None:
     if source_record_id:
         conn.execute("INSERT OR IGNORE INTO source_link(source_record_id, event_id) VALUES (?,?)", (source_record_id, event_id))
+        # 同一来源记录之前因身份/币种/映射不足进过待匹配队列：现在已入账，自动结清（否则队列里留着已处理的陈旧项，对账会误报「待匹配」）
+        for r in conn.execute("SELECT p.pending_id FROM pending_match p LEFT JOIN pending_resolution x ON x.pending_id=p.pending_id "
+                              "WHERE p.source_record_id=? AND x.pending_id IS NULL", (source_record_id,)).fetchall():
+            resolve_pending(conn, r["pending_id"], "posted", event_id, "auto: 后续采集已入账")
 
 
 # ------------------------------------------------------------------ 写入

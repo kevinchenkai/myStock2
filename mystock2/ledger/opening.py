@@ -16,7 +16,7 @@ def create_snapshot(conn: sqlite3.Connection, account_id: str, captured_at, sour
                     positions: dict[str, dict], cash: dict[str, dict], source_record_id: str | None = None) -> str:
     """写入券商快照（只追加、幂等）。
 
-    positions: {code: {"qty": "100", "sellable_qty": "100", "cost_basis": "..."}}
+    positions: {code: {"qty": "100", "sellable_qty": "100", "cost_basis": "…(历史列＝券商 cost_price，摊薄成本)", "average_cost": "平均成本", "diluted_cost": "摊薄成本"}}
     cash: {ccy: {"cash": "1000", "available": "...", "frozen": "..."}}
     """
     payload = {"p": {k: {a: to_db(b) for a, b in v.items() if b is not None} for k, v in sorted(positions.items())},
@@ -29,9 +29,11 @@ def create_snapshot(conn: sqlite3.Connection, account_id: str, captured_at, sour
                      (sid, account_id, iso_utc(captured_at), source, source_record_id))
         for code, v in positions.items():
             market = market_of(code)
-            conn.execute("INSERT INTO snapshot_position(snapshot_id, market, code, qty, sellable_qty, cost_basis) VALUES (?,?,?,?,?,?)",
+            conn.execute("INSERT INTO snapshot_position(snapshot_id, market, code, qty, sellable_qty, cost_basis, average_cost, diluted_cost) VALUES (?,?,?,?,?,?,?,?)",
                          (sid, market, code, to_db(v["qty"]), to_db(v["sellable_qty"]) if v.get("sellable_qty") is not None else None,
-                          to_db(v["cost_basis"]) if v.get("cost_basis") is not None else None))
+                          to_db(v["cost_basis"]) if v.get("cost_basis") is not None else None,
+                          to_db(v["average_cost"]) if v.get("average_cost") is not None else None,
+                          to_db(v["diluted_cost"]) if v.get("diluted_cost") is not None else None))
         for ccy, v in cash.items():
             conn.execute("INSERT INTO snapshot_cash(snapshot_id, currency, cash, available, frozen) VALUES (?,?,?,?,?)",
                          (sid, ccy.upper(), to_db(v["cash"]), to_db(v["available"]) if v.get("available") is not None else None,

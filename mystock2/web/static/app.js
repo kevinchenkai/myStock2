@@ -42,6 +42,15 @@
       var cur = params[p.name] !== undefined ? params[p.name] : (applied[p.name] !== undefined ? applied[p.name] : p.default);
       var ctl;
       if (p.name === "account") return;                                    // 账户选择器见下
+      if (p.name === "symbol" && data && data.codes) {   // 标的选择器：选项来自视图数据（不是配置里的固定列表）
+        var ssel = h("select", { "aria-label": "symbol" }, [h("option", { value: "", text: "（自动）" })].concat(data.codes.map(function (c) {
+          return h("option", { value: c, selected: c === data.symbol ? true : null, text: c });
+        })));
+        ssel.addEventListener("change", function () { var np = Object.assign({}, params); np.symbol = ssel.value; go(view.id, np); });
+        box.appendChild(field("symbol", "标的", ssel));
+        return;
+      }
+      if (p.name === "symbol") return;                                     // 数据到达前不显示（选项来自数据）
       if (p.choices) {
         ctl = h("select", { "aria-label": p.name }, p.choices.map(function (c) {
           return h("option", { value: c, selected: String(c) === String(cur) ? true : null, text: c === "" ? "（无）" : String(c) });

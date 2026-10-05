@@ -250,7 +250,8 @@ def ledger_source(conn: sqlite3.Connection, account_id: str) -> dict:
 
 
 def latest_snapshot(conn: sqlite3.Connection, account_id: str) -> sqlite3.Row | None:
-    return conn.execute("SELECT * FROM account_snapshot WHERE account_id=? ORDER BY captured_at DESC, snapshot_id DESC LIMIT 1",
+    # 只取带真实采集时刻的券商快照：V1 日快照（source='v1-date-only'）的 captured_at 只是占位，不能用于对账/成本
+    return conn.execute("SELECT * FROM account_snapshot WHERE account_id=? AND source!='v1-date-only' ORDER BY captured_at DESC, snapshot_id DESC LIMIT 1",
                         (account_id,)).fetchone()
 
 

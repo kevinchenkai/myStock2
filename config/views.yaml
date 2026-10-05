@@ -21,6 +21,10 @@ views:
       pair: USDHKD
   - id: tickets             # 操作单（密封语义：未揭示只显示「已密封」与计数）
   - id: scoreboard          # 记分牌（三类证据分区；不合成单一胜率结论）
+  - id: forecast            # 预测效果（基线 vs LightGBM+CQR；rebuilt 样本不是前向证据；目标日未结束的预测价位密封）
+    params:
+      source: rebuilt
+      window: 120
   - id: replay
     params:
       limit: 100

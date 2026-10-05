@@ -1,0 +1,20 @@
+title: 预测效果
+description: 基线（baseline）与 LightGBM+CQR（lgbm）对次日日内最低/最高价区间的预测 vs 实际：尾部覆盖率、区间宽度、pinball 损失、相对改善与 V1 门槛的描述性判定；选中标的的预测带图；各标的最新预测（目标日未结束时密封）。事后重建样本不是前向证据。
+order: 85
+data_mode: daily
+stale_after_hours: 96
+params:
+  source:
+    type: str
+    default: "rebuilt"
+    choices: ["rebuilt", "forward"]
+    description: 样本来源（rebuilt＝事后重建；forward＝当时生成并冻结；二者不混算）
+  symbol:
+    type: str
+    default: ""
+    description: 图表的标的代码（留空＝该来源下样本最多的标的）
+  window:
+    type: int
+    default: 120
+    choices: [60, 120, 250]
+    description: 图表显示最近多少个交易日

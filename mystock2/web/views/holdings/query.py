@@ -80,9 +80,10 @@ def run(conn, params):
         cp = pnl.by_code.get(code)
         mv = qty * px.close if px.close is not None else None
         # 券商成本（快照原值）
-        broker_cost = C.price_cell(dec(sp["cost_basis"]), ccy, tag="快照原值") if sp is not None and sp["cost_basis"] is not None else \
-            C.na_cell("最近快照没有该标的的成本" if sp is not None else "没有快照")
-        diluted = C.na_cell("快照没有摊薄成本字段")
+        broker_cost = C.price_cell(dec(sp["average_cost"]), ccy, tag="券商平均成本") if sp is not None and sp["average_cost"] is not None else \
+            C.na_cell("最近快照没有该标的的平均成本" if sp is not None else "没有快照")
+        diluted = C.price_cell(dec(sp["diluted_cost"]), ccy, tag="券商摊薄成本", title="摊薄成本把已实现盈亏摊入持仓，可为负；它不是持仓的平均成本") \
+            if sp is not None and sp["diluted_cost"] is not None else C.na_cell("最近快照没有摊薄成本")
         # 本地移动平均成本
         if cp is None or cp.avg_cost is None:
             local = C.na_cell("没有可追溯的成本证据（开账持仓无成本，且之后无买入）" if cp is not None or qty else "无持仓")

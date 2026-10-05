@@ -139,7 +139,9 @@ def collect_snapshot(ledger, api: TradeApi, *, account_id: str, acc_id: int, mar
             for p in api.positions(acc_id, m):
                 market_of(p["code"])
                 positions[p["code"]] = {"qty": str(_q(p["qty"], QTY_Q)), "sellable_qty": str(_q(p["can_sell_qty"], QTY_Q)) if p.get("can_sell_qty") is not None else None,
-                                        "cost_basis": str(_q(p["cost_price"], PRICE_Q)) if p.get("cost_price") else None}
+                                        "cost_basis": str(_q(p["cost_price"], PRICE_Q)) if p.get("cost_price") else None,     # 历史列：券商 cost_price＝摊薄成本（首跑核实，可为负）
+                                        "average_cost": str(_q(p["average_cost"], PRICE_Q)) if p.get("average_cost") else None,
+                                        "diluted_cost": str(_q(p["diluted_cost"], PRICE_Q)) if p.get("diluted_cost") is not None else None}
         sleep(min_interval)
         funds = api.funds(acc_id)
     except Exception as exc:  # noqa: BLE001
@@ -331,7 +333,8 @@ class FutuTradeApi:
             ret, df = ctx.position_list_query(acc_id=acc_id, trd_env=ft.TrdEnv.REAL)
             if ret != ft.RET_OK:
                 raise FutuApiError(str(df))
-            return [{"code": r.code, "qty": r.qty, "can_sell_qty": r.can_sell_qty, "cost_price": r.cost_price} for r in df.itertuples()] if df is not None and len(df) else []
+            return [{"code": r.code, "qty": r.qty, "can_sell_qty": r.can_sell_qty, "cost_price": r.cost_price,
+                     "average_cost": getattr(r, "average_cost", None), "diluted_cost": getattr(r, "diluted_cost", None)} for r in df.itertuples()] if df is not None and len(df) else []
         finally:
             ctx.close()
 

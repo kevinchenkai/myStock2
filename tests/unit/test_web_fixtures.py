@@ -97,7 +97,7 @@ def _build_demo_db(tmp_path, *, quotes=True, fx=True, snapshot="match", opening_
     led = dbmod.connect_writer(path, "ledger")
     ensure_account(led, ACCT, "futu", "REAL", "USD")
     sid = create_snapshot(led, ACCT, T0, "futu",
-                          {"US.NVDA": {"qty": "100", "cost_basis": "80" if opening_cost else None},
+                          {"US.NVDA": {"qty": "100", "average_cost": "80" if opening_cost else None},
                            "HK.00700": {"qty": "200"}},
                           {"USD": {"cash": "10000"}, "HKD": {"cash": "50000"}})
     record_opening(led, ACCT, T0, {"US.NVDA": "100", "HK.00700": "200"}, {"USD": "10000", "HKD": "50000"}, snapshot_id=sid)
@@ -129,10 +129,10 @@ def _build_demo_db(tmp_path, *, quotes=True, fx=True, snapshot="match", opening_
         led = dbmod.connect_writer(path, "ledger")
         p = project(led, ACCT, as_of="2026-03-10T01:00:00.000000Z")
         pos = {c: {"qty": str(q)} for c, q in p.positions.items()}
-        pos["US.NVDA"]["cost_basis"] = "85"                      # 券商成本（快照原值）；0700 的快照没有成本
+        pos["US.NVDA"]["average_cost"], pos["US.NVDA"]["diluted_cost"] = "85", "-3"      # 券商平均成本与摊薄成本（摊薄可为负）；0700 的快照没有成本
         cash = {c: {"cash": str(v)} for c, v in p.cash.items()}
         if snapshot == "mismatch":
-            pos["US.NVDA"] = {"qty": str(p.positions["US.NVDA"] + 3), "cost_basis": "85"}
+            pos["US.NVDA"] = {"qty": str(p.positions["US.NVDA"] + 3), "average_cost": "85", "diluted_cost": "-3"}
             cash["USD"] = {"cash": str(p.cash["USD"] + D("12.34"))}
         create_snapshot(led, ACCT, "2026-03-10T01:00:00.000000Z", "futu", pos, cash)
         led.close()

@@ -10,7 +10,7 @@ MS.registerPanel("holdings", function (root, d) {
     { key: "price", label: "收盘价", num: true },
     { key: "market_value", label: "市值", num: true },
     { key: "weight", label: "占该币种持仓市值", num: true },
-    { key: "broker_cost", label: "券商成本（快照）", num: true },
+    { key: "broker_cost", label: "券商平均成本", num: true },
     { key: "diluted_cost", label: "摊薄成本", num: true },
     { key: "local_cost", label: "本地移动平均成本", num: true },
     { key: "unrealized", label: "浮动盈亏（按本地成本）", num: true },

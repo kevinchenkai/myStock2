@@ -18,8 +18,8 @@
 | 编号 | 问题 | 状态 |
 | --- | --- | --- |
 | D0 | V2 与 V1 的关系：新仓库替代 V1；V1 代码锁定只读，可借用或全新生成；V2 完成后 V1→8887、V2→8888 | ✅ 已确认（负责人，2026-10-05；见方案 §3.1、§3.7） |
-| D1 | `NV` 是否指 NVDA（M0a：V1 与 idea 文档均无 `NV` 写法，请确认来源） | 待答复 |
-| D2 | 研究宇宙：沿用 V1 的 6 只，还是收敛到 NVDA/TSLA/0700（冻结协议前必须确定） | 待答复 |
+| D1 | `NV` 是否指 NVDA | ✅ 已确认（负责人 2026-10-05：研究名单写明「英伟达」＝US.NVDA） |
+| D2 | 研究宇宙 | ✅ 已确认（负责人 2026-10-05）：美股 英伟达 NVDA、特斯拉 TSLA、拼多多 PDD；港股 腾讯 00700、阿里 09988、康方生物 09926 |
 | D3 | 基准币种、预算 `B`、开账日 `D0`（决定共同初始权益 `E0`） | 待答复 |
 | D4 | 核心仓／交易仓边界；`max_weight`、`max_lots`；是否允许加仓 | 待答复 |
 | D5 | 费用来源：券商对账单／接口，还是自填费用档案 | 待答复 |
@@ -48,7 +48,7 @@
 | --- | --- | --- |
 | M0a | 只读预审（V1 源码与官方文档）、V1 功能对照表（D16 输入）：[审计](records/v1-audit_claude_20261005.md)、[功能对照](records/v1-feature-parity_claude_20261005.md)、[模块来源](records/module-sources_claude_20261005.md) | ✅ 已完成（方案 v1.1 §14 已吸收；官方文档部分经摘要读取，引用前须复核） |
 | M1 | 地基（包骨架、core、迁移器、边界测试） | ✅ 已完成（回执 [m1-foundation](records/m1-foundation_claude_20261005.md)） |
-| M0b | V1 库 schema/行数、备份演练（需授权访问 V1 运行库） | 待授权 |
+| M0b | V1 库只读核对与一次性导入 | ✅ 已完成（负责人 2026-10-05 授权；回执 [first-real-run](records/first-real-run_claude_20261005.md)） |
 | M2a | 账本（最小前向包）：核心逻辑与合成测试完成，回执 [m2a-ledger-core](records/m2a-ledger-core_claude_20261005.md)；Futu 采集与真实对账待授权与 M0a | 进行中 |
 | M4 | 行情与预测基线：回执 [m4-market-baseline](records/m4-market-baseline_claude_20261005.md) | ✅ 已完成（合成数据＋公开行情冒烟） |
 | M5 | 记分牌：引擎/指标/统计/持久化完成，回执 [m5-scoreboard](records/m5-scoreboard_claude_20261005.md)；页面与 CLI 待 M3/M6 | 核心完成 |
@@ -57,7 +57,7 @@
 | M9 | LLM 否决（人工通道）：回执 [m9-llm-veto](records/m9-llm-veto_claude_20261005.md)；API 通道（D7）未做 | ✅ 已完成（合成数据） |
 | M2b | V1 历史导入器：回执 [m2b-v1-import](records/m2b-v1-import_claude_20261005.md)；**真实导入待 M0b 授权** | 代码完成，待授权 |
 | M3 | 透视（Web）：框架＋六个视图完成，回执 [m3-web-views](records/m3-web-views_claude_20261005.md)；LN-07（K 线/资金流向/公司资料）未做 | ✅ 已完成（合成数据） |
-| M3-a | `snapshot_position.cost_basis` 口径：Web 按**每股**处理；V1 导入器与 Futu 采集器按每股成本价（V1/富途 `cost_price`）写入，口径一致，**真实首跑须核对** | 待核对（真实数据） |
+| M3-a | `snapshot_position` 成本口径 | ✅ 已核实并修正（真实首跑 2026-10-05）：富途 `cost_price` 是**摊薄成本**（可为负），`average_cost` 才是平均成本；迁移 0008 新增 `average_cost`/`diluted_cost` 两列，`cost_basis` 保留为历史列；开账成本证据只用平均成本，且要求开账后该标的无成交 |
 | M3-b | 盈亏成本口径（移动平均；无证据/估算/精确三类按比例消耗；见 `ledger/pnl.py` 头注释）需负责人确认 | 待确认 |
 | M8 | LightGBM+CQR 候选线：预测器与评估框架完成；探索性评估未过门槛（+0.57%，3/6），**不晋级**；回执 [m8-lgbm-cqr](records/m8-lgbm-cqr_claude_20261005.md) | 完成（负结果） |
 | M10 | 交接文档：[真实数据启动指南](guides/real-data-startup_claude_20261005.md)、[切换运行手册](guides/cutover-runbook_claude_20261005.md)；**`quoted` 近实时、公开导出白名单（D8）、切换执行均未做** | 文档完成，执行待决定/授权 |
@@ -73,3 +73,7 @@
 | PT-02 | `human_plan` 冻结 ticket 路径的 `state_ref` 对齐；`ai_lgbm` 接入 `coach run` 的显式开关 | 待办 |
 | PT-03 | 否决外发包里 ticket 的 qty×价格仍可粗略反推账户规模：人工外发前确认（关联 D7） | 待办 |
 | PT-04 | M3b 决策点：①揭示是否只显示 `version_hashes` 覆盖到的版本；②密封期是否显示「哪只标的缺单」；③pilot 判定规则固化进协议登记 | 待负责人答复 |
+| FR-1 | 真实首跑（OpenD 只读采集、V1 导入、行情/预测回填）：[回执](records/first-real-run_claude_20261005.md)；首跑发现并修复的问题见回执 | ✅ 完成（历史回填；前向计时未启动） |
+| FR-2 | 开账成本 | ✅ 已处置（负责人 2026-10-05「按推荐处理」）：用券商**平均成本**作开账成本证据（标「估算」）；摊薄成本单列展示、不当买入成本；开账后有成交的标的不用后到快照的成本（不猜） |
+| FR-3 | 港股资金流水/股息的备注格式未核实（港股股息暂进待匹配队列）；接口无除息日，股息应收与到账同日 | 待核实（等首次港股派息出现） |
+| FR-4 | M3c 预测效果视图：[回执](records/m3c-forecast-view_claude_20261005.md) | ✅ 已处置（负责人 2026-10-05）：事后重建（rebuilt）的预测不密封；前向（forward）预测仍按 §6A.2 密封。rebuilt 的「新鲜」只代表刚重建过 |

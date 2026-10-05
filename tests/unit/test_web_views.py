@@ -148,8 +148,8 @@ def test_overview_without_any_snapshot_is_unreconciled_not_ok(tmp_path):
 def test_holdings_three_costs_side_by_side_never_overwritten(client):
     rows = get_view(client, "holdings")[1]["data"]["rows"]
     nv = by(rows, "code", "US.NVDA")
-    assert nv["broker_cost"]["text"].startswith("85.00 USD") and nv["broker_cost"]["tag"] == "快照原值"
-    assert nv["diluted_cost"]["na"] is True                                                     # 摊薄成本：没有就不可用
+    assert nv["broker_cost"]["text"].startswith("85.00 USD") and nv["broker_cost"]["tag"] == "券商平均成本"
+    assert nv["diluted_cost"]["text"].startswith("-3.00 USD") and nv["diluted_cost"]["tag"] == "券商摊薄成本"     # 摊薄成本可为负，且不当买入成本
     assert nv["local_cost"]["v"] == "81.83181818181818181818181818181818181818" or nv["local_cost"]["text"].startswith("81.8318")
     assert nv["local_cost"]["tag"] == "估算"                                                     # 含开账快照成本 → 估算
     assert nv["broker_cost"]["v"] != nv["local_cost"]["v"]                                       # 互不覆盖
@@ -413,3 +413,41 @@ def test_stale_ledger_is_marked_stale(tmp_path):
     app = make_app(tmp_path, clock=lambda: NOW + timedelta(days=10))
     b = get_view(app.test_client(), "trades")[1]
     assert b["header"]["staleness"]["label"] == "陈旧"
+
+
+def test_latest_v1_date_only_snapshot_is_never_used_for_reconciliation(tmp_path):
+    from mystock2.ledger.opening import create_snapshot
+
+    from .ledger_helpers import ACCT
+
+    p = build_demo_db(tmp_path)
+    led = dbmod.connect_writer(p, "ledger")
+    create_snapshot(led, ACCT, "2026-03-31T23:59:59Z", "v1-date-only", {"US.NVDA": {"qty": "1"}}, {"USD": {"cash": "1"}})   # 比所有真实快照都晚的日快照
+    led.close()
+    code, b = get_view(make_app(tmp_path, p).test_client(), "account_overview")
+    assert code == 200 and b["status"] == "ok"                                    # 不得因日快照而 500 或给出假差异
+    assert b["data"]["reconciliation"]["snapshot"] != "v1-date-only"
+
+
+def test_opening_cost_evidence_uses_average_cost_never_diluted_and_never_after_a_fill(tmp_path):
+    from mystock2.ledger.opening import create_snapshot
+    from mystock2.web.ledgerdata import load_trades
+
+    from .ledger_helpers import ACCT
+    from .test_web_fixtures import T0, buy
+
+    path = tmp_path / "oc.db"
+    dbmod.migrate(path)
+    led = dbmod.connect_writer(path, "ledger")
+    ensure_account(led, ACCT, "futu", "REAL", "USD")
+    sid = create_snapshot(led, ACCT, T0, "futu", {"US.NVDA": {"qty": "100", "cost_basis": "-7"}, "US.TSLA": {"qty": "50", "cost_basis": "-9"}}, {"USD": {"cash": "1"}})
+    record_opening(led, ACCT, T0, {"US.NVDA": "100", "US.TSLA": "50"}, {"USD": "1"}, snapshot_id=sid)      # 开账快照只有（摊薄）cost_basis，没有平均成本
+    buy(led, "d1", "US.NVDA", 10, 100, "2026-03-03T15:00:00.000000Z")                                      # NVDA 开账后有成交；TSLA 没有
+    create_snapshot(led, ACCT, "2026-03-20T00:00:00Z", "futu",
+                    {"US.NVDA": {"qty": "110", "average_cost": "999", "diluted_cost": "-5"}, "US.TSLA": {"qty": "50", "cost_basis": "-9", "average_cost": "321", "diluted_cost": "-9"}},
+                    {"USD": {"cash": "1"}})
+    led.close()
+    lt = load_trades(dbmod.connect_ro(path), ACCT)
+    opening = {e.code: e.price for e in lt.trade_events if e.kind == "OPENING"}
+    assert opening["US.TSLA"] == D("321")                      # 平均成本；不是 cost_basis/摊薄成本（负数）
+    assert opening["US.NVDA"] is None                          # 开账后有成交：平均成本已变，不能代表开账时的成本

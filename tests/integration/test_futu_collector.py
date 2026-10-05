@@ -36,7 +36,7 @@ class FakeApi:
         return [d for d in self._deals[market] if str(start) <= d["create_time"][:10] <= str(end)]
 
     def positions(self, acc_id, market):
-        return {"US": [{"code": "US.NVDA", "qty": 15.0, "can_sell_qty": 15.0, "cost_price": 101.2345}], "HK": []}[market]
+        return {"US": [{"code": "US.NVDA", "qty": 15.0, "can_sell_qty": 15.0, "cost_price": 101.2345, "average_cost": 150.5, "diluted_cost": 101.2345}], "HK": []}[market]
 
     def funds(self, acc_id):
         return {"USD": {"cash": 899.0}, "HKD": {"cash": 0.0}}
@@ -106,6 +106,8 @@ def test_snapshot_then_reconcile_fees_close_the_cash_gap(led):
     collect_deals(led, api, account_id=ACCT, acc_id=1, markets=["US"], start=date(2026, 3, 1), end=date(2026, 3, 31), **NOSLEEP)
     rep = collect_snapshot(led, api, account_id=ACCT, acc_id=1, markets=["US", "HK"], captured_at="2026-03-04T21:00:00.000000Z", **NOSLEEP)
     assert rep.ok and led.execute("SELECT cost_basis FROM snapshot_position").fetchone()["cost_basis"] == "101.2345"
+    row = led.execute("SELECT cost_basis, average_cost, diluted_cost FROM snapshot_position").fetchone()
+    assert (row["average_cost"], row["diluted_cost"]) == ("150.5", "101.2345")           # 平均成本与摊薄成本分开存（首跑核实：cost_price＝摊薄成本）
     sid = led.execute("SELECT snapshot_id FROM account_snapshot").fetchone()["snapshot_id"]
     r = reconcile(led, ACCT, sid)
     assert project(led, ACCT).positions == {"US.NVDA": D(15)} and not r.position_diffs                      # 持仓逐标的一致
@@ -190,3 +192,14 @@ def test_dividend_and_withholding_tax_pair_into_one_dividend_group_and_unparseab
     assert p.cash == {"USD": D("37.67")} and not p.receivable                 # 现金＝总额−预扣税；应收结清
     again = collect_cash_flows(led, api, account_id=ACCT, acc_id=1, days=[d], type_map=tmap, **NOSLEEP)
     assert again.inserted == 0 and again.duplicate == 3                       # 幂等
+
+
+def test_pending_item_is_auto_resolved_when_a_later_run_posts_it(led):
+    api = FakeApi()
+    api._deals["US"] = [deal(1, order="O1")]
+    collect_deals(led, api, account_id=ACCT, acc_id=1, markets=["US"], start=date(2026, 3, 1), end=date(2026, 3, 31), **NOSLEEP)
+    api.fees = {"O1": [{"item": "佣金", "amount": 1.0, "currency": None}]}
+    r1 = collect_order_fees(led, api, account_id=ACCT, acc_id=1, **NOSLEEP)                      # 币种未核实 → 进待匹配
+    assert r1.pending == 1 and len(open_pending(led)) == 1
+    r2 = collect_order_fees(led, api, account_id=ACCT, acc_id=1, assume_market_currency=True, **NOSLEEP)
+    assert r2.inserted == 1 and open_pending(led) == []                                            # 入账后陈旧待匹配项自动结清
