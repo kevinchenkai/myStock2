@@ -5,10 +5,11 @@ import hashlib
 import json
 import sqlite3
 
+from mystock2.core.db import atomic
 from mystock2.core.money import to_db
 from mystock2.core.timeutil import iso_utc, utc_now
 from mystock2.instruments.code_map import currency_of, market_of
-from mystock2.ledger.events import EventDraft, LedgerError, SourceDraft, atomic, post_event
+from mystock2.ledger.events import EventDraft, LedgerError, SourceDraft, post_event
 
 
 def create_snapshot(conn: sqlite3.Connection, account_id: str, captured_at, source: str,

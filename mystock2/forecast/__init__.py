@@ -1,1 +1,1 @@
-"""myStock2 子包占位（里程碑实现时填充，见实施方案 §3.3）。"""
+"""预测：透明基线与（M8）LightGBM+CQR。只依赖 core、instruments、market；不得依赖 web/ledger。"""

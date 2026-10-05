@@ -11,9 +11,12 @@ import 图不足以保证「研究不改账户事实」，所以写权限在连�
 from __future__ import annotations
 
 import hashlib
+import secrets
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterator
 
 from mystock2.core.timeutil import iso_utc, utc_now
 
@@ -36,6 +39,14 @@ TABLE_OWNERS: dict[str, str] = {
     "account_snapshot": "ledger",
     "snapshot_position": "ledger",
     "snapshot_cash": "ledger",
+    # market / forecast（M4）
+    "quote_daily": "market",
+    "quote_hourly": "market",
+    "fx_rate": "market",
+    "collection_log": "market",
+    "evidence_snapshot": "market",
+    "security_rule": "instruments",
+    "prediction_version": "forecast",
 }
 
 _WRITE_ACTIONS = {sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE, sqlite3.SQLITE_DELETE}
@@ -104,6 +115,23 @@ def connect_migrator(path: str | Path) -> sqlite3.Connection:
     conn = _base_connect(path)
     conn.execute("PRAGMA journal_mode = WAL")
     return conn
+
+
+@contextmanager
+def atomic(conn: sqlite3.Connection) -> Iterator[None]:
+    """事务/保存点：最外层 BEGIN IMMEDIATE，嵌套用 SAVEPOINT；异常整体回滚。"""
+    outer = not conn.in_transaction
+    sp = "sp_" + secrets.token_hex(4)
+    conn.execute("BEGIN IMMEDIATE" if outer else f"SAVEPOINT {sp}")
+    try:
+        yield
+    except BaseException:
+        conn.execute("ROLLBACK" if outer else f"ROLLBACK TO {sp}")
+        if not outer:
+            conn.execute(f"RELEASE {sp}")
+        raise
+    else:
+        conn.execute("COMMIT" if outer else f"RELEASE {sp}")
 
 
 # ---------------------------------------------------------------- 迁移器

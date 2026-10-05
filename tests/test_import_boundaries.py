@@ -8,7 +8,7 @@ PKG = Path(__file__).resolve().parents[1] / "mystock2"
 ALLOWED = {
     "core": set(),
     "instruments": {"core"},
-    "collectors": {"core", "instruments"},
+    "collectors": {"core", "instruments", "ledger", "market"},   # 采集器把外部数据写入账本/行情
     "ledger": {"core", "instruments"},
     "market": {"core", "instruments"},
     "forecast": {"core", "instruments", "market"},

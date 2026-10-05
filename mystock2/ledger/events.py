@@ -11,13 +11,11 @@ from __future__ import annotations
 
 import hashlib
 import json
-import secrets
 import sqlite3
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Iterator
 
+from mystock2.core.db import atomic
 from mystock2.core.money import MoneyError, dec, to_db
 from mystock2.core.timeutil import TimeError, iso_utc, utc_now
 from mystock2.instruments.code_map import CodeError, currency_of, market_of
@@ -96,23 +94,6 @@ def flow_key(account_id: str, flow_id: str | None, kind: str) -> str:
     if not flow_id:
         raise IdentityInsufficient("资金流水缺少流水号")
     return f"{kind.lower()}:{account_id}:{flow_id}"
-
-
-# ------------------------------------------------------------------ 事务
-@contextmanager
-def atomic(conn: sqlite3.Connection) -> Iterator[None]:
-    outer = not conn.in_transaction
-    sp = "sp_" + secrets.token_hex(4)
-    conn.execute("BEGIN IMMEDIATE" if outer else f"SAVEPOINT {sp}")
-    try:
-        yield
-    except BaseException:
-        conn.execute("ROLLBACK" if outer else f"ROLLBACK TO {sp}")
-        if not outer:
-            conn.execute(f"RELEASE {sp}")
-        raise
-    else:
-        conn.execute("COMMIT" if outer else f"RELEASE {sp}")
 
 
 # ------------------------------------------------------------------ 校验

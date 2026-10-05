@@ -8,8 +8,10 @@ dependencies:
   - pip:
       - PyYAML>=6.0
       - Flask>=3.0
+      - yfinance==1.7.0   # 与 V1 同版本；公开接口，个人研究用途，不保证实时
       # dev
       - pytest>=8
       - hypothesis>=6
       - ruff>=0.5
-      # 后续里程碑按需加入：futu-api（M2a）、yfinance（M4）、scikit-learn/lightgbm（M8），加入时锁定版本并说明理由
+      - numpy>=1.26      # 测试中独立核对预测器
+      # 后续里程碑按需加入：futu-api（M2a）、scikit-learn/lightgbm（M8），加入时锁定版本并说明理由
