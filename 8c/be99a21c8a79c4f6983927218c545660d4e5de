@@ -1,0 +1,50 @@
+mystock2/web/views/replay/panel.js
+  s_97d138eaf84b50::t_0656e996c1b2e6 39
+mystock2/web/static/app.css
+  s_97d138eaf84b50::t_f581aea648c970 155-164
+mystock2/web/views/tickets/query.py
+  s_97d138eaf84b50::t_61cba1cd0cc40f 131-137,142-145
+  s_97d138eaf84b50::t_bc68e2ddbffbbf 118-130,138-141,146-153,156,158-163,213
+mystock2/web/static/ui.js
+  s_97d138eaf84b50::t_0656e996c1b2e6 197
+  s_97d138eaf84b50::t_f581aea648c970 125-132,137-138,160-164,174,180-186,191,195-196,198-212,219,228,240,253
+mystock2/web/views/pnl/panel.js
+  s_97d138eaf84b50::t_1eb6278e25ff28 1,31-49
+  s_97d138eaf84b50::t_e3e1f5bb2fb1a3 50
+tests/unit/test_web_ops_views.py
+  s_97d138eaf84b50::t_bde4d4f827ad4b 196-197,592-611
+tests/unit/test_web_frontend.py
+  s_97d138eaf84b50::t_6ad165107824f2 341-390
+tests/unit/test_web_views.py
+  s_97d138eaf84b50::t_86383a28acafa4 451-466
+mystock2/web/views/tickets/panel.js
+  s_97d138eaf84b50::t_bc68e2ddbffbbf 3-21
+mystock2/web/views/pnl/view.yaml
+  s_97d138eaf84b50::t_1eb6278e25ff28 15-18
+docs/records/m3e-pagination-orders-finance_claude_20261005.md
+  s_97d138eaf84b50::t_81792dcbf6d3db 1-40
+tests/unit/test_web_framework.py
+  s_97d138eaf84b50::t_bde4d4f827ad4b 171-174
+docs/records/real-data-phase-changelog_claude_20261005.md
+  s_97d138eaf84b50::t_81792dcbf6d3db 35-37,51-53,91
+mystock2/web/views/pnl/query.py
+  s_97d138eaf84b50::t_1eb6278e25ff28 12-13,22-62,125,128
+config/views.yaml
+  s_97d138eaf84b50::t_e301fce30a2aec 30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "8cbe99a21c8a79c4f6983927218c545660d4e5de",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
