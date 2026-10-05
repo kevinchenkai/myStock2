@@ -94,7 +94,7 @@ def test_builtin_view_sources_pass_the_same_static_lint():
 
 def test_views_yaml_controls_enabled_hidden_order_and_default_params(tmp_path):
     cfg = {"views": [
-        {"id": "fx", "params": {"pair": "USDCNY"}},
+        {"id": "fx", "params": {"days": 30}},
         {"id": "holdings", "hidden": True},
         {"id": "trades", "enabled": False},
         {"id": "ghost"},
@@ -107,12 +107,12 @@ def test_views_yaml_controls_enabled_hidden_order_and_default_params(tmp_path):
     assert ids == ["fx", "holdings", "pnl", "account_overview", "equity_trend", "tickets", "scoreboard", "forecast", "replay", "data_status"]   # 列出的在前（按配置顺序），其余按 order；trades 已停用
     assert next(v for v in js["views"] if v["id"] == "holdings")["hidden"] is True
     fx = next(v for v in js["views"] if v["id"] == "fx")
-    assert next(p for p in fx["params"] if p["name"] == "pair")["default"] == "USDCNY"
+    assert next(p for p in fx["params"] if p["name"] == "days")["default"] == 30
     assert {p["view"] for p in js["problems"]} == {"ghost", "pnl"}
     assert get_view(c, "trades")[0] == 404                                              # 停用
     assert get_view(c, "holdings")[0] == 200                                            # 隐藏但可访问
-    assert get_view(c, "fx")[1]["params"]["pair"] == "USDCNY"                           # 默认参数生效
-    assert get_view(c, "fx", pair="USDHKD")[1]["params"]["pair"] == "USDHKD"            # 请求参数覆盖默认
+    assert get_view(c, "fx")[1]["params"]["days"] == 30                                 # 默认参数生效
+    assert get_view(c, "fx", days=60)[1]["params"]["days"] == 60                        # 请求参数覆盖默认
 
 
 def test_shipped_views_yaml_is_valid_and_lists_every_builtin_view():

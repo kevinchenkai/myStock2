@@ -165,3 +165,62 @@ def test_ops_panels_never_claim_a_single_win_rate_and_use_only_server_cells():
         t = (registry.BUILTIN_VIEWS_DIR / vid / "panel.js").read_text(encoding="utf-8")
         assert "打败" not in t and "win_rate" not in t, vid
         assert "innerHTML" not in t and "Number(" not in t and "parseFloat" not in t and "toFixed" not in t, vid
+
+
+@pytest.mark.skipif(node is None, reason="需要 node")
+def test_table_sorting_and_market_filter_behaviour():
+    """表格点击排序（数值按 v、缺失在后、数值列先降序）与美股/港股筛选（无市场归属的行始终显示）；用最小假 DOM 在 node 里实际运行。"""
+    script = r"""
+    const vm = require('vm'), fs = require('fs');
+    class El {
+      constructor(t){ this.tag=t; this.children=[]; this.attrs={}; this.listeners={}; this.className=''; this._text=''; this.nodeType=1; this.value=''; this.parentNode=null; }
+      setAttribute(k,v){ this.attrs[k]=v; } appendChild(c){ c.parentNode=this; this.children.push(c); return c; }
+      addEventListener(e,f){ (this.listeners[e]=this.listeners[e]||[]).push(f); }
+      set textContent(v){ this._text=String(v); this.children=[]; } get textContent(){ return this._text + this.children.map(c=>c.textContent).join(''); }
+      click(){ (this.listeners.click||[]).forEach(f=>f()); }
+      find(pred, out=[]){ if(pred(this)) out.push(this); this.children.forEach(c=>c.find&&c.find(pred,out)); return out; }
+    }
+    const store = {};
+    const ctx = { window: { localStorage: { getItem:k=>store[k]||null, setItem:(k,v)=>{store[k]=v;} } }, console,
+      document: { createElement: t => new El(t), createElementNS: (n,t) => new El(t), createTextNode: s => { const e=new El('#text'); e._text=String(s); return e; } } };
+    vm.createContext(ctx);
+    vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), ctx);
+    const MS = ctx.window.MS;
+    const rows = [
+      { code: 'US.NVDA', qty: {text:'66', v:'66'}, mv: {text:'15,440.70 USD', v:'15440.7'} },
+      { code: 'HK.00700', qty: {text:'11,807', v:'11807'}, mv: {text:'4,994,361.00 HKD', v:'4994361'} },
+      { code: 'US.TSLA', qty: {text:'56', v:'56'}, mv: {text:'不可用', na:true, v:null} },
+      { code: 'HK.09926', qty: {text:'1,000', v:'1000'}, mv: {text:'106,000.00 HKD', v:'106000'} },
+      { code: '汇总', qty: {text:'—', na:true}, mv: {text:'x', na:true} },
+    ];
+    const cols = [{key:'code',label:'标的'},{key:'qty',label:'数量',num:true},{key:'mv',label:'市值',num:true}];
+    const host = MS.table(cols, rows);
+    const order = () => host.find(e=>e.tag==='tbody')[0].children.map(tr=>tr.children[0].textContent);
+    const th = label => host.find(e=>e.tag==='th').filter(t=>t.textContent.startsWith(label))[0];
+    const btn = label => host.find(e=>e.tag==='button').filter(b=>b.textContent===label)[0];
+    const out = {};
+    out.original = order();
+    th('数量').click();  out.qtyDesc = order();                 // 数值列：第一次点＝降序
+    th('数量').click();  out.qtyAsc = order();
+    th('数量').click();  out.restored = order();                // 第三次：恢复原顺序
+    th('市值').click();  out.mvDesc = order();                  // 缺失（不可用）排最后
+    th('市值').click();  out.mvAsc = order();                   // 升序时缺失仍在最后
+    th('标的').click();  out.codeAsc = order();                 // 文本列：升序
+    btn('港股').click(); out.hk = order();                      // 无归属的行（汇总）始终显示
+    btn('美股').click(); out.us = order();
+    out.stored = store['mystock2.market'];
+    console.log(JSON.stringify(out));
+    """
+    r = subprocess.run([node, "-e", script, str(STATIC / "ui.js")], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    import json
+    o = json.loads(r.stdout.strip())
+    assert o["original"] == ["US.NVDA", "HK.00700", "US.TSLA", "HK.09926", "汇总"]
+    assert o["qtyDesc"] == ["HK.00700", "HK.09926", "US.NVDA", "US.TSLA", "汇总"]          # 缺失（汇总）在最后
+    assert o["qtyAsc"] == ["US.TSLA", "US.NVDA", "HK.09926", "HK.00700", "汇总"]
+    assert o["restored"] == o["original"]
+    assert o["mvDesc"] == ["HK.00700", "HK.09926", "US.NVDA", "US.TSLA", "汇总"]          # 不可用排最后
+    assert o["mvAsc"] == ["US.NVDA", "HK.09926", "HK.00700", "US.TSLA", "汇总"]          # 升序时缺失仍在最后
+    assert [c for c in o["codeAsc"] if c != "汇总"] == ["HK.00700", "HK.09926", "US.NVDA", "US.TSLA"]       # 文本列升序
+    assert set(o["hk"]) == {"HK.00700", "HK.09926", "汇总"} and set(o["us"]) == {"US.NVDA", "US.TSLA", "汇总"}
+    assert o["stored"] == "US"

@@ -1,4 +1,4 @@
-"""外汇视图（LN-06）：USD/HKD/CNY 换算路径与汇率历史。
+"""外汇视图（LN-06）：美元—人民币（USD/CNY）汇率与历史。
 
 路径：直接币对、反向币对，或经 USD 中转（HKD→USD→CNY）；每一段都显示来源与汇率日期。缺任一段即「不可用」，
 **不当作 1、不拿过旧的值冒充**（`max_stale_days` 之外视为缺失）。汇率是比率不是涨跌，用中性色。
@@ -13,7 +13,7 @@ from mystock2.market.fx import FxUnavailable
 from mystock2.web import common as C
 from mystock2.web.fxpath import describe_legs, resolve
 
-CCYS = ("USD", "HKD", "CNY")
+CCYS = ("USD", "CNY")                 # 负责人只关注美元—人民币（2026-10-05）；HKD 的换算仍由账户总览/资产趋势经 fxpath 解析，不在本页展示
 GAP_DAYS = 4
 
 
@@ -37,7 +37,7 @@ def run(conn, params):
                 row.update(rate=C.na_cell(str(exc)), path="—", direct=None, rate_date=None, stale_days=None, source="不可用", status="unavailable")
             paths.append(row)
 
-    pair = params.get("pair", "USDHKD")
+    pair = params.get("pair", "USDCNY")
     rev = pair[3:] + pair[:3]
     since = (today - timedelta(days=params.get("days", 120))).isoformat()
     raw = conn.execute("SELECT pair, rate_date, version, source, rate, event_at, received_at FROM fx_rate WHERE pair IN (?,?) AND rate_date>=? "
@@ -55,7 +55,7 @@ def run(conn, params):
         if d > GAP_DAYS:
             gaps.append({"from": x["date"], "to": y["date"], "days": d})
 
-    latest = conn.execute("SELECT pair, MAX(rate_date) AS d, MAX(event_at) AS e, MAX(received_at) AS r FROM fx_rate GROUP BY pair ORDER BY pair").fetchall()
+    latest = conn.execute("SELECT pair, MAX(rate_date) AS d, MAX(event_at) AS e, MAX(received_at) AS r FROM fx_rate WHERE pair IN ('USDCNY', 'CNYUSD') GROUP BY pair ORDER BY pair").fetchall()
     ev = max((r["e"] for r in latest), default=None)
     rc = max((r["r"] for r in latest), default=None)
     notes = ["汇率是比率，不是涨跌，不按红涨绿跌着色", f"换算最多接受比今天早 {max_stale} 天的汇率，超出即「不可用」"]

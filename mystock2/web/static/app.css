@@ -109,3 +109,17 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; } ul.plain li { overflow-wrap: a
 .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
 .cols .card { margin: 0; }
 tr[role="button"] { cursor: pointer; }
+
+/* 表格工具条：市场筛选 + 排序（纯显示层，不改数据） */
+.tbl-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 0 0 8px; }
+.tbl-toolbar .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.tbl-toolbar .seg-btn { background: transparent; color: var(--fg); border: 0; padding: 3px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+.tbl-toolbar .seg .seg-btn + .seg-btn { border-left: 1px solid var(--line); }
+.tbl-toolbar .seg-btn.on { background: var(--accent); color: var(--bg); }
+.tbl-toolbar .sortbox { display: inline-flex; align-items: center; gap: 6px; }
+.tbl-toolbar .sortbox select { font: inherit; font-size: 13px; background: var(--card, transparent); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; max-width: 14em; }
+.tbl-toolbar .sortbox .seg-btn { border: 1px solid var(--line); border-radius: 6px; }
+.tbl-toolbar .count { margin-left: auto; }
+.tbl th.sortable { cursor: pointer; user-select: none; }
+.tbl th.sortable:hover { color: var(--fg); }
+.tbl th.sorted { color: var(--fg); }

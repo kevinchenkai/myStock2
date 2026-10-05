@@ -67,18 +67,133 @@
     }));
   }
 
-  /* 表格：columns=[{key,label,num}]；窄屏由 CSS 折成卡片（用 data-label） */
+  /* 表格：columns=[{key,label,num}]；窄屏由 CSS 折成卡片（用 data-label）。
+     交互（纯前端，只改显示顺序/可见行，不改数据）：
+       · 点表头排序（再点切换升/降；第三次点恢复服务器原顺序）；窄屏表头被折叠，用工具条的「排序」下拉；
+       · 市场筛选：行里有 code（US./HK. 前缀）或 currency（USD/HKD）时，工具条出现「全部 / 美股 / 港股」；选择记在 localStorage（可选），各表共用；
+         没有市场归属的行（如汇总行）始终显示。
+     排序键：单元的 v（规范十进制字符串，转 Number 只用于比较）；没有 v 则取文本；不可用/缺失一律排最后。 */
+  var MARKET_KEY = "mystock2.market";
+  function marketOf(r) {
+    if (!r || typeof r !== "object") return null;
+    var c = r.code;
+    if (c && typeof c === "object") c = c.text;
+    var m = typeof c === "string" ? /^(US|HK)\./.exec(c) : null;
+    if (m) return m[1];
+    var ccy = r.currency;
+    if (ccy && typeof ccy === "object") ccy = ccy.text;
+    return ccy === "USD" ? "US" : ccy === "HKD" ? "HK" : null;
+  }
+  function storedMarket() { try { return window.localStorage.getItem(MARKET_KEY) || "ALL"; } catch (e) { return "ALL"; } }
+  function storeMarket(m) { try { window.localStorage.setItem(MARKET_KEY, m); } catch (e) { /* 无存储也能用 */ } }
+  function sortValue(c, r) {
+    var v = typeof c.render === "function" ? c.render(r) : r[c.key];
+    if (v === null || v === undefined) return null;
+    if (typeof v === "object") {
+      if (v.na) return null;
+      if (v.v !== undefined && v.v !== null && /^-?\d/.test(String(v.v))) return Number(v.v);
+      v = v.text;
+      if (v === undefined || v === null) return null;
+    }
+    var str = String(v);
+    if (/^[+-]?[\d,]+(\.\d+)?\s*[A-Za-z%]*$/.test(str)) return Number(str.replace(/[,+A-Za-z%\s]/g, ""));
+    return str;
+  }
+  function compareValues(a, b) {
+    if (a === null && b === null) return 0;
+    if (a === null) return 1;                       // 缺失永远在最后（不论升降）
+    if (b === null) return -1;
+    if (typeof a === "number" && typeof b === "number") return a - b;
+    return String(a).localeCompare(String(b), "zh");
+  }
   function table(columns, rows, opts) {
     opts = opts || {};
     if (!rows || !rows.length) return h("p", { class: "muted", text: opts.empty || "（暂无数据）" });
-    var thead = h("thead", null, h("tr", null, columns.map(function (c) { return h("th", { class: c.num ? "num" : null, text: c.label }); })));
-    var tbody = h("tbody", null, rows.map(function (r) {
-      return h("tr", null, columns.map(function (c) {
-        var v = typeof c.render === "function" ? c.render(r) : r[c.key];
-        return h("td", { class: c.num ? "num" : null, "data-label": c.label }, cell(v));
+    var host = h("div", { class: "tbl-host" });
+    var state = { sortKey: null, dir: 1, market: storedMarket() };
+    var hasMarket = rows.length > 1 && rows.filter(function (r) { return marketOf(r); }).length * 2 >= rows.length;
+    var canSort = opts.sortable !== false && rows.length > 1;
+    var tableEl = h("table", { class: "tbl" + (columns.length >= 8 ? " wide" : "") });
+    var wrap = h("div", { class: "tbl-wrap" }, tableEl);
+    var toolbar = null, selectEl = null, dirBtn = null, countEl = null;
+    function visibleRows() {
+      var out = rows.filter(function (r) { var m = marketOf(r); return !hasMarket || state.market === "ALL" || m === null || m === state.market; });
+      if (state.sortKey !== null) {
+        var col = columns.filter(function (c) { return c.key === state.sortKey; })[0];
+        if (col) {
+          var keyed = out.map(function (r, i) { return { r: r, i: i, k: sortValue(col, r) }; });
+          keyed.sort(function (x, y) {
+            if (x.k === null || y.k === null) return compareValues(x.k, y.k) || x.i - y.i;   // 缺失在后，与方向无关
+            return compareValues(x.k, y.k) * state.dir || x.i - y.i;
+          });
+          out = keyed.map(function (x) { return x.r; });
+        }
+      }
+      return out;
+    }
+    function draw() {
+      var shown = visibleRows();
+      var thead = h("thead", null, h("tr", null, columns.map(function (c) {
+        var active = state.sortKey === c.key;
+        var th = h("th", { class: (c.num ? "num" : "") + (canSort ? " sortable" : "") + (active ? " sorted" : ""),
+                           "aria-sort": active ? (state.dir === 1 ? "ascending" : "descending") : null,
+                           title: canSort ? "点击排序" : null }, c.label + (active ? (state.dir === 1 ? " ▲" : " ▼") : ""));
+        if (canSort) th.addEventListener("click", function () { sortBy(c.key); });
+        return th;
+      })));
+      var tbody = h("tbody", null, shown.map(function (r) {
+        return h("tr", null, columns.map(function (c) {
+          var v = typeof c.render === "function" ? c.render(r) : r[c.key];
+          return h("td", { class: c.num ? "num" : null, "data-label": c.label }, cell(v));
+        }));
       }));
-    }));
-    return h("div", { class: "tbl-wrap" }, h("table", { class: "tbl" + (columns.length >= 8 ? " wide" : "") }, [thead, tbody]));
+      tableEl.textContent = "";
+      tableEl.appendChild(thead);
+      tableEl.appendChild(tbody);
+      if (countEl) countEl.textContent = shown.length === rows.length ? rows.length + " 行" : shown.length + " / " + rows.length + " 行";
+      if (selectEl) selectEl.value = state.sortKey === null ? "" : state.sortKey;
+      if (dirBtn) dirBtn.textContent = state.dir === 1 ? "升序 ▲" : "降序 ▼";
+    }
+    function sortBy(key) {
+      var first = columns.filter(function (c) { return c.key === key; })[0].num ? -1 : 1;     // 数值列先降序（大的在前），文本列先升序
+      if (state.sortKey === key) {
+        if (state.dir === first) state.dir = -first;             // 第二次点：反向
+        else { state.sortKey = null; state.dir = 1; }            // 第三次点：恢复原顺序
+      } else { state.sortKey = key; state.dir = first; }
+      draw();
+    }
+    if (hasMarket || canSort) {
+      var kids = [];
+      if (hasMarket) {
+        kids.push(h("span", { class: "seg", role: "group", "aria-label": "市场筛选" }, [["ALL", "全部"], ["US", "美股"], ["HK", "港股"]].map(function (m) {
+          var b = h("button", { type: "button", class: "seg-btn" + (state.market === m[0] ? " on" : ""), text: m[1], "aria-pressed": state.market === m[0] ? "true" : "false" });
+          b.addEventListener("click", function () {
+            state.market = m[0]; storeMarket(m[0]);
+            Array.prototype.forEach.call(b.parentNode.children, function (x) { var on = x === b; x.className = "seg-btn" + (on ? " on" : ""); x.setAttribute("aria-pressed", on ? "true" : "false"); });
+            draw();
+          });
+          return b;
+        })));
+      }
+      if (canSort) {
+        selectEl = h("select", { "aria-label": "排序列" }, [h("option", { value: "", text: "原顺序" })].concat(columns.map(function (c) { return h("option", { value: c.key, text: c.label }); })));
+        selectEl.addEventListener("change", function () {
+          state.sortKey = selectEl.value === "" ? null : selectEl.value;
+          state.dir = state.sortKey && columns.filter(function (c) { return c.key === state.sortKey; })[0].num ? -1 : 1;
+          draw();
+        });
+        dirBtn = h("button", { type: "button", class: "seg-btn", text: "升序 ▲", title: "切换升序/降序" });
+        dirBtn.addEventListener("click", function () { if (state.sortKey !== null) { state.dir = -state.dir; draw(); } });
+        kids.push(h("span", { class: "sortbox" }, [h("span", { class: "muted small", text: "排序" }), selectEl, dirBtn]));
+      }
+      countEl = h("span", { class: "muted small count" });
+      kids.push(countEl);
+      toolbar = h("div", { class: "tbl-toolbar" }, kids);
+      host.appendChild(toolbar);
+    }
+    host.appendChild(wrap);
+    draw();
+    return host;
   }
 
   /* ---- 十进制字符串格式化（不经 float；银行家舍入） ---- */

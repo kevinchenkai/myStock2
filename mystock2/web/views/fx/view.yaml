@@ -1,13 +1,13 @@
 title: 外汇
-description: USD/HKD/CNY 换算路径（直接、反向或经 USD 中转）与汇率历史；缺汇率显示「不可用」；汇率用中性色。
+description: 美元—人民币（USD/CNY）汇率与历史；缺汇率显示「不可用」；汇率用中性色。（负责人只关注美元-人民币；港币换算在账户总览里仍按需使用，不在本页展示。）
 order: 60
 data_mode: daily
 stale_after_hours: 72
 params:
   pair:
     type: str
-    default: "USDHKD"
-    choices: ["USDHKD", "USDCNY", "HKDCNY"]
+    default: "USDCNY"
+    choices: ["USDCNY"]
     description: 要看历史的币对（1 前者 = rate 后者）
   days:
     type: int

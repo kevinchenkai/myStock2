@@ -353,34 +353,31 @@ def test_equity_trend_uses_unadjusted_close(tmp_path):
 
 
 # ------------------------------------------------------------------ 外汇
-def test_fx_paths_direct_inverse_and_via_usd(client):
+def test_fx_page_only_shows_usd_cny(client):
     d = get_view(client, "fx")[1]["data"]
     p = {(r["from"], r["to"]): r for r in d["paths"]}
-    assert len(p) == 6
-    assert p[("USD", "HKD")]["path"] == "USD→HKD" and p[("USD", "HKD")]["direct"] is True and p[("USD", "HKD")]["rate"]["text"] == "7.8"
-    assert p[("HKD", "USD")]["rate"]["text"] == "0.128205"                                       # 反向币对
-    assert p[("HKD", "CNY")]["path"] == "HKD→USD→CNY" and p[("HKD", "CNY")]["direct"] is False
+    assert set(p) == {("USD", "CNY"), ("CNY", "USD")}                                          # 负责人只关注美元—人民币：页面不展示港币币对
+    assert p[("USD", "CNY")]["path"] == "USD→CNY" and p[("USD", "CNY")]["direct"] is True and p[("USD", "CNY")]["rate"]["text"] == "7.2"
+    assert p[("CNY", "USD")]["rate"]["text"] == "0.138889"                                     # 反向币对
     assert all("dir" not in r["rate"] for r in d["paths"])
-    assert p[("USD", "HKD")]["needed"] is True and p[("USD", "CNY")]["needed"] is False          # 账户只用到 USD/HKD
+    assert {x["pair"] for x in d["stored_pairs"]} == {"USDCNY"}                                 # 库里的 USDHKD 不在本页列出
+    assert d["currencies"] == ["USD", "CNY"]
 
 
 def test_fx_missing_rates_are_unavailable(tmp_path):
     p = build_demo_db(tmp_path, fx=False)
     mk = dbmod.connect_writer(p, "market")
-    put_fx(mk, "USDHKD", "7.8")
+    put_fx(mk, "USDHKD", "7.8")                                                                 # 只有港币汇率：美元—人民币仍不可用，不拿别的币对冒充
     mk.close()
     d = get_view(make_app(tmp_path, p).test_client(), "fx")[1]["data"]
     paths = {(r["from"], r["to"]): r for r in d["paths"]}
-    assert paths[("HKD", "CNY")]["status"] == "unavailable" and paths[("HKD", "CNY")]["rate"]["na"] is True
-    assert paths[("USD", "HKD")]["status"] == "ok"
+    assert paths[("USD", "CNY")]["status"] == "unavailable" and paths[("USD", "CNY")]["rate"]["na"] is True
 
 
 def test_fx_history_gaps_and_pair_param(client):
     d = get_view(client, "fx")[1]["data"]
-    assert d["pair"] == "USDHKD" and [h["date"] for h in d["history"]][0] == "2026-03-02" and len(d["history"]) == 7
-    assert d["gaps"] == []
-    d2 = get_view(client, "fx", pair="USDCNY")[1]["data"]
-    assert d2["history"][0]["rate"] == "7.2"
+    assert d["pair"] == "USDCNY" and d["history"][0]["rate"] == "7.2" and d["gaps"] == []
+    assert get_view(client, "fx", pair="USDHKD")[0] == 400                                       # 不再提供港币币对
     assert get_view(client, "fx", pair="EURUSD")[0] == 400
 
 
