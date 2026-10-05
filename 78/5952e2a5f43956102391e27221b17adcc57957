@@ -1,0 +1,72 @@
+tests/unit/test_db.py
+  s_97d138eaf84b50::t_fad08448ee4bbc 94
+mystock2/forecast/__init__.py
+  s_97d138eaf84b50::t_d6905f192cdd90 1
+mystock2/collectors/__init__.py
+  s_97d138eaf84b50::t_fad08448ee4bbc 1
+mystock2/forecast/versions.py
+  s_97d138eaf84b50::t_d6905f192cdd90 1-64
+mystock2/instruments/security_rule.py
+  s_97d138eaf84b50::t_d6905f192cdd90 1-82
+mystock2/market/evidence.py
+  s_97d138eaf84b50::t_8342a4a8c714a0 1-66
+mystock2/ledger/opening.py
+  s_97d138eaf84b50::t_7a223a0363c006 8,12
+migrations/0003_market.sql
+  s_97d138eaf84b50::t_c4298ea8d91600 1-125
+mystock2/market/__init__.py
+  s_97d138eaf84b50::t_c4298ea8d91600 1
+mystock2/ledger/events.py
+  s_97d138eaf84b50::t_7a223a0363c006 18
+mystock2/market/fx.py
+  s_97d138eaf84b50::t_8342a4a8c714a0 1-58
+mystock2/forecast/baseline.py
+  s_97d138eaf84b50::t_d6905f192cdd90 1-78,80,82-85,87-132
+  s_97d138eaf84b50::t_f517cf84ac5f02 79,81,86
+tests/test_import_boundaries.py
+  s_97d138eaf84b50::t_fad08448ee4bbc 11
+mystock2/forecast/run.py
+  s_97d138eaf84b50::t_f517cf84ac5f02 1-37
+tests/unit/market_helpers.py
+  s_97d138eaf84b50::t_f517cf84ac5f02 1-46
+tests/unit/test_market.py
+  s_97d138eaf84b50::t_f293546da4d512 3,125,142
+  s_97d138eaf84b50::t_f517cf84ac5f02 1-2,4-124,126-141,143-185
+  s_97d138eaf84b50::t_a35e6e2450be9c 186-194
+mystock2/collectors/quotes.py
+  s_97d138eaf84b50::t_fad08448ee4bbc 1-15,17-150,152,162-166
+  s_97d138eaf84b50::t_d6905f192cdd90 16,151,153-161
+mystock2/core/db.py
+  s_97d138eaf84b50::t_7a223a0363c006 14,16,19,120-134
+  s_97d138eaf84b50::t_c4298ea8d91600 42-49
+  s_97d138eaf84b50::t_1232f944871980 135-136
+tests/unit/test_forecast_rules.py
+  s_97d138eaf84b50::t_f343d5fa844d35 1-215
+mystock2/market/bars.py
+  s_97d138eaf84b50::t_8342a4a8c714a0 9-169
+  s_97d138eaf84b50::t_c4298ea8d91600 1-8
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_36d45aed71d4a8 53
+docs/records/m4-market-baseline_claude_20261005.md
+  s_97d138eaf84b50::t_67daa27e25fea6 1-40
+environment.yml
+  s_97d138eaf84b50::t_7c528ba204f5d9 11,16-17
+pyproject.toml
+  s_97d138eaf84b50::t_72e11fafdc26e7 11,14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "785952e2a5f43956102391e27221b17adcc57957",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
