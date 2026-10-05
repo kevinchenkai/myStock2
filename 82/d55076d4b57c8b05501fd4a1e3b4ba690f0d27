@@ -1,0 +1,55 @@
+docs/COLLABORATION.md
+  s_97d138eaf84b50::t_fd3390cf8d540d 1-67
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_811ef74b0ee814 1-36
+docs/plans/mystock-v2-implementation-plan_claude_20261005.md
+  s_97d138eaf84b50::t_8bce5ce0f1d592 1-529
+docs/plans/plan-review-prompt_claude_20261005.md
+  s_97d138eaf84b50::t_3e5f1ddaeab714 1-31
+CLAUDE.md
+  s_97d138eaf84b50::t_e6b32cd63a555b 1,3,5,7-12
+AGENTS.md
+  s_97d138eaf84b50::t_2bf3cdb291f56f 1-32
+README.md
+  s_97d138eaf84b50::t_f5bcc45c6d68a1 3,5,7,9-36
+docs/README.md
+  s_97d138eaf84b50::t_0dac8e92030cd1 1-26
+docs/PROJECT.md
+  s_97d138eaf84b50::t_62b9a9c4f7b762 4,8-9,11,13,15-16,18,20,22-25,27,29,31,33,35,37,40-41
+.gitignore
+  s_97d138eaf84b50::t_fb1aeb8feacb23 221-233
+docs/prd/mystock-project-v2_codex_20261003.html
+  s_5ede6fd7a3d817::t_756fdd5f2a6c79 1-1598
+"docs/V2项目 idea.md"
+  s_97d138eaf84b50::t_0a51eaa59c937b 1-35
+docs/prd/mystock-project-v2_claude_20261003.html
+  s_97d138eaf84b50::t_9f29f10d062c43 1-1842
+docs/prd/mystock-project-v2_claude_20261003.md
+  s_97d138eaf84b50::t_4dd71987b8c238 1-725
+docs/prd/mystock-project-v2_codex_20261003.md
+  s_97d138eaf84b50::t_07e15ae73cc75b 1-740
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "82d55076d4b57c8b05501fd4a1e3b4ba690f0d27",
+  "prompts": {},
+  "sessions": {
+    "s_5ede6fd7a3d817": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019eeaf1-6acd-7390-9eb7-3622e67641d0",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    },
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
