@@ -6,9 +6,10 @@
 
 | 文档 | 用途 |
 | --- | --- |
-| [实施方案 v0.5.1](plans/mystock-v2-implementation-plan_claude_20261005.md) | **现行**：里程碑、架构、数据模型、协议、测试、待决事项、评审方案（评审中） |
+| [实施方案 v0.6](plans/mystock-v2-implementation-plan_claude_20261005.md) | **现行**：里程碑、架构、数据模型、协议、测试、待决事项、评审方案（评审中） |
 | [评审记录与处置](plans/plan-review-log_claude_20261005.md) | 逐条处置；含对 gpt-6.1 评审的回应 |
 | gpt-6.1 评审原文：[第一轮](plans/plan-review_gpt_20261005.md) · [第二轮](plans/plan-review_gpt_r2_20261005.md) · [第三轮](plans/plan-review_gpt_r3_20261005.md) · [第四轮](plans/plan-review_gpt_r4_20261005.md) · [第五轮](plans/plan-review_gpt_r5_20261005.md) · [评审提示](plans/plan-review-prompt_claude_20261005.md) | 独立评审 |
+| [grok-4.7 评审（原文）](plans/plan-review_grok_20261005.md) | 独立评审（经 cursor-agent） |
 | [PROJECT.md](PROJECT.md) | 立项书（一页） |
 | [OPEN_ITEMS.md](OPEN_ITEMS.md) | 跨轮次唯一待办与待决事项 |
 | [COLLABORATION.md](COLLABORATION.md) | 协作与多模型评审约定 |
