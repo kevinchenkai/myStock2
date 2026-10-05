@@ -499,6 +499,48 @@ def cmd_veto_import(args) -> int:
     return 0 if res.status == "applied" else 1
 
 
+def cmd_collect_futu(args) -> int:
+    """富途采集（只读查询；**需负责人授权连接真实账户**；采集器尚未对真实 OpenD 验证，首跑先小范围）。"""
+    from mystock2.collectors.futu import (
+        FutuTradeApi,
+        collect_cash_flows,
+        collect_deals,
+        collect_order_fees,
+        collect_snapshot,
+    )
+
+    cfg = load_config(args.config)
+    firm = (cfg.raw.get("futu") or {}).get("security_firm")
+    if not firm:
+        print("配置缺少 futu.security_firm（须由负责人确认券商主体，不硬编码；见 D10）", file=sys.stderr)
+        return 2
+    api = FutuTradeApi(cfg.futu.host, cfg.futu.port, firm)
+    interval = float((cfg.raw.get("futu") or {}).get("min_interval", 3.2))
+    markets = list(cfg.markets)
+    what = set(args.what.split(","))
+    out = {}
+    with _opener(cfg, "core") as rl, _opener(cfg, "ledger") as w:
+        with run_log(rl, "collect futu", {"what": sorted(what), "markets": markets}) as run:
+            if "deals" in what:
+                out["deals"] = collect_deals(w, api, account_id=args.account_id, acc_id=args.acc_id, markets=markets, start=date.fromisoformat(args.start),
+                                             end=date.fromisoformat(args.end), min_interval=interval)
+            if "fees" in what:
+                out["fees"] = collect_order_fees(w, api, account_id=args.account_id, acc_id=args.acc_id, min_interval=interval)
+            if "snapshot" in what:
+                out["snapshot"] = collect_snapshot(w, api, account_id=args.account_id, acc_id=args.acc_id, markets=markets, captured_at=utc_now(), min_interval=interval)
+            if "cashflow" in what:
+                tmap = yaml.safe_load(Path(args.cashflow_map).read_text(encoding="utf-8")) if args.cashflow_map else {}
+                d0, d1 = date.fromisoformat(args.start), date.fromisoformat(args.end)
+                days = [d0 + timedelta(days=i) for i in range((d1 - d0).days + 1)]
+                out["cashflow"] = collect_cash_flows(w, api, account_id=args.account_id, acc_id=args.acc_id, days=days, type_map=tmap or {}, min_interval=interval)
+            if any(not r.ok for r in out.values()):
+                run.partial("; ".join(sc for r in out.values() for sc in r.failed_scopes))
+            run.note(**{k: {"rows": v.rows, "inserted": v.inserted, "duplicate": v.duplicate, "pending": v.pending, "ok": v.ok} for k, v in out.items()})
+            print(f"run_id={run.run_id}")
+    print(json.dumps({k: {**v.__dict__, "recon_only": {a: str(b) for a, b in v.recon_only.items()}} for k, v in out.items()}, ensure_ascii=False, indent=2, default=str))
+    return 0 if all(r.ok and not r.conflicts for r in out.values()) else 1
+
+
 def cmd_v1_import(args) -> int:
     """V1 历史数据一次性只读导入（需负责人授权访问 V1 运行库；先 --dry-run 看报告）。"""
     from mystock2.collectors.v1_import import run_import
@@ -586,6 +628,12 @@ def register(sub) -> None:
     fh.add_argument("--now")
     fh.add_argument("--local-dir", **ld)
     fh.set_defaults(fn=cmd_human_plan_freeze)
+    cl = sub.add_parser("collect", help="采集").add_subparsers(dest="ccl", required=True)
+    cf = cl.add_parser("futu", help="富途只读采集（需授权；未经真实验证）")
+    for k, kw in (("--account-id", {"required": True}), ("--acc-id", {"required": True, "type": int}), ("--start", {"required": True}), ("--end", {"required": True}),
+                  ("--what", {"default": "deals,fees,snapshot"}), ("--cashflow-map", {"help": "YAML：资金流水类型→入账方式（DEPOSIT/WITHDRAW/INTEREST/TAX/RECON_ONLY）"})):
+        cf.add_argument(k, **kw)
+    cf.set_defaults(fn=cmd_collect_futu)
     v1 = sub.add_parser("v1", help="V1 数据").add_subparsers(dest="v1cmd", required=True)
     vi1 = v1.add_parser("import", help="只读导入 V1 成交与日快照")
     vi1.add_argument("--v1-db", required=True)
