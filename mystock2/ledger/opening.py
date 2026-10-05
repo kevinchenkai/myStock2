@@ -47,6 +47,14 @@ def record_opening(conn: sqlite3.Connection, account_id: str, opening_at, positi
         row = conn.execute("SELECT opening_at FROM account_opening WHERE account_id=?", (account_id,)).fetchone()
         if row and row["opening_at"] != t0:
             raise LedgerError(f"账户已有开账点 {row['opening_at']}，不得改动")
+        if row:                                              # 开账包整包冻结：重复调用必须与已有内容完全一致
+            have = {r["business_key"]: (r["event_type"], r["qty_delta"], r["cash_delta"]) for r in conn.execute(
+                "SELECT business_key, event_type, qty_delta, cash_delta FROM ledger_event WHERE account_id=? AND event_type IN ('OPENING_POSITION','OPENING_CASH') AND event_version=1",
+                (account_id,))}
+            want = {f"opening:{account_id}:pos:{c}": ("OPENING_POSITION", to_db(q), "0") for c, q in positions.items()}
+            want.update({f"opening:{account_id}:cash:{c.upper()}": ("OPENING_CASH", "0", to_db(a)) for c, a in cash.items()})
+            if have != want:
+                raise LedgerError("开账包已冻结且与本次内容不同；变更只能走显式的追加更正（correct_event）")
         ids = []
         for code, qty in sorted(positions.items()):
             ids.append(post_event(conn, EventDraft(f"opening:{account_id}:pos:{code}", account_id, "OPENING_POSITION", t0, currency_of(code),

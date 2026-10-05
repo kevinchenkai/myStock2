@@ -192,3 +192,11 @@ def test_t24_revision_creates_new_snapshot_old_one_still_verifiable(mk):
 def test_synth_helper_produces_calendar_days():
     bs = synth_bars(CODE, 30, date(2026, 3, 4))
     assert len(bs) == 30 and all(cal.is_session("US", b.session_date) for b in bs)
+
+
+def test_get_daily_prefers_ok_over_later_partial(mk):
+    t1, t2 = datetime(2026, 3, 3, 22, 0, tzinfo=UTC), datetime(2026, 3, 4, 9, 0, tzinfo=UTC)
+    put_daily(mk, [bar()], source="s1", received_at=t1)
+    put_daily(mk, [bar(c="10.9", h="11.5")], source="s1", received_at=t2, quality="partial")
+    got = get_daily(mk, CODE, date(2026, 3, 3), date(2026, 3, 3))
+    assert got[0]["close"] == "10.5" and got[0]["quality"] == "ok"      # 终值不被更晚的残缺行覆盖

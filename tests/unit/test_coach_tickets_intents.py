@@ -24,6 +24,7 @@ from mystock2.scoreboard.engine import run_line
 from mystock2.scoreboard.marketdata import DbMarketData
 from mystock2.scoreboard.providers import HumanPlanProvider, TicketProvider
 from mystock2.scoreboard.types import ExecProtocol, LineState
+from tests.unit.coach_helpers import seed_prediction
 from tests.unit.scoreboard_helpers import FakeMD, state
 
 UTC = timezone.utc
@@ -39,11 +40,13 @@ B, L = "B1", "B1:ai"
 def conn(tmp_path):
     p = tmp_path / "c.db"
     dbmod.migrate(p)
+    for code in ("US.NVDA", "US.TSLA", "US.AMD"):
+        seed_prediction(p, f"p-{code}", code, TARGET.isoformat())
     return dbmod.connect_writer(p, "coach")
 
 
 def draft(action=BUY, px="97", qty=30, code="US.NVDA", reasons=("edge_ok",)):
-    return TicketDraft(code, action, D(px) if px else None, qty, 1, D("2913") if action == BUY else None, reasons, model_ref="p1")
+    return TicketDraft(code, action, D(px) if px else None, qty, 1, D("2913") if action == BUY else None, reasons, model_ref=f"p-{code}")
 
 
 def freeze(conn, drafts, *, at, stage="close", state_ref="s0", line=L, kind="line_sim", unavailable=None, deadline=DEADLINE):
@@ -125,7 +128,36 @@ def test_selection_cells_are_isolated_by_line_kind_and_code(conn):
     assert select_ticket(conn, cell(), deadline_at=DEADLINE).ticket["limit_price"] == "97"
     assert select_ticket(conn, cell(line="B1:ai_veto"), deadline_at=DEADLINE).ticket["limit_price"] == "90"
     assert select_ticket(conn, cell(kind="live_guidance"), deadline_at=DEADLINE).ticket["state_ref_type"] == "account_snapshot"
-    assert select_ticket(conn, cell(code="US.TSLA"), deadline_at=DEADLINE).reason == "none_frozen"
+    assert select_ticket(conn, cell(code="US.TSLA"), deadline_at=DEADLINE).reason == "not_in_latest_group"          # 该组里没有 TSLA
+
+
+def test_f14_selection_is_group_atomic_no_stitching_of_old_and_new_and_expired_tickets_are_invalid(conn):
+    freeze(conn, [draft(code="US.NVDA", px="97"), draft(code="US.TSLA", px="250", qty=5)], at=BEFORE)         # 旧组：A、B
+    freeze(conn, [draft(code="US.NVDA", px="96")], at=BEFORE2, stage="preopen")                                 # 新组只刷新 A
+    assert select_ticket(conn, cell("US.NVDA"), deadline_at=DEADLINE).ticket["limit_price"] == "96"
+    sel = select_ticket(conn, cell("US.TSLA"), deadline_at=DEADLINE)
+    assert sel.ticket is None and sel.reason == "not_in_latest_group"                                           # 不拼接「新 A + 旧 B」
+    # 有效期：valid_to 早于截止的票失效
+    freeze_tickets(conn, batch_id=B, line_id="B1:ai_x", kind="line_sim", market="US", target_session=TARGET, stage="close", drafts=[draft(code="US.NVDA")],
+                   state_ref_type="line_state", state_ref="s", strategy_version="v", protocol_version="p", generated_at=BEFORE, now=BEFORE, deadline_at=DEADLINE,
+                   valid_to=BEFORE2 - timedelta(hours=1))
+    assert select_ticket(conn, cell("US.NVDA", line="B1:ai_x"), deadline_at=DEADLINE).reason == "expired"
+
+
+def test_f03_freeze_rejects_mismatched_kind_missing_or_rebuilt_predictions(conn):
+    with pytest.raises(TicketError, match="不匹配"):
+        freeze_tickets(conn, batch_id=B, line_id=L, kind="line_sim", market="US", target_session=TARGET, stage="close", drafts=[draft()],
+                       state_ref_type="account_snapshot", state_ref="s", strategy_version="v", protocol_version="p", generated_at=BEFORE, now=BEFORE, deadline_at=DEADLINE)
+    with pytest.raises(TicketError, match="model_ref 不存在"):
+        freeze(conn, [TicketDraft("US.NVDA", BUY, D("97"), 1, 1, None, ("x",), model_ref="ghost")], at=BEFORE)
+    p = conn.execute("PRAGMA database_list").fetchone()["file"]
+    seed_prediction(p, "p-rebuilt", "US.NVDA", TARGET.isoformat(), source_tag="rebuilt")
+    with pytest.raises(TicketError, match="不是前向预测"):
+        freeze(conn, [TicketDraft("US.NVDA", BUY, D("97"), 1, 1, None, ("x",), model_ref="p-rebuilt")], at=BEFORE)         # 重建预测不能冒充前向
+    with pytest.raises(TicketError, match="不是前向预测|不符"):
+        freeze(conn, [TicketDraft("US.TSLA", BUY, D("97"), 1, 1, None, ("x",), model_ref="p-US.NVDA")], at=BEFORE)         # 引用别的标的的预测
+    with pytest.raises(TicketError, match="state_ref"):
+        freeze(conn, [draft()], at=BEFORE, state_ref="")
 
 
 def test_co02_coverage_counts_skips_and_misses(conn):
@@ -214,7 +246,7 @@ def test_t13_t39_first_reveal_locks_last_pre_reveal_plan_and_later_edits_do_not_
 
 
 def test_no_record_before_reveal_means_no_order_and_exposed_before_record_flag(conn):
-    assert plan(conn)["US.NVDA"] == {"action": "NO_ORDER", "limit_price": None, "qty": None, "intent_id": None, "flags": ["plan_missing"]}   # 缺失＝确定性无订单
+    assert plan(conn)["US.NVDA"] == {"action": "NO_ORDER", "limit_price": None, "qty": None, "intent_id": None, "flags": ["plan_missing"], "valid_to": None, "state_hash": None}   # 缺失＝确定性无订单
     reveal(conn, batch_id=B, market="US", target_session=TARGET, channel="veto_export", version_hashes=["h"], at=BEFORE)
     rec(conn, px="97", qty=10, at=BEFORE + timedelta(minutes=10))              # 揭示之后才首次记录
     p = plan(conn)["US.NVDA"]
@@ -291,3 +323,8 @@ def test_db_market_data_close_uses_final_unadjusted_and_ignores_partial(tmp_path
     assert md.close("US.NVDA", date(2026, 3, 4)) == D("10.5")                              # 未复权 close，不是 adj_close
     assert md.close("US.NVDA", date(2026, 3, 5)) is None                                   # partial 不用
     _ = datetime(2026, 1, 1, tzinfo=UTC)
+
+
+def test_reveal_without_any_record_still_flags_exposed_before_record(conn):
+    reveal(conn, batch_id=B, market="US", target_session=TARGET, channel="veto_export", version_hashes=["h"], at=BEFORE)
+    assert plan(conn)["US.NVDA"]["flags"] == ["plan_missing", "exposed_before_record"]     # 揭示后从未补录也要标记

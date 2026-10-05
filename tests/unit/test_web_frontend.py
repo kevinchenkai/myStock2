@@ -13,7 +13,7 @@ STATIC = Path(registry.__file__).resolve().parent / "static"
 CSS = (STATIC / "app.css").read_text(encoding="utf-8")
 HTML = (STATIC / "index.html").read_text(encoding="utf-8")
 JS_FILES = sorted(STATIC.glob("*.js")) + sorted(registry.BUILTIN_VIEWS_DIR.glob("*/panel.js"))
-BUILTIN = ["account_overview", "holdings", "trades", "pnl", "equity_trend", "fx"]
+BUILTIN = ["account_overview", "holdings", "trades", "pnl", "equity_trend", "fx", "tickets", "scoreboard", "replay", "data_status"]
 
 
 def block(selector_start: str) -> str:
@@ -146,3 +146,22 @@ def test_client_decimal_formatting_is_string_based_bankers_rounding():
     r = subprocess.run([node, "-e", script, str(STATIC / "ui.js")], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     assert r.stdout.strip() == '["1,234,567.89","-80.00","0.12","0.14","2.68","0.00","100,000,000,000,000,000,000.01","7.8123","69,737.50 USD","不可用","—"]'
+
+
+def test_series_colors_for_five_lines_exist_in_every_theme_and_are_not_red_or_green():
+    for scope in (":root {", ":root:not([data-theme=\"light\"]) {", ":root[data-theme=\"dark\"] {"):
+        b = block(scope)
+        for v in ("--s1", "--s2", "--s3", "--s4", "--s5"):
+            r, g, bl = var_in(b, v)
+            assert not (r > g + 40 and r > bl + 40) and not (g > r + 40 and g > bl + 40), (scope, v)    # 曲线颜色不借用涨跌色
+
+
+def test_replay_card_columns_collapse_on_narrow_screens_without_fixed_widths():
+    assert re.search(r"\.cols\s*\{[^}]*minmax\((\d+)px", CSS) and int(re.search(r"\.cols\s*\{[^}]*minmax\((\d+)px", CSS).group(1)) < 376
+
+
+def test_ops_panels_never_claim_a_single_win_rate_and_use_only_server_cells():
+    for vid in ("tickets", "scoreboard", "replay", "data_status"):
+        t = (registry.BUILTIN_VIEWS_DIR / vid / "panel.js").read_text(encoding="utf-8")
+        assert "打败" not in t and "win_rate" not in t, vid
+        assert "innerHTML" not in t and "Number(" not in t and "parseFloat" not in t and "toFixed" not in t, vid

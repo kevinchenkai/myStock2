@@ -4,7 +4,8 @@
 - 券商成本：来自最近一份券商快照的 `cost_basis`（可空；**此处按每股成本展示——字段口径待 M2a 采集器确认**）；
 - 摊薄成本：快照没有该字段 → 「不可用」（不拿别的成本冒充）；
 - 本地移动平均成本：由账本成交按移动平均法算出（`ledger.pnl`）；含开账估算成本时标「估算」，有无成本证据的股份时标「部分」。
-角色（核心/交易/观察）来自标的名单配置（可选，缺失显示「未配置」）；「当前操作单」由 M6 提供，这里留空位。
+角色（核心/交易/观察）来自标的名单配置（可选，缺失显示「未配置」）；「当前操作单」只显示该标的在最近目标日是否已有已冻结的 AI 单——
+**只有「已密封/已揭示」状态，未揭示时绝不显示动作**（密封见 `web/sealing.py`；内容请到「操作单」视图）。
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ from mystock2.instruments.code_map import currency_of
 from mystock2.ledger.pnl import compute_realized_pnl
 from mystock2.ledger.projection import project
 from mystock2.web import common as C
+from mystock2.web import sealing
 from mystock2.web.ledgerdata import load_trades
 from mystock2.web.valuation import latest_close
 
@@ -35,6 +37,15 @@ def _roles(path):
     return roles, ("" if rep.ok else "标的名单有校验错误，角色可能不完整")
 
 
+def _order_cell(st):
+    """当前操作单：只给状态，不给任何内容（动作/限价/数量）。"""
+    if st is None:
+        return C.text_cell("无已冻结的 AI 单")
+    if st["state"] == "revealed":
+        return C.text_cell(f"已揭示（目标日 {st['target']}）", title="内容请到「操作单」视图查看")
+    return C.text_cell(f"已密封（目标日 {st['target']}）", title="揭示前不显示动作；揭示只能经命令行写入暴露日志")
+
+
 def run(conn, params):
     now = C.now_of(params)
     acct, accts = C.resolve_account(conn, params)
@@ -48,6 +59,7 @@ def run(conn, params):
     pnl = compute_realized_pnl(trades.trade_events, trades.opening_at)
     roles, role_note = _roles(params.get("_universe_path"))
     prices = {c: latest_close(conn, c, now) for c in sorted(set(proj.positions) | set(spos))}
+    ai_state = sealing.latest_ai_status_by_code(conn, now)
 
     # 每个币种的已估值市值合计，用于集中度（占该币种持仓市值，币种之间不相加）
     mv_by_ccy: dict[str, Decimal] = {}
@@ -104,7 +116,7 @@ def run(conn, params):
             "market_value": C.money_cell(mv, ccy) if mv is not None else C.na_cell(px.reason),
             "weight": weight if weight is not None else C.na_cell("缺行情或无市值，无法算集中度"),
             "broker_cost": broker_cost, "diluted_cost": diluted, "local_cost": local, "unrealized": unreal,
-            "order": C.text_cell("M6 提供"),
+            "order": _order_cell(ai_state.get(code)),
         })
 
     warn = list(proj.warnings) + list(trades.warnings)

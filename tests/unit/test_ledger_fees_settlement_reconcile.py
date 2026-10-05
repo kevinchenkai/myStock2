@@ -74,7 +74,7 @@ def test_settle_date_requires_configured_rule_and_skips_non_sessions():
 def test_t23_sale_proceeds_not_tradable_until_settled(tmp_path):
     conn = make_db(tmp_path)
     opening.record_opening(conn, ACCT, T0, {"US.NVDA": "10"}, {"USD": "100"})
-    sell(conn, "S-1", "US.NVDA", 10, "50", "2026-03-04T15:00:00Z")           # 周三
+    sell(conn, "S-1", "US.NVDA", 10, "50", "2026-03-04T15:00:00.000000Z")           # 周三
     econ = project(conn, ACCT).cash
     assert econ["USD"] == 600
     rules = {"US": SettlementRule("US", 1)}
@@ -126,7 +126,7 @@ def test_reconcile_lists_pending_and_incomplete_fx_never_hides_them(tmp_path):
     s = snap(conn, D2, {}, {"USD": "100"})
     assert reconcile(conn, ACCT, s).ok
     queue_pending(conn, src("csv", "r1"), "缺 deal_id")
-    post_event(conn, EventDraft(f"fx:{ACCT}:G9:out", ACCT, "FX", D1, "USD", cash_delta="0.001", group_id="G9", leg_id="out"))
+    post_event(conn, EventDraft(f"fx:{ACCT}:G9:out", ACCT, "FX", D1, "USD", cash_delta="0.001", group_id="G9", leg_id="out"), _internal_fx=True)
     s2 = snap(conn, D3, {}, {"USD": "100.001"})
     rep = reconcile(conn, ACCT, s2)
     assert not rep.ok and rep.open_pending == 1 and rep.incomplete_fx_groups == ["G9"]

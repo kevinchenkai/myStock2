@@ -161,3 +161,26 @@ def test_decide_is_pure_deterministic_and_does_not_mutate_state():
     a = run(st, ["US.NVDA"], {"US.NVDA": pred(95, 105)})
     b = run(st, ["US.NVDA"], {"US.NVDA": pred(95, 105)})
     assert a == b and st.hash() == before
+
+
+def test_f18_allow_add_respects_total_weight_and_total_lot_caps():
+    add = StrategyParams(k=D("0.5"), q_buy=D("0.2"), q_sell=D("0.8"), min_gain=D("0.01"), max_hold_days=5, exit_q=D("0.3"), budget_slice=D("0.5"), allow_add=True)
+    full = holding(50, 110, TARGET - timedelta(days=2), cash=100000)           # 50 股×中间价 100 = 5000 = 50% 权益上限；卖出目标不可达（地板 111.1 > 105）
+    (t,) = run(full, ["US.NVDA"], {"US.NVDA": pred(95, 105)}, params=add, equity=10000, w="0.5")
+    assert t.action == SKIP and "budget_too_small" in t.reason_codes or t.qty in (None, 0)         # 已到总权重上限：不得再买
+    part = holding(10, 110, TARGET - timedelta(days=2), cash=100000)
+    (t,) = run(part, ["US.NVDA"], {"US.NVDA": pred(95, 105)}, params=add, equity=10000, w="0.5")
+    assert t.action == BUY and (10 + t.qty) * 100 <= 5000 + 100                                     # 总持仓价值不超过 max_weight×权益
+    (t,) = run(holding(5, 110, TARGET - timedelta(days=2), cash=100000), ["US.NVDA"], {"US.NVDA": pred(95, 105)}, params=add, equity=10000, w="0.9", lots=8)
+    assert t.action == BUY and 5 + t.qty <= 8                                                       # max_lots 是总手数上限（含已有）
+
+
+def test_time_stop_sells_whole_lots_only_and_skips_odd_lot_remainder():
+    hk = SecurityRule("HK.00700", "2026-01-01", None, 100, parse_bands('[{"tick":"0.2"}]'), "合成", True)
+    for held, expect in ((250, ("SELL", 200)), (60, (SKIP, None))):
+        st = LineState("HKD", D(0))
+        st.lots["HK.00700"] = [Lot(D(held), D(400), TARGET - timedelta(days=9))]
+        ents = validate_universe({"instruments": [{"code": "HK.00700", "tier": "trade", "max_weight": "1", "max_lots": 5}]}).entries
+        (t,) = decide(st, market="HK", target_session=TARGET, universe=ents, predictions={"HK.00700": pred(400, 440)}, rules={"HK.00700": hk},
+                      params=P, fee_rules=[FeeRule("syn", "HK", "ANY", "order", "HKD", pct_fee=D("0.0003"), min_fee=D("3"))], trade_equity=D(100000))
+        assert (t.action, t.qty) == expect                       # 零股不出单；也不再生成会被整单拒绝的 250 股

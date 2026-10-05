@@ -1,0 +1,19 @@
+title: 操作单
+description: AI 线的冻结操作单（line_sim）。密封语义：该批次、市场、目标日在暴露日志里已有揭示记录才显示动作/限价/数量；否则只显示「已密封」与计数。人类线与 live_guidance 不在此展示。
+order: 70
+data_mode: daily
+stale_after_hours: 72
+params:
+  batch:
+    type: str
+    default: ""
+    description: 比较批次 id（留空＝最近一个有 AI 单的批次）
+  market:
+    type: str
+    default: ""
+    choices: ["", "HK", "US"]
+    description: 市场（留空＝该批次有单的全部市场）
+  target:
+    type: str
+    default: ""
+    description: 目标日 YYYY-MM-DD（留空＝该市场最近一个有 AI 单的目标日）

@@ -1,0 +1,20 @@
+title: 复盘
+description: 逐笔成交的复盘卡（事实/证据/诊断/结果/缺口分栏，无意图记录则写「动机未记录」）、行为指标（含样本量，样本不足显示「不足」）、诊断回合（FIFO，诊断口径，不是账本收益）。
+order: 90
+data_mode: daily
+stale_after_hours: 72
+params:
+  account:
+    type: str
+    default: ""
+    description: 账户 id（留空＝第一个账户）
+  code:
+    type: str
+    default: ""
+    description: 只看某个标的（留空＝全部）
+  limit:
+    type: int
+    default: 100
+    min: 1
+    max: 1000
+    description: 最多显示最近多少笔成交的复盘卡

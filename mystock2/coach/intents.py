@@ -149,12 +149,13 @@ def select_human_plan(conn: sqlite3.Connection, *, batch_id: str, line_id: str, 
         eligible = [r for r in rows if not r["late_record"] and r["recorded_at"] <= deadline_s and (reveal_s is None or r["recorded_at"] < reveal_s)]
         if eligible:
             r = eligible[-1]
-            out[code] = {"action": r["action"], "limit_price": r["limit_price"], "qty": r["qty"], "intent_id": r["intent_id"], "flags": []}
+            out[code] = {"action": r["action"], "limit_price": r["limit_price"], "qty": r["qty"], "intent_id": r["intent_id"], "flags": [],
+                         "valid_to": r["valid_to"], "state_hash": r["state_hash"]}
         else:
             flags = ["plan_missing"]
-            if rows and any(r["late_record"] for r in rows):
+            if reveal_s is not None and reveal_s <= deadline_s:     # 首次揭示早于任何合格记录（含「揭示后从未补录」）
                 flags.append("exposed_before_record")
-            out[code] = {"action": "NO_ORDER", "limit_price": None, "qty": None, "intent_id": None, "flags": flags}
+            out[code] = {"action": "NO_ORDER", "limit_price": None, "qty": None, "intent_id": None, "flags": flags, "valid_to": None, "state_hash": None}
     return out
 
 

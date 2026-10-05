@@ -15,8 +15,8 @@ def test_naive_time_is_rejected():
 
 
 def test_iso_utc_normalizes_offsets_and_z():
-    assert iso_utc("2026-01-01T08:00:00+08:00") == "2026-01-01T00:00:00Z"
-    assert iso_utc("2026-01-01T00:00:00Z") == "2026-01-01T00:00:00Z"
+    assert iso_utc("2026-01-01T08:00:00+08:00") == "2026-01-01T00:00:00.000000Z"
+    assert iso_utc("2026-01-01T00:00:00.000000Z") == "2026-01-01T00:00:00.000000Z"
     assert iso_utc(datetime(2026, 1, 1, 0, 0, 0, 5, tzinfo=timezone.utc)) == "2026-01-01T00:00:00.000005Z"
 
 

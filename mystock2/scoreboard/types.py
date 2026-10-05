@@ -33,6 +33,7 @@ class SimOrder:
     qty: int
     limit_price: Decimal | None = None
     tag: str = ""
+    valid_until: object | None = None      # datetime（UTC）；撮合只考虑 bar.start < valid_until 的 bar
 
 
 @dataclass
@@ -51,6 +52,7 @@ class LineState:
     unsettled: list[tuple[date, Decimal]] = field(default_factory=list)
     lots: dict[str, list[Lot]] = field(default_factory=dict)
     fees_cum: Decimal = Decimal(0)
+    other_equity: Decimal = Decimal(0)      # 开账时的非交易资产净额（应收−应付）：计入权益与 E0，模拟中不变、不可交易（exec-v1 不建模股息）
 
     def qty(self, code: str) -> Decimal:
         return sum((lot.qty for lot in self.lots.get(code, [])), Decimal(0))
@@ -72,11 +74,12 @@ class LineState:
         return self.cash - self.unsettled_total()
 
     def copy(self) -> "LineState":
-        return LineState(self.currency, self.cash, list(self.unsettled), {c: [Lot(lot.qty, lot.unit_cost, lot.acquired) for lot in ls] for c, ls in self.lots.items()}, self.fees_cum)
+        return LineState(self.currency, self.cash, list(self.unsettled), {c: [Lot(lot.qty, lot.unit_cost, lot.acquired) for lot in ls] for c, ls in self.lots.items()},
+                         self.fees_cum, self.other_equity)
 
     def to_dict(self) -> dict:
         return {
-            "currency": self.currency, "cash": to_db(self.cash), "fees_cum": to_db(self.fees_cum),
+            "currency": self.currency, "cash": to_db(self.cash), "fees_cum": to_db(self.fees_cum), "other_equity": to_db(self.other_equity),
             "unsettled": [[d.isoformat(), to_db(a)] for d, a in sorted(self.unsettled)],
             "lots": {c: [[to_db(lot.qty), to_db(lot.unit_cost), lot.acquired.isoformat()] for lot in ls] for c, ls in sorted(self.lots.items())},
         }
@@ -84,7 +87,8 @@ class LineState:
     @classmethod
     def from_dict(cls, d: dict) -> "LineState":
         return cls(d["currency"], dec(d["cash"]), [(date.fromisoformat(x), dec(a)) for x, a in d["unsettled"]],
-                   {c: [Lot(dec(q), dec(u), date.fromisoformat(a)) for q, u, a in ls] for c, ls in d["lots"].items()}, dec(d["fees_cum"]))
+                   {c: [Lot(dec(q), dec(u), date.fromisoformat(a)) for q, u, a in ls] for c, ls in d["lots"].items()}, dec(d["fees_cum"]),
+                   dec(d.get("other_equity", "0")))
 
     def hash(self) -> str:
         return hashlib.sha256(json.dumps(self.to_dict(), sort_keys=True).encode()).hexdigest()[:24]

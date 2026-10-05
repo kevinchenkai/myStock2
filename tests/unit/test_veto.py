@@ -17,6 +17,7 @@ from mystock2.coach.tickets import Cell, freeze_tickets, select_ticket
 from mystock2.core import calendars as cal
 from mystock2.core import db as dbmod
 from mystock2.market.bars import DailyBar  # noqa: F401
+from tests.unit.coach_helpers import seed_prediction
 
 UTC = timezone.utc
 TARGET = date(2026, 3, 5)
@@ -32,6 +33,8 @@ CUTOFF = BEFORE
 def db(tmp_path):
     p = tmp_path / "v.db"
     dbmod.migrate(p)
+    seed_prediction(p, "p1", "US.NVDA", TARGET.isoformat())
+    seed_prediction(p, "p2", "US.TSLA", TARGET.isoformat())
     return p
 
 
@@ -54,7 +57,7 @@ def rows(ro):
 
 
 EVENTS = [{"evidence_id": "ev-1", "title": "公司公告：下周发布财报", "source": "IR", "published_at": (CUTOFF - timedelta(hours=3)).isoformat()}]
-SUMMARY = [{"code": "US.NVDA", "position_qty": "0", "cash_pct": "0.9", "exposure_pct": "0.1"}]
+SUMMARY = [{"code": "US.NVDA", "holding": "no", "cash_pct": "0.9", "exposure_pct": "0.1"}]
 
 
 def make_pack(ro, events=EVENTS):
@@ -79,7 +82,7 @@ def test_pack_contains_only_whitelisted_fields_and_no_absolute_money_or_ids(db):
     for forbidden in ("account", "acc_id", "客户", "deal_id", "batch_id", "budget", "equity", "cash\":"):
         assert forbidden not in text
     assert set(pack.content) == {"pack_version", "market", "target_session", "tickets", "line_state", "ohlcv", "events"}
-    assert set(pack.content["line_state"][0]) == {"code", "position_qty", "cash_pct", "exposure_pct"}              # 只有比例与股数
+    assert set(pack.content["line_state"][0]) == {"code", "holding", "cash_pct", "exposure_pct"}              # 只有粗粒度比例与是否持有
     assert "base_hash" in pack.content["tickets"][0] and set(pack.base_hashes) == {"US.NVDA", "US.TSLA", "US.AMD"}
     assert "严格 JSON" in pack.markdown and pack.pack_id in pack.markdown and "不得" in pack.markdown
     assert any(f.startswith("tickets[]") for f in FIELD_WHITELIST) and "account" not in "".join(FIELD_WHITELIST)
@@ -155,8 +158,8 @@ def test_allowed_actions_cancel_reduce_and_flags_only(db):
 
 # ---------------------------------------------------------------- 导入（T-12、T-30）
 def do_import(db, pack, text, now=IMPORT_OK, pack_id=None):
-    a, c, ro = conns(db)
-    return import_veto(a, c, ro, pack_id=pack_id or pack.pack_id, response_text=text, provider="manual", model_id="model-x", prompt_version="v1", now=now,
+    _a, _c, ro = conns(db)
+    return import_veto(dbmod.connect_writer(db, "veto"), ro, pack_id=pack_id or pack.pack_id, response_text=text, provider="manual", model_id="model-x", prompt_version="v1", now=now,
                        deadline_at=DEADLINE, strategy_version="v", protocol_version="p", state_ref="s0")
 
 
@@ -259,3 +262,39 @@ def test_veto_precision_counts_would_be_losing_buys_and_reports_insufficient_sam
     assert (res.vetoed_buys, res.would_fill, res.would_lose) == (1, 1, 0)                 # 本会成交但不亏（97 → 99）
     assert res.precision is None and "不足" in res.note and MIN_SAMPLE == 5                # 样本不足：不给比例
     _ = td
+
+
+def test_f23_pack_builder_rejects_fields_outside_the_whitelist(db):
+    a, c, ro = conns(db)
+    base_tickets(c)
+    bad_state = [{"code": "US.NVDA", "holding": "no", "cash_pct": "0.9", "exposure_pct": "0.1", "account_id": "A1", "cash": "123456.78"}]
+    with pytest.raises(VetoError, match="白名单"):
+        build_pack(market="US", target_session=TARGET, base_tickets=rows(ro), line_state_summary=bad_state, ohlcv={}, events=[], input_cutoff_at=CUTOFF)
+    bad_bar = {"US.NVDA": [{"date": "2026-03-04", "open": "1", "high": "2", "low": "0.5", "close": "1.5", "volume": "1", "equity": "9"}]}
+    with pytest.raises(VetoError, match="白名单"):
+        build_pack(market="US", target_session=TARGET, base_tickets=rows(ro), line_state_summary=SUMMARY, ohlcv=bad_bar, events=[], input_cutoff_at=CUTOFF)
+
+
+def test_f15_state_changed_between_export_and_import_rejects_instead_of_rebinding(db):
+    pack = setup_pack(db)
+    a, c, ro = conns(db)
+    res = import_veto(dbmod.connect_writer(db, "veto"), ro, pack_id=pack.pack_id, response_text=resp(pack), provider="manual", model_id="m", prompt_version="v1",
+                      now=IMPORT_OK, deadline_at=DEADLINE, strategy_version="v", protocol_version="p", state_ref="DIFFERENT-STATE")
+    assert res.status == "rejected" and res.reason == "state_changed"                       # 不把旧数量绑定到新状态
+    assert dbmod.connect_ro(db).execute("SELECT COUNT(*) c FROM ticket").fetchone()["c"] == 3
+
+
+def test_f15_freeze_and_receipt_commit_atomically(db, monkeypatch):
+    import mystock2.assistant.veto as v
+    pack = setup_pack(db)
+
+    def boom(*a, **k):
+        raise RuntimeError("日志写入失败")
+    monkeypatch.setattr(v, "_log", boom)
+    with pytest.raises(RuntimeError):
+        do_import(db, pack, resp(pack))
+    ro = dbmod.connect_ro(db)
+    assert ro.execute("SELECT COUNT(*) c FROM ticket").fetchone()["c"] == 3                  # 回执写失败 → 新票也一并回滚，不会出现「票已生效、回执缺失」
+    assert ro.execute("SELECT COUNT(*) c FROM llm_call").fetchone()["c"] == 0
+    monkeypatch.undo()
+    assert do_import(db, pack, resp(pack)).status == "applied"                              # 可重试

@@ -19,3 +19,9 @@ views:
   - id: fx
     params:
       pair: USDHKD
+  - id: tickets             # 操作单（密封语义：未揭示只显示「已密封」与计数）
+  - id: scoreboard          # 记分牌（三类证据分区；不合成单一胜率结论）
+  - id: replay
+    params:
+      limit: 100
+  - id: data_status

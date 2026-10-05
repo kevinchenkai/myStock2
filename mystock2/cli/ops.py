@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sys
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -33,7 +34,7 @@ from mystock2.instruments.security_rule import RuleUnknown, rule_for
 from mystock2.instruments.universe import UniverseReport, load_universe
 from mystock2.ledger.fees import FeeRule, load_fee_rules
 from mystock2.ledger.settlement import SettlementRule
-from mystock2.scoreboard.engine import LineRun, run_line
+from mystock2.scoreboard.engine import LineRun, apply_splits, run_line
 from mystock2.scoreboard.lines import BuyHoldProvider, batch_initial_state, create_batch, save_run
 from mystock2.scoreboard.marketdata import DbMarketData
 from mystock2.scoreboard.metrics import summarize
@@ -43,6 +44,39 @@ from mystock2.scoreboard.types import ExecProtocol, LineState, Lot
 
 LOCAL_DIR = REPO_ROOT / "config" / "local"
 REQUIRED_STRATEGY = ("k", "q_buy", "q_sell", "max_hold_days", "exit_q", "budget_slice")
+
+
+ENV_NOW = "MYSTOCK2_ALLOW_NOW_OVERRIDE"
+
+
+def _now(args):
+    """当前时间。`--now` 只在显式设置环境变量 MYSTOCK2_ALLOW_NOW_OVERRIDE=1 时生效（测试/回放）；生产运行不得回填时间。"""
+    if getattr(args, "now", None):
+        if os.environ.get(ENV_NOW) != "1":
+            raise ConfigError(f"--now 只用于测试：需显式设置环境变量 {ENV_NOW}=1（生产运行的记录时间/揭示时间/冻结时间必须是真实时钟）")
+        return ensure_utc(args.now)
+    return utc_now()
+
+
+def protocol_hash(loc: "Local") -> str:
+    """协议、费用档案、结算规则与名单的联合哈希：冻结后任何变化都会改变它（新协议＝新批次）。"""
+    body = {
+        "protocol": loc.protocol,
+        "fees": [[r.profile_id, r.market, r.side, r.basis, r.currency, str(r.pct_fee), str(r.min_fee), str(r.flat_fee), str(r.cap_fee), str(r.tax_pct), str(r.round_step), r.valid_from, r.valid_to]
+                 for r in loc.fee_rules],
+        "settlement": {m: r.lag_sessions for m, r in sorted(loc.settlement.items())},
+        "universe": [[e.code, e.tier, str(e.max_weight), e.max_lots, e.pending_confirmation] for e in loc.universe.entries],
+    }
+    return hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()
+
+
+def check_protocol(b: "Batch", loc: "Local", allow_drift: bool) -> list[str]:
+    """运行前核验：本地协议/费用/名单哈希必须与批次创建时一致。允许漂移时返回提示标签（输出标 drift，不得当作正式记录）。"""
+    if b.protocol_hash and protocol_hash(loc) != b.protocol_hash:
+        if not allow_drift:
+            raise ConfigError("本地协议/费用档案/结算规则/名单与批次创建时不一致：冻结后修改＝新协议版本＝新比较批次（请新建批次；仅调试可加 --allow-drift，结果不得作为正式记录）")
+        return ["drift"]
+    return []
 
 
 # ------------------------------------------------------------------ 本地私有配置
@@ -108,6 +142,8 @@ class Batch:
     e0: Decimal
     codes: list[str]
     lines: dict[str, str]          # kind -> line_id
+    protocol_hash: str | None = None
+    pilot: bool = True
 
 
 def load_batch(conn, batch_id: str) -> Batch:
@@ -116,7 +152,8 @@ def load_batch(conn, batch_id: str) -> Batch:
         raise ConfigError(f"批次不存在：{batch_id}")
     meta = json.loads(r["initial_state_json"]).get("_meta", {})
     lines = {x["kind"]: x["line_id"] for x in conn.execute("SELECT kind, line_id FROM strategy_line WHERE batch_id=?", (batch_id,))}
-    return Batch(batch_id, meta["market"], r["currency"], date.fromisoformat(r["start_date"]), dec(r["e0"]), meta["codes"], lines)
+    return Batch(batch_id, meta["market"], r["currency"], date.fromisoformat(r["start_date"]), dec(r["e0"]), meta["codes"], lines, meta.get("protocol_hash"),
+                 bool(meta.get("pilot", True)))
 
 
 def sessions_between(market: str, after: date, upto: date) -> list[date]:
@@ -132,12 +169,16 @@ def split_table(conn, codes: list[str]) -> dict[str, list]:
 
 
 def lot_sizes(conn, codes: list[str], on: date) -> dict[str, int]:
+    """每手股数来自已核实的证券规则；规则未知/未核实**失败关闭**（不默认 1 股）。"""
     out = {}
     for c in codes:
         try:
-            out[c] = rule_for(conn, c, on.isoformat()).lot_size or 1
-        except RuleUnknown:
-            out[c] = 1
+            lot = rule_for(conn, c, on.isoformat()).lot_size
+        except RuleUnknown as exc:
+            raise ConfigError(f"{c} 的证券规则未知或未核实（{exc}）：不能模拟/生成可执行数量，请先录入并核实 security_rule") from exc
+        if not lot:
+            raise ConfigError(f"{c} 的 lot_size 未知：不能模拟/生成可执行数量")
+        out[c] = lot
     return out
 
 
@@ -177,6 +218,7 @@ def state_at_open(conn, loc: Local, b: Batch, kind: str, target: date) -> tuple[
         if not run.results or run.results[-1].status != "OK":
             raise ConfigError(f"{kind} 线在 {prev} 前进入 UNKNOWN/PAUSED：先补齐行情并重算（不得用假定库存继续）")
         equity = ok[-1].equity
+    apply_splits(st, split_table(conn, b.codes), b.market, target)           # 与引擎一致：先拆股、再释放结算（同一份「目标日开盘状态」）
     st.unsettled = [(d, a) for d, a in st.unsettled if d > target]       # 结算日当天视为已结算
     return st, equity
 
@@ -190,6 +232,32 @@ def _opener(cfg, owner):
     return dbmod.connect_writer(cfg.db_path, owner)
 
 
+def _parse_positions(raw: str | None, md, d0: date, loc: "Local", market: str, currency: str) -> tuple[dict[str, list[Lot]], list[str]]:
+    """开账时属于交易仓的初始库存。值可为数量，或 {"qty":..,"cost":"每股成本","acquired":"YYYY-MM-DD"}。
+    缺成本→估计为 D0 未复权收盘价（标 cost_estimated）；缺买入日→按 D0（标 acquired_unknown，影响时间止损的持有天数）。"""
+    from mystock2.instruments.code_map import currency_of
+
+    entries = {e.code: e for e in loc.universe.entries if e.market == market and e.tier == "trade"}
+    out: dict[str, list[Lot]] = {}
+    notes: list[str] = []
+    for code, v in (json.loads(raw) if raw else {}).items():
+        if code not in entries:
+            raise ConfigError(f"{code} 不是名单内 {market} 市场的交易仓标的（核心仓/名单外库存不进入正式模拟线）")
+        if currency_of(code) != currency:
+            raise ConfigError(f"{code} 的币种 {currency_of(code)} 与批次币种 {currency} 不一致")
+        spec = v if isinstance(v, dict) else {"qty": v}
+        px = md.close(code, d0)
+        if spec.get("cost") is None:
+            if px is None:
+                raise ConfigError(f"{code} 在 {d0} 缺少未复权收盘价，无法估算成本")
+            notes.append(f"cost_estimated:{code}")
+        if spec.get("acquired") is None:
+            notes.append(f"acquired_unknown:{code}")
+        out[code] = [Lot(dec(str(spec["qty"])), dec(str(spec["cost"])) if spec.get("cost") is not None else px,
+                         date.fromisoformat(spec["acquired"]) if spec.get("acquired") else d0)]
+    return out, notes
+
+
 def cmd_batch_create(args) -> int:
     cfg = load_config(args.config)
     loc = load_local(args.local_dir)
@@ -197,21 +265,27 @@ def cmd_batch_create(args) -> int:
     codes = [e.code for e in loc.universe.entries if e.market == market and e.tier == "trade"]
     ro = _conn_ro(cfg)
     md = DbMarketData(ro)
-    budget = dec(args.budget)
-    init = LineState(args.currency.upper(), budget)
-    notes = []
-    for code, qty in (json.loads(args.positions) if args.positions else {}).items():          # 开账时属于交易仓的初始库存（来自开账快照，由负责人核对）
-        px = md.close(code, d0)
+    init = LineState(args.currency.upper(), dec(args.budget))
+    lots, notes = _parse_positions(args.positions, md, d0, loc, market, init.currency)
+    init.lots = lots
+    init.other_equity = dec(args.other_equity)                      # 开账时交易仓的应收−应付（如已除息未到账的股息）
+    pos_value = Decimal(0)
+    for c in init.lots:
+        px = md.close(c, d0)
         if px is None:
-            raise ConfigError(f"{code} 在 {d0} 缺少未复权收盘价，无法估值/估成本")
-        init.lots[code] = [Lot(dec(str(qty)), px, d0)]
-        notes.append(f"cost_estimated:{code}")
-    pos_value = sum((init.qty(c) * md.close(c, d0) for c in init.lots), Decimal(0))
-    e0 = init.cash + pos_value
+            raise ConfigError(f"{c} 在 {d0} 缺少未复权收盘价，无法计算 E0")
+        pos_value += init.qty(c) * px
+    e0 = init.cash + pos_value + init.other_equity                  # E0 = B + 交易仓库存市值 + 期初应收 − 应付（§6A.5）
+    h = protocol_hash(loc)
+    fr = ro.execute("SELECT protocol_hash, summary_json FROM protocol_freeze WHERE protocol_version=?", (str(loc.protocol.get("protocol_version")),)).fetchone()
+    frozen = bool(fr and fr["protocol_hash"] == h and not json.loads(fr["summary_json"]).get("pilot"))
+    pilot = not frozen or bool(loc.missing_required())
+    if pilot:
+        notes.append("pilot:protocol_not_frozen_or_incomplete")
     kinds = args.lines.split(",")
     with _opener(cfg, "scoreboard") as w:
-        create_batch(w, args.id, loc.exec_protocol(), d0, init, e0, kinds, meta={"market": market, "codes": codes, "notes": notes})
-    print(f"batch={args.id} market={market} e0={to_db(e0)} lines={kinds} notes={notes}")
+        create_batch(w, args.id, loc.exec_protocol(), d0, init, e0, kinds, meta={"market": market, "codes": codes, "notes": notes, "protocol_hash": h, "pilot": pilot})
+    print(f"batch={args.id} market={market} e0={to_db(e0)} lines={kinds} pilot={pilot} notes={notes}")
     return 0
 
 
@@ -222,8 +296,7 @@ def cmd_protocol_freeze(args) -> int:
     if missing and not args.pilot:
         print("协议不完整，拒绝冻结（缺失项使所有运行保持 pilot）：" + ", ".join(missing), file=sys.stderr)
         return 2
-    body = json.dumps(loc.protocol, sort_keys=True, ensure_ascii=False)
-    h = hashlib.sha256(body.encode()).hexdigest()
+    h = protocol_hash(loc)
     version = str(loc.protocol.get("protocol_version") or "")
     if not version or version == "TEMPLATE":
         print("protocol_version 未填写（模板值 TEMPLATE 不可冻结）", file=sys.stderr)
@@ -260,10 +333,11 @@ def _latest_closed(market: str, now: datetime) -> date:
 def cmd_coach_run(args) -> int:
     cfg = load_config(args.config)
     loc = load_local(args.local_dir)
-    now = ensure_utc(args.now) if args.now else utc_now()
+    now = _now(args)
     market = args.market.upper()
     ro = _conn_ro(cfg)
     b = load_batch(ro, args.batch)
+    drift = check_protocol(b, loc, getattr(args, "allow_drift", False))
     t, target = _target_for(args.stage, market, now, date.fromisoformat(args.as_of) if args.as_of else None)
     deadline = cal.project_deadline(market, target)
     params, missing = loc.strategy_params(), loc.missing_required()
@@ -296,11 +370,12 @@ def cmd_coach_run(args) -> int:
                                 params=params, fee_rules=loc.fee_rules, trade_equity=equity)
                 ids = freeze_tickets(cw, batch_id=b.batch_id, line_id=b.lines[kind], kind="line_sim", market=market, target_session=target, stage=args.stage,
                                      drafts=drafts, state_ref_type="line_state", state_ref=state.hash(), strategy_version=params.version,
-                                     protocol_version=loc.protocol.get("protocol_version", "pilot"), generated_at=now, now=now, deadline_at=deadline)
+                                     protocol_version=loc.protocol.get("protocol_version", "pilot"), generated_at=now, now=_now(args), deadline_at=deadline)   # 冻结时间取提交时的真实时钟
                 n_total += len(ids)
-            run.note(tickets=n_total, pilot=bool(missing), missing=missing)
+            run.note(tickets=n_total, pilot=bool(missing or b.pilot or drift), missing=missing, drift=bool(drift))
             # 密封：只输出回执与计数，不输出动作/限价/数量
-            print(f"run_id={run.run_id} stage={args.stage} market={market} data_as_of={t} target={target} tickets_frozen={n_total} pilot={bool(missing)}")
+            pilot = bool(missing or b.pilot or drift)
+            print(f"run_id={run.run_id} stage={args.stage} market={market} data_as_of={t} target={target} tickets_frozen={n_total} pilot={pilot}")
     return 0
 
 
@@ -318,7 +393,7 @@ def cmd_coach_show(args) -> int:
             latest[(r["line_id"], r["code"])] = r
     with _opener(cfg, "coach") as w:
         reveal(w, batch_id=args.batch, market=market, target_session=target, channel="coach_show", version_hashes=[r["frozen_hash"] for r in latest.values()],
-               at=ensure_utc(args.now) if args.now else None)
+               at=_now(args))
     for (line, code), r in sorted(latest.items()):
         print(f"{line} {code} {r['action']} limit={r['limit_price']} qty={r['qty']} reasons={r['reason_json']} deadline={r['deadline_at']}")
     print(f"（已写暴露日志：{len(latest)} 张；此后记录的人类计划将标 seen_ai=1 且不进入 human_plan 线）")
@@ -347,6 +422,7 @@ def cmd_intent_state(args) -> int:
     loc = load_local(args.local_dir)
     ro = _conn_ro(cfg)
     b = load_batch(ro, args.batch)
+    check_protocol(b, loc, getattr(args, "allow_drift", False))
     target = date.fromisoformat(args.target)
     st, _ = state_at_open(ro, loc, b, "human_plan", target)
     print(json.dumps({"state_hash": st.hash(), **st.to_dict(), "tradable_cash": to_db(st.tradable_cash())}, ensure_ascii=False, indent=2))
@@ -358,9 +434,10 @@ def cmd_intent_add(args) -> int:
     loc = load_local(args.local_dir)
     ro = _conn_ro(cfg)
     b = load_batch(ro, args.batch)
+    check_protocol(b, loc, getattr(args, "allow_drift", False))
     market, target = b.market, date.fromisoformat(args.target)
     st, _ = state_at_open(ro, loc, b, "human_plan", target)
-    now = ensure_utc(args.now) if args.now else utc_now()
+    now = _now(args)
     try:
         rule = rule_for(ro, args.code, target.isoformat())
     except RuleUnknown:
@@ -380,12 +457,13 @@ def cmd_human_plan_freeze(args) -> int:
     loc = load_local(args.local_dir)
     ro = _conn_ro(cfg)
     b = load_batch(ro, args.batch)
+    check_protocol(b, loc, getattr(args, "allow_drift", False))
     target = date.fromisoformat(args.target)
     deadline = cal.project_deadline(b.market, target)
     st, _ = state_at_open(ro, loc, b, "human_plan", target)
     plan = select_human_plan(ro, batch_id=b.batch_id, line_id=b.lines["human_plan"], market=b.market, target_session=target, codes=b.codes, deadline_at=deadline)
     drafts = plan_to_drafts(plan, lot_sizes(ro, b.codes, target))
-    now = ensure_utc(args.now) if args.now else utc_now()
+    now = _now(args)
     with _opener(cfg, "coach") as w:
         ids = freeze_tickets(w, batch_id=b.batch_id, line_id=b.lines["human_plan"], kind="line_sim", market=b.market, target_session=target, stage="human_plan",
                              drafts=drafts, state_ref_type="line_state", state_ref=st.hash(), strategy_version="human", protocol_version=loc.protocol.get("protocol_version", "pilot"),
@@ -400,6 +478,7 @@ def cmd_scoreboard_run(args) -> int:
     loc = load_local(args.local_dir)
     ro = _conn_ro(cfg)
     b = load_batch(ro, args.batch)
+    drift = check_protocol(b, loc, getattr(args, "allow_drift", False))
     end = date.fromisoformat(args.end)
     weights = {c: Decimal(1) / len(b.codes) for c in b.codes} if b.codes else {}       # 默认：交易仓标的等权（协议可预注册覆盖）
     for c, w in ((loc.protocol.get("buyhold") or {}).get("weights") or {}).items():
@@ -412,12 +491,12 @@ def cmd_scoreboard_run(args) -> int:
     with run_log(_opener(cfg, "core"), "scoreboard run", {"batch": b.batch_id, "end": args.end}) as rl:
         run_id = rl.run_id
         with _opener(cfg, "scoreboard") as w:
-            save_run(w, run_id, b.batch_id, loc.exec_protocol(), [], runs, b.e0, b.currency)
+            save_run(w, run_id, b.batch_id, loc.exec_protocol(), [], runs, b.e0, b.currency, extra={"protocol_hash": protocol_hash(loc), "pilot": bool(b.pilot or drift), "drift": bool(drift)})
     summary = {}
     for line_id, run in runs.items():
         summary[line_id] = summarize(run.results, b.e0).as_dict()
     ai, human, hold = (runs.get(b.lines.get(k, "")) for k in ("ai", "human_plan", "buyhold"))
-    out = {"run_id": run_id, "batch": b.batch_id, "lines": summary}
+    out = {"run_id": run_id, "batch": b.batch_id, "pilot": bool(b.pilot or drift), "drift": bool(drift), "lines": summary}
     for name, other in (("ai_vs_human_plan", human), ("ai_vs_buyhold", hold)):
         if ai and other:
             d = paired_diff(ai.results, other.results, b.e0)
@@ -435,6 +514,7 @@ def cmd_veto_export(args) -> int:
     loc = load_local(args.local_dir)
     ro = _conn_ro(cfg)
     b = load_batch(ro, args.batch)
+    check_protocol(b, loc, getattr(args, "allow_drift", False))
     target = date.fromisoformat(args.target)
     if not args.confirm_fields:
         print("将外发的字段（白名单）：\n  " + "\n  ".join(FIELD_WHITELIST) + "\n\n不含账号、客户号、成交编号与绝对金额。确认后加 --confirm-fields 重新执行。", file=sys.stderr)
@@ -451,15 +531,17 @@ def cmd_veto_export(args) -> int:
     if not base:
         print("没有可导出的机械基础单（先 coach run）", file=sys.stderr)
         return 2
-    now = ensure_utc(args.now) if args.now else utc_now()
+    now = _now(args)
     st, equity = state_at_open(ro, loc, b, "ai_veto", target)
     md = DbMarketData(ro)
     summary = []
     for code in sorted(base):
         q = st.qty(code)
         px = md.close(code, cal.prev_session(b.market, target))
-        summary.append({"code": code, "position_qty": str(q), "cash_pct": str((st.cash / equity).quantize(Decimal("0.0001"))) if equity else None,
-                        "exposure_pct": str(((q * px) / equity).quantize(Decimal("0.0001"))) if (equity and px) else None})
+        # 外发只给粗粒度比例（2 位小数）与「是否持有」：绝对股数 × 价格 ÷ 比例会还原账户规模
+        summary.append({"code": code, "holding": "yes" if q > 0 else "no",
+                        "cash_pct": str((st.cash / equity).quantize(Decimal("0.01"))) if equity else None,
+                        "exposure_pct": str(((q * px) / equity).quantize(Decimal("0.01"))) if (equity and px) else None})
     from mystock2.market.bars import get_daily
     ohlcv = {c: [{"date": r["session_date"], "open": r["open"], "high": r["high"], "low": r["low"], "close": r["close"], "volume": r["volume"]}
                  for r in get_daily(ro, c, cal.prev_session(b.market, target) - timedelta(days=40), cal.prev_session(b.market, target))[-20:]] for c in base}
@@ -487,12 +569,13 @@ def cmd_veto_import(args) -> int:
         print(f"未知输入包：{args.pack}", file=sys.stderr)
         return 2
     b = load_batch(ro, row["batch_id"])
+    check_protocol(b, loc, getattr(args, "allow_drift", False))
     target = date.fromisoformat(row["target_session"])
     st, _ = state_at_open(ro, loc, b, "ai_veto", target)
-    now = ensure_utc(args.now) if args.now else utc_now()
     text = Path(args.response).read_text(encoding="utf-8")
-    with _opener(cfg, "assistant") as aw, _opener(cfg, "coach") as cw:
-        res = import_veto(aw, cw, ro, pack_id=args.pack, response_text=text, provider="manual", model_id=args.model_id, prompt_version=args.prompt_version or PROMPT_VERSION,
+    now = _now(args)                                                       # 读完响应之后再取时间：以导入完成时刻判截止
+    with _opener(cfg, "veto") as vw:
+        res = import_veto(vw, ro, pack_id=args.pack, response_text=text, provider="manual", model_id=args.model_id, prompt_version=args.prompt_version or PROMPT_VERSION,
                           now=now, deadline_at=cal.project_deadline(b.market, target), strategy_version=loc.strategy_params().version,
                           protocol_version=loc.protocol.get("protocol_version", "pilot"), state_ref=st.hash())
     print(f"status={res.status} reason={res.reason} tickets={len(res.tickets)}")
@@ -566,7 +649,8 @@ def cmd_collect_futu(args) -> int:
                 run.partial("; ".join(sc for r in out.values() for sc in r.failed_scopes))
             run.note(**{k: {"rows": v.rows, "inserted": v.inserted, "duplicate": v.duplicate, "pending": v.pending, "ok": v.ok} for k, v in out.items()})
             print(f"run_id={run.run_id}")
-    print(json.dumps({k: {**v.__dict__, "recon_only": {a: str(b) for a, b in v.recon_only.items()}} for k, v in out.items()}, ensure_ascii=False, indent=2, default=str))
+    text = json.dumps({k: {**v.__dict__, "recon_only": {a: str(b) for a, b in v.recon_only.items()}} for k, v in out.items()}, ensure_ascii=False, indent=2, default=str)
+    print(text.replace(str(args.account_id), "<account>").replace(str(args.acc_id), "<acc>"))      # 终端输出不带账户号（日志/截图/粘贴会外泄）
     return 0 if all(r.ok and not r.conflicts for r in out.values()) else 1
 
 
@@ -650,7 +734,7 @@ def register(sub) -> None:
     b = sub.add_parser("batch", help="比较批次").add_subparsers(dest="bcmd", required=True)
     c = b.add_parser("create", help="创建批次（冻结完整状态包）")
     for a, kw in (("--id", {"required": True}), ("--market", {"required": True}), ("--d0", {"required": True}), ("--currency", {"required": True}),
-                  ("--budget", {"required": True}), ("--lines", {"default": "ai,human_plan,buyhold"}), ("--positions", {"help": 'JSON：{"US.NVDA": 10}（开账时交易仓初始库存）'})):
+                  ("--budget", {"required": True}), ("--other-equity", {"default": "0", "help": "开账时交易仓的应收−应付（计入 E0）"}), ("--lines", {"default": "ai,human_plan,buyhold"}), ("--positions", {"help": 'JSON：{"US.NVDA": 10}（开账时交易仓初始库存）'})):
         c.add_argument(a, **kw)
     c.add_argument("--local-dir", **ld)
     c.set_defaults(fn=cmd_batch_create)
@@ -666,7 +750,8 @@ def register(sub) -> None:
     r.add_argument("--market", required=True)
     r.add_argument("--stage", choices=["close", "preopen"], required=True)
     r.add_argument("--as-of", help="数据截至的交易日（默认自动）")
-    r.add_argument("--now", help="测试用：覆盖当前时间（带时区 ISO）")
+    r.add_argument("--now", help="测试用：覆盖当前时间（须设置环境变量 MYSTOCK2_ALLOW_NOW_OVERRIDE=1）")
+    r.add_argument("--allow-drift", action="store_true", help="允许本地协议与批次创建时不一致（仅调试；结果标 drift/pilot）")
     r.add_argument("--local-dir", **ld)
     r.set_defaults(fn=cmd_coach_run)
     s = co.add_parser("show", help="受控揭示 AI 单（写暴露日志）")
@@ -684,6 +769,7 @@ def register(sub) -> None:
     s2 = it.add_parser("state", help="展示人类线自己的状态")
     s2.add_argument("--batch", required=True)
     s2.add_argument("--target", required=True)
+    s2.add_argument("--allow-drift", action="store_true")
     s2.add_argument("--local-dir", **ld)
     s2.set_defaults(fn=cmd_intent_state)
     a = it.add_parser("add", help="记录结构化人类计划")
@@ -691,12 +777,14 @@ def register(sub) -> None:
                   ("--action", {"required": True, "choices": ["buy", "sell", "hold", "no_trade", "BUY", "SELL", "HOLD", "NO_TRADE"]}), ("--limit", {}),
                   ("--qty", {"type": int}), ("--note", {}), ("--now", {})):
         a.add_argument(k, **kw)
+    a.add_argument("--allow-drift", action="store_true")
     a.add_argument("--local-dir", **ld)
     a.set_defaults(fn=cmd_intent_add)
     fh = it.add_parser("freeze", help="截止时冻结人类计划为 human_plan 线的单")
     fh.add_argument("--batch", required=True)
     fh.add_argument("--target", required=True)
     fh.add_argument("--now")
+    fh.add_argument("--allow-drift", action="store_true")
     fh.add_argument("--local-dir", **ld)
     fh.set_defaults(fn=cmd_human_plan_freeze)
     cl = sub.add_parser("collect", help="采集").add_subparsers(dest="ccl", required=True)
@@ -738,16 +826,19 @@ def register(sub) -> None:
         ve.add_argument(k, **kw)
     ve.add_argument("--confirm-fields", action="store_true", help="确认外发字段白名单")
     ve.add_argument("--no-human-plan", action="store_true", help="接受在未记录人类计划时导出（后果：揭示前无记录）")
+    ve.add_argument("--allow-drift", action="store_true")
     ve.add_argument("--local-dir", **ld)
     ve.set_defaults(fn=cmd_veto_export)
     vi = vt.add_parser("import", help="导入人工否决结果（严格 JSON）")
     for k, kw in (("--pack", {"required": True}), ("--response", {"required": True}), ("--model-id", {}), ("--prompt-version", {}), ("--now", {})):
         vi.add_argument(k, **kw)
+    vi.add_argument("--allow-drift", action="store_true")
     vi.add_argument("--local-dir", **ld)
     vi.set_defaults(fn=cmd_veto_import)
     sc = sub.add_parser("scoreboard", help="记分牌").add_subparsers(dest="scmd", required=True)
     rn = sc.add_parser("run", help="重算各线并写入新 run")
     rn.add_argument("--batch", required=True)
     rn.add_argument("--end", required=True)
+    rn.add_argument("--allow-drift", action="store_true")
     rn.add_argument("--local-dir", **ld)
     rn.set_defaults(fn=cmd_scoreboard_run)

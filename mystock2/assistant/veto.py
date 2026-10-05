@@ -34,7 +34,7 @@ MAX_FLAGS = 10
 FIELD_WHITELIST = [
     "pack_version", "market", "target_session", "tickets[].code", "tickets[].action", "tickets[].limit_price", "tickets[].qty", "tickets[].lot_size",
     "tickets[].reason_codes", "tickets[].n_train", "tickets[].width", "tickets[].c_rt", "tickets[].base_hash",
-    "line_state[].code", "line_state[].position_qty", "line_state[].cash_pct", "line_state[].exposure_pct",
+    "line_state[].code", "line_state[].holding", "line_state[].cash_pct", "line_state[].exposure_pct",
     "ohlcv[].date", "ohlcv[].open", "ohlcv[].high", "ohlcv[].low", "ohlcv[].close", "ohlcv[].volume",
     "events[].evidence_id", "events[].title", "events[].source", "events[].published_at",
 ]
@@ -57,10 +57,21 @@ def _h(obj) -> str:
     return hashlib.sha256(json.dumps(obj, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
+def _only(d: dict, allowed: set[str], where: str) -> None:
+    extra = set(d) - allowed
+    if extra:
+        raise VetoError(f"外发白名单之外的字段（{where}）：{sorted(extra)}——输入包构造器不接受未列入白名单的键")
+
+
 def build_pack(*, market: str, target_session: date, base_tickets: list[sqlite3.Row], line_state_summary: list[dict], ohlcv: dict[str, list[dict]],
                events: list[dict], input_cutoff_at) -> Pack:
     """base_tickets：该线的、截止前最后冻结的机械单（sqlite Row）。events 中 published_at 晚于输入截止的一律拒绝（不得前视）。"""
     cutoff = ensure_utc(input_cutoff_at)
+    for row in line_state_summary:
+        _only(row, {"code", "holding", "cash_pct", "exposure_pct"}, "line_state")
+    for code, bars in ohlcv.items():
+        for bar in bars:
+            _only(bar, {"date", "open", "high", "low", "close", "volume"}, f"ohlcv[{code}]")
     ev_out = []
     for e in events:
         pub = ensure_utc(e["published_at"])
@@ -229,11 +240,12 @@ def _log(conn, pack_id, provider, model_id, prompt_version, input_hash, output, 
                  (cid, pack_id, provider, model_id, prompt_version, input_hash, output, status, reason, iso_utc(now)))
 
 
-def import_veto(conn_assistant: sqlite3.Connection, conn_coach: sqlite3.Connection, conn_read: sqlite3.Connection, *, pack_id: str, response_text: str,
+def import_veto(conn_write: sqlite3.Connection, conn_read: sqlite3.Connection, *, pack_id: str, response_text: str,
                 provider: str, model_id: str | None, prompt_version: str, now, deadline_at, strategy_version: str, protocol_version: str,
                 state_ref: str) -> ImportResult:
-    """导入人工否决结果。**以本系统导入完成时间判截止**；拒绝错包、重放、迟到、基础单已更新（包失效）与越权结果。
+    """导入人工否决结果。**以本系统导入完成时间判截止**；拒绝错包、重放、迟到、基础单已更新/状态已变（包失效）与越权结果。
 
+    `conn_write` 须是复合写入者 `veto`（可写 ticket 与 llm_call）：新版本冻结与成功回执在**同一事务**内提交。
     任何非 applied 的结果都意味着否决层对该日关闭：机械操作单照常（不改任何票）。
     """
     now = ensure_utc(now)
@@ -244,8 +256,8 @@ def import_veto(conn_assistant: sqlite3.Connection, conn_coach: sqlite3.Connecti
     pack = json.loads(row["content_json"])
 
     def close(status, reason):
-        with atomic(conn_assistant):
-            _log(conn_assistant, pack_id, provider, model_id, prompt_version, input_hash, response_text[:20000], status, reason, now)
+        with atomic(conn_write):
+            _log(conn_write, pack_id, provider, model_id, prompt_version, input_hash, response_text[:20000], status, reason, now)
         return ImportResult(status, reason, [])
 
     if conn_read.execute("SELECT 1 FROM llm_call WHERE pack_id=? AND status='applied'", (pack_id,)).fetchone():
@@ -267,18 +279,18 @@ def import_veto(conn_assistant: sqlite3.Connection, conn_coach: sqlite3.Connecti
     base_rows = conn_read.execute(
         "SELECT * FROM ticket WHERE batch_id=? AND line_id=? AND kind='line_sim' AND market=? AND target_session=? AND status='frozen' AND frozen_hash IN (%s)"
         % ",".join("?" * len(base_hashes)), (row["batch_id"], row["line_id"], row["market"], row["target_session"], *base_hashes.values())).fetchall()
+    if any(r["state_ref"] != state_ref for r in base_rows):               # 基础单绑定的线内状态已变：不得把旧数量绑定到新状态
+        return close("rejected", "state_changed")
     drafts = apply_adjustments(base_rows, resp)
     changed = [d for d, b in zip(sorted(drafts, key=lambda x: x.code), sorted(base_rows, key=lambda x: x["code"]), strict=True)
                if (d.action, d.qty, d.reason_codes) != (b["action"], int(b["qty"]) if b["qty"] else None, tuple(json.loads(b["reason_json"])))]
     ids: list[str] = []
-    if changed:
-        # 注意：两个写连接不嵌套事务（避免 SQLite 写锁互等）。先冻结新版本，再记 llm_call；
-        # 若记录失败，已冻结的票内容相同重放是 no-op，不会重复生效。
-        ids = freeze_tickets(conn_coach, batch_id=row["batch_id"], line_id=row["line_id"], kind="line_sim", market=row["market"],
-                             target_session=date.fromisoformat(row["target_session"]), stage="close", drafts=drafts, state_ref_type="line_state",
-                             state_ref=state_ref, strategy_version=strategy_version, protocol_version=protocol_version, generated_at=now, now=now,
-                             deadline_at=deadline_at)
-    with atomic(conn_assistant):
-        _log(conn_assistant, pack_id, provider, model_id, prompt_version, input_hash, json.dumps(resp, ensure_ascii=False, sort_keys=True), "applied",
+    with atomic(conn_write):                                                # 新版本冻结与成功回执同一事务：要么都生效，要么都不生效
+        if changed:
+            ids = freeze_tickets(conn_write, batch_id=row["batch_id"], line_id=row["line_id"], kind="line_sim", market=row["market"],
+                                 target_session=date.fromisoformat(row["target_session"]), stage="close", drafts=drafts, state_ref_type="line_state",
+                                 state_ref=state_ref, strategy_version=strategy_version, protocol_version=protocol_version, generated_at=now, now=now,
+                                 deadline_at=deadline_at)
+        _log(conn_write, pack_id, provider, model_id, prompt_version, input_hash, json.dumps(resp, ensure_ascii=False, sort_keys=True), "applied",
              f"changed={len(changed)} flags={len(resp.get('flags', []))}", now)
     return ImportResult("applied", f"changed={len(changed)}", ids)

@@ -12,7 +12,7 @@ from mystock2.web.app import create_app
 
 from .test_web_fixtures import NOW, build_demo_db, get_view, make_app
 
-BUILTIN = ["account_overview", "holdings", "trades", "pnl", "equity_trend", "fx"]
+BUILTIN = ["account_overview", "holdings", "trades", "pnl", "equity_trend", "fx", "tickets", "scoreboard", "replay", "data_status"]
 
 
 def write_view(root: Path, vid: str, query: str, *, meta: dict | None = None, panel: str | None = "MS.registerPanel('%s', function(){});"):
@@ -104,7 +104,7 @@ def test_views_yaml_controls_enabled_hidden_order_and_default_params(tmp_path):
     c = app.test_client()
     js = c.get("/api/views").get_json()
     ids = [v["id"] for v in js["views"]]
-    assert ids == ["fx", "holdings", "pnl", "account_overview", "equity_trend"]       # 列出的在前（按配置顺序），其余按 order；trades 已停用
+    assert ids == ["fx", "holdings", "pnl", "account_overview", "equity_trend", "tickets", "scoreboard", "replay", "data_status"]   # 列出的在前（按配置顺序），其余按 order；trades 已停用
     assert next(v for v in js["views"] if v["id"] == "holdings")["hidden"] is True
     fx = next(v for v in js["views"] if v["id"] == "fx")
     assert next(p for p in fx["params"] if p["name"] == "pair")["default"] == "USDCNY"
@@ -135,7 +135,7 @@ def test_envelope_has_header_and_data(tmp_path):
     assert code == 200 and set(body) >= {"view_id", "title", "status", "params", "header", "data", "error"}
     h = body["header"]
     assert set(h) >= {"data_mode", "data_mode_label", "event_at", "collected_at", "staleness", "sources", "generated_at"}
-    assert h["staleness"]["label"] in ("新鲜", "陈旧", "未知") and h["generated_at"] == "2026-03-11T06:00:00Z"
+    assert h["staleness"]["label"] in ("新鲜", "陈旧", "未知") and h["generated_at"] == "2026-03-11T06:00:00.000000Z"
     assert all(not k.startswith("_") for k in body["params"])
 
 
@@ -165,9 +165,14 @@ def test_empty_migrated_database_reports_no_account(tmp_path):
     p = tmp_path / "m.db"
     dbmod.migrate(p)
     c = make_app(tmp_path, p).test_client()
-    for vid in ("account_overview", "holdings", "trades", "pnl", "equity_trend"):
+    for vid in ("account_overview", "holdings", "trades", "pnl", "equity_trend", "replay"):
         code, body = get_view(c, vid)
         assert body["status"] == "unavailable" and body["error"]["code"] == "no_account", vid
+    for vid in ("tickets", "scoreboard"):                                # 没有比较批次：业务状态，不是错误
+        code, body = get_view(c, vid)
+        assert body["status"] == "unavailable" and body["error"]["code"] == "no_batch", vid
+    code, body = get_view(c, "data_status")                            # 数据状态不依赖账户：空库照常回答，新鲜度「未知」
+    assert body["status"] == "ok" and body["header"]["staleness"]["label"] == "未知" and body["data"]["protocols"]["verdict"]["pilot"] is True
     code, body = get_view(c, "fx")                                      # 外汇不依赖账户：没有汇率 → 全部不可用
     assert body["status"] == "ok" and all(p["status"] == "unavailable" for p in body["data"]["paths"])
     assert body["header"]["staleness"]["label"] == "未知"

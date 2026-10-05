@@ -5,6 +5,7 @@ import pytest
 
 from mystock2.ledger import opening
 from mystock2.ledger.events import EventDraft, fee_key, fill_key, post_event
+from mystock2.ledger.fees import FeeRule
 from mystock2.ledger.settlement import SettlementRule
 from mystock2.scoreboard.engine import EngineError, run_line
 from mystock2.scoreboard.human_actual import human_actual_series
@@ -19,7 +20,7 @@ from mystock2.scoreboard.lines import (
 from mystock2.scoreboard.matcher import match_order
 from mystock2.scoreboard.metrics import daily_returns, summarize
 from mystock2.scoreboard.stats import block_bootstrap_ci, paired_diff, required_days
-from mystock2.scoreboard.types import BUY, SELL, DayResult, ExecProtocol, SimOrder
+from mystock2.scoreboard.types import BUY, SELL, DayResult, ExecProtocol, LineState, SimOrder
 from tests.unit.ledger_helpers import ACCT
 from tests.unit.ledger_helpers import make_db as make_ledger_db
 from tests.unit.scoreboard_helpers import CODE, CODE2, DAYS, PROTO, RULES, SETTLE1, FakeMD, state
@@ -319,14 +320,14 @@ def test_t43_external_flow_into_a_formal_line_terminates_batch():
 # ------------------------------------------------------------ human_actual（描述性）
 def test_human_actual_books_real_fills_as_is_with_negative_cash_allowed(tmp_path):
     conn = make_ledger_db(tmp_path)
-    t0 = "2026-02-27T00:00:00Z"
+    t0 = "2026-02-27T00:00:00.000000Z"
     opening.record_opening(conn, ACCT, t0, {CODE: "10"}, {"USD": "100000"})
     md = FakeMD()
     md.flat(CODE, DAYS, 10)
     md.flat(CODE2, DAYS, 20)
     md.set_day(CODE, d2, [(10, 12, 9, 12, 1_000_000)] * 6, close=12)
     md.set_day(CODE2, d2, [(20, 21, 19, 21, 1_000_000)] * 6, close=21)
-    t = "2026-03-03T16:00:00Z"
+    t = "2026-03-03T16:00:00.000000Z"
     post_event(conn, EventDraft(fill_key(ACCT, "H1"), ACCT, "FILL", t, "USD", code=CODE, price="11", qty_delta="100", cash_delta="-1100", ref_deal_id="H1"))
     post_event(conn, EventDraft(fee_key(ACCT, "H1", "commission"), ACCT, "FEE", t, "USD", cash_delta="-1.5", ref_deal_id="H1"))
     post_event(conn, EventDraft("dep:1", ACCT, "DEPOSIT", t, "USD", cash_delta="9999"))                         # 入金不进入 human_actual（T-43）
@@ -354,3 +355,81 @@ def test_sensitivity_variants_are_pessimistic_and_exclusion_removes_ambiguous_da
     a[1].flags.append("ambiguous_bar")
     full, trimmed = paired_diff(a, b, e0), paired_diff(a, b, e0, exclude_dates=ambiguous_dates(a, b))
     assert full.n == 3 and trimmed.n == 2 and DAYS[1] not in trimmed.deltas and trimmed.coverage == D(2) / 3
+
+
+# ---------------------------------------------------------------- 代码评审回归（F09–F13、F19）
+def test_f13_unknown_early_volume_is_not_masked_by_later_full_fill():
+    md = FakeMD()
+    bars = hb(md, d1, [(10, 11, 9, 10, None), (10, 11, 9, 10, 1000), (10, 11, 9, 10, 1000)])      # 第一根穿越但容量未知
+    assert match_order(SimOrder("L", CODE, BUY, 100, D("9.5")), bars, ExecProtocol(max_participation=D("0.5"))).status == "unknown"
+
+
+def test_f19_valid_until_limits_matching_to_earlier_bars():
+    md = FakeMD()
+    bars = hb(md, d1, [(10, 11, 9, 10, 100000), (10, 11, 9, 10, 100000), (10, 11, 9, 10, 100000)])
+    o = SimOrder("L", CODE, BUY, 100, D("9.5"), valid_until=bars[1].start)                         # 只有第一根 bar 在有效期内
+    m = match_order(o, bars, PROTO)
+    assert [f.bar.start for f in m.fills] == [bars[0].start]
+    late = SimOrder("L", CODE, BUY, 100, D("9.5"), valid_until=bars[0].start)                      # 有效期在开盘之前：全部不可成交
+    assert match_order(late, bars, PROTO).status == "unfilled"
+
+
+def test_f11_reserve_covers_slippage_fill_level_flat_fees_and_buy_tax():
+    md = FakeMD()
+    md.flat(CODE, DAYS, 10)
+    rules = [FeeRule("syn", "US", "ANY", "fill", "USD", pct_fee=D("0"), min_fee=D("0"), flat_fee=D("5"), tax_pct=D("0.01"))]
+    # 现金 100：买 2 股 @10（20）+ 税 0.2 + 单笔固定费 5，逐笔计费最多 6 个 bar → 保守预留 20+0.2+5+5×5=50.2 ≤ 100：被接受；现金不会为负
+    r = run_line(md, market="US", currency="USD", initial=state(100), sessions=[d1], provider=once({d1: [SimOrder("L", CODE, BUY, 2, D("10.5"))]}),
+                 protocol=PROTO, fee_rules=rules, settlement=SETTLE1)
+    res = r.results[0]
+    assert res.cash is not None and res.cash >= 0 and res.fills                                                    # 买入税与费用都扣了，且不透支
+    assert res.cash == D(100) - D("21") - D("0.21") - D(5)                                                         # 2×10.5=21、税 0.21、一笔固定费 5
+    # 同一订单预留不足 → 整单拒绝而不是透支：现金 30 不够 20+税+固定费×6
+    r = run_line(md, market="US", currency="USD", initial=state(30), sessions=[d1], provider=once({d1: [SimOrder("L", CODE, BUY, 2, D("10.5"))]}),
+                 protocol=PROTO, fee_rules=rules, settlement=SETTLE1)
+    assert [why for _, why in r.results[0].rejected] == ["cash_insufficient"] and r.results[0].cash == D(30)
+    slip = ExecProtocol(slippage_bps=D("1000"))                                                                    # 10% 滑点：预留按最坏成交价
+    r = run_line(md, market="US", currency="USD", initial=state(22), sessions=[d1], provider=once({d1: [SimOrder("L", CODE, BUY, 2, D("10.5"))]}),
+                 protocol=slip, fee_rules=[FeeRule("syn", "US", "ANY", "order", "USD")], settlement=SETTLE1)
+    assert [why for _, why in r.results[0].rejected] == ["cash_insufficient"]                                      # 2×10.5×1.1=23.1 > 22
+
+
+def test_f12_buyhold_missing_first_bar_is_unknown_and_pauses_not_idle_cash():
+    md = FakeMD()
+    md.flat(CODE, DAYS, 10)
+    md.bars[(CODE, d1)] = []                                                                                       # 建仓日缺小时线
+    prov = BuyHoldProvider(md, market="US", weights={CODE: D("0.5")}, first_day=d1, lot_sizes={CODE: 1}, fee_rules=RULES, protocol=PROTO)
+    r = run(md, state(10000), prov, days=[d1, d2, d3])
+    assert [x.status for x in r.results] == ["UNKNOWN", "PAUSED", "PAUSED"] and r.results[0].flags[0].startswith("provider_unknown")
+    late_open = FakeMD()
+    late_open.flat(CODE, DAYS, 10)
+    s0 = late_open.hourly(CODE, d1)
+    late_open.bars[(CODE, d1)] = s0[2:]                                                                            # 缺开盘的前两根：不得拿后面的 bar 当「开盘价」
+    prov2 = BuyHoldProvider(late_open, market="US", weights={CODE: D("0.5")}, first_day=d1, lot_sizes={CODE: 1}, fee_rules=RULES, protocol=PROTO)
+    assert run(late_open, state(10000), prov2, days=[d1]).results[0].status == "UNKNOWN"
+
+
+def test_f09_other_equity_enters_equity_and_e0_and_state_hash():
+    md = FakeMD()
+    md.flat(CODE, DAYS, 10)
+    st = state(1000, US_NVDA=(100, 8, d1 - timedelta(days=30)))
+    st.other_equity = D(100)                                                                                       # 期初应收 100
+    r = run(md, st, once({}), days=[d1])
+    e0 = D(1000) + 100 * 10 + 100                                                                                  # E0=B+库存+应收 = 2100
+    assert r.results[0].equity == e0 and summarize(r.results, e0).cumulative_return == 0                           # 开账 R=0（漏掉应收则会是 5%）
+    other = state(1000, US_NVDA=(100, 8, d1 - timedelta(days=30)))
+    assert other.hash() != st.hash()
+    assert LineState.from_dict(st.to_dict()).other_equity == D(100) and LineState.from_dict(st.to_dict()).hash() == st.hash()
+
+
+def test_f25_human_actual_applies_splits_via_ledger_projection(tmp_path):
+    from mystock2.ledger.opening import add_split
+    conn = make_ledger_db(tmp_path)
+    opening.record_opening(conn, ACCT, "2026-02-27T00:00:00.000000Z", {CODE: "10"}, {"USD": "100000"})
+    add_split(conn, CODE, "2026-03-04T12:00:00Z", 2, 1)                                  # d2（03-04）开盘前 2:1 拆股
+    md = FakeMD()
+    for d in DAYS:
+        md.set_day(CODE, d, [(10, 11, 9, 10, 1_000_000)] * 6, close=10 if d >= DAYS[2] else 20)
+    res = human_actual_series(conn, md, account_id=ACCT, market="US", currency="USD", codes={CODE}, budget=D(0), d0=DAYS[0], sessions=[DAYS[1], DAYS[2]])
+    before, after = res
+    assert before.equity == D(10) * 20 and after.equity == D(20) * 10 and after.positions == {CODE: D(20)}     # 价格减半、数量翻倍：权益不变

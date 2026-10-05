@@ -132,7 +132,11 @@ def decide(state: StateView, *, market: str, target_session: date, universe: lis
                     out.append(_skip(code, "params_missing:exit_q", model_ref=pred.prediction_id))
                     continue
                 lim = rule.legal_limit(_px(pred, params.exit_q), SELL)      # 时间止损：不受 min_gain 约束
-                out.append(TicketDraft(code, SELL, lim, int(held), lot, None, ("time_stop",), uncertainty=unc, model_ref=pred.prediction_id))
+                exit_qty = int(floor_to_lots(held, lot))                      # 只出整手：零股单会被撮合整单拒绝，到期退出就静默消失
+                if exit_qty <= 0:
+                    out.append(_skip(code, "time_stop", "odd_lot_only", model_ref=pred.prediction_id))
+                else:
+                    out.append(TicketDraft(code, SELL, lim, exit_qty, lot, None, ("time_stop",), uncertainty=unc, model_ref=pred.prediction_id))
                 continue
             if params.q_sell is None:
                 out.append(_skip(code, "params_missing:q_sell", model_ref=pred.prediction_id))
@@ -168,8 +172,10 @@ def decide(state: StateView, *, market: str, target_session: date, universe: lis
         if limit <= 0:
             out.append(_skip(code, "invalid_limit", model_ref=pred.prediction_id))
             continue
-        budget = min(params.budget_slice * trade_equity, state.tradable_cash() - reserved, e.max_weight * trade_equity)
-        cap_by_lots = Decimal(e.max_lots) * lot
+        exposure = held * pred.close                                  # 已有暴露按最近收盘估值；max_weight 约束的是总持仓价值，不是单次买入
+        headroom = max(Decimal(0), e.max_weight * trade_equity - exposure)
+        budget = min(params.budget_slice * trade_equity, state.tradable_cash() - reserved, headroom)
+        cap_by_lots = max(Decimal(0), Decimal(e.max_lots) * lot - held)     # max_lots 是总持仓手数上限（含已有）
         qty = int(floor_to_lots(min(budget / limit, cap_by_lots), lot))
         while qty > 0:                                                  # 把预估费用也放进预算
             fee = estimate(select_rule(fee_rules, market, BUY, day), [(Decimal(qty), limit)]).fee

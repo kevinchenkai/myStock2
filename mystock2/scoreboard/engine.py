@@ -32,6 +32,10 @@ class EngineError(ValueError):
     pass
 
 
+class ProviderUnknown(RuntimeError):
+    """订单提供者无法确定当日应有的订单（如买入持有缺建仓行情）：该日 UNKNOWN，此后 PAUSED（不静默变成无订单）。"""
+
+
 @dataclass
 class LineRun:
     results: list[DayResult] = field(default_factory=list)
@@ -39,7 +43,7 @@ class LineRun:
     final_state: LineState | None = None
 
 
-def _apply_splits(state: LineState, splits: dict[str, list[tuple[object, int, int]]], market: str, day: date) -> None:
+def apply_splits(state: LineState, splits: dict[str, list[tuple[object, int, int]]], market: str, day: date) -> None:
     s = cal.session(market, day)
     prev = cal.prev_session(market, day)
     prev_close = cal.session(market, prev).close_utc
@@ -70,10 +74,15 @@ def run_line(md: MarketData, *, market: str, currency: str, initial: LineState, 
         if paused:
             run.results.append(DayResult(day, "PAUSED"))
             continue
-        _apply_splits(state, splits, market, day)
+        apply_splits(state, splits, market, day)
         state.unsettled = [(d, a) for d, a in state.unsettled if d > day]       # 结算日当天视为已结算
         run.start_states[day] = state.copy()
-        orders = provider(state.copy(), day)
+        try:
+            orders = provider(state.copy(), day)
+        except ProviderUnknown as exc:
+            run.results.append(DayResult(day, "UNKNOWN", flags=[f"provider_unknown:{exc}"]))
+            paused = True
+            continue
         res, state, unknown = _simulate_day(md, market, day, state, orders, protocol, fee_rules, settlement, lot_sizes)
         run.results.append(res)
         if unknown:
@@ -108,11 +117,12 @@ def _simulate_day(md, market, day, state: LineState, orders: list[SimOrder], pro
             if px is None:
                 res.rejected.append((o, "no_price"))
                 continue
+            px = px * (1 + protocol.slippage_bps / Decimal(10000))          # 按最坏成交价（含滑点）预留
             rule = select_rule(fee_rules, market, BUY, day.isoformat())
-            fee_res = _fee(rule, [(Decimal(o.qty), px)], protocol)[0]
-            if rule.basis == "fill":
-                fee_res += rule.min_fee * max(0, len(bars) - 1) * protocol.fee_multiplier
-            need = Decimal(o.qty) * px + fee_res
+            fee_res, tax_res = _fee(rule, [(Decimal(o.qty), px)], protocol)
+            if rule.basis == "fill":                                          # 逐笔计费：每个可能的成交 bar 都可能再收最低费与固定费
+                fee_res += (rule.min_fee + rule.flat_fee) * max(0, len(bars) - 1) * protocol.fee_multiplier
+            need = Decimal(o.qty) * px + fee_res + tax_res
             if need > tradable - reserved:
                 res.rejected.append((o, "cash_insufficient"))
                 continue
@@ -144,8 +154,8 @@ def _simulate_day(md, market, day, state: LineState, orders: list[SimOrder], pro
         res.fees_day += fee + tax
         st.fees_cum += fee + tax
         if o.side == BUY:
-            st.cash -= notional + fee
-            unit = (notional + fee) / total_qty
+            st.cash -= notional + fee + tax                                    # 买入税（如有）与费用一并扣减并计入成本
+            unit = (notional + fee + tax) / total_qty
             st.lots.setdefault(o.code, []).append(Lot(Decimal(total_qty), unit, day))
         else:
             net = notional - fee - tax
@@ -177,7 +187,7 @@ def _simulate_day(md, market, day, state: LineState, orders: list[SimOrder], pro
             res.flags.append(f"missing_close:{code}")
             return DayResult(day, "UNKNOWN", flags=res.flags), state, True
         pv += st.qty(code) * px
-    res.equity = st.cash + pv
+    res.equity = st.cash + pv + st.other_equity
     res.cash, res.unsettled, res.position_value = st.cash, st.unsettled_total(), pv
     res.positions = {c: st.qty(c) for c in st.lots}
     return res, st, False

@@ -41,10 +41,13 @@ def ensure_utc(value: datetime | str) -> datetime:
 
 
 def iso_utc(value: datetime | str) -> str:
-    """规范化 UTC 文本：YYYY-MM-DDTHH:MM:SS(.ffffff)Z，用于入库与哈希。"""
+    """规范化 UTC 文本：**固定**微秒精度 YYYY-MM-DDTHH:MM:SS.ffffffZ。
+
+    固定精度保证文本的字典序与时间序一致（可变精度时 `…00Z` 与 `…00.100000Z` 的字典序会反过来，
+    使 SQL/Python 的字符串比较在同一秒内出错）。入库、哈希与比较一律用本函数。
+    """
     d = ensure_utc(value)
-    text = d.isoformat(timespec="microseconds" if d.microsecond else "seconds")
-    return text.replace("+00:00", "Z")
+    return d.isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
 def to_market_time(value: datetime | str, market: str) -> datetime:

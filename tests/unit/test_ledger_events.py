@@ -181,15 +181,19 @@ def test_t19_fx_both_legs_atomic_and_same_group_not_duplicates(conn):
         post_fx(conn, ACCT, "G2", D1, "USD", "100", "HKD", "0")
     assert conn.execute("SELECT COUNT(*) c FROM ledger_event WHERE group_id='G2'").fetchone()["c"] == 0
     # 人为制造只有一腿：被检出
-    post_event(conn, EventDraft(f"fx:{ACCT}:G3:out", ACCT, "FX", D1, "USD", cash_delta="-5", group_id="G3", leg_id="out"))
+    with pytest.raises(LedgerError, match="成组"):
+        post_event(conn, EventDraft(f"fx:{ACCT}:G3:out", ACCT, "FX", D1, "USD", cash_delta="-5", group_id="G3", leg_id="out"))       # 外部不能单腿写入
+    post_event(conn, EventDraft(f"fx:{ACCT}:G3:out", ACCT, "FX", D1, "USD", cash_delta="-5", group_id="G3", leg_id="out"), _internal_fx=True)   # 模拟损坏数据
     assert incomplete_fx_groups(conn, ACCT) == ["G3"]
+    p = project(conn, ACCT)
+    assert p.cash == {"USD": Decimal(900), "HKD": Decimal(780)} and "fx_group_incomplete:G3" in p.warnings          # 缺腿的组整组不生效
 
 
 # ---------------------------------------------------------------- T-01 开账边界
 def test_t01_events_before_opening_are_descriptive_only(conn):
     # 开账日之前的历史成交（含一笔卖出）：不进入前向和式
-    buy(conn, "H-1", "US.NVDA", 100, "10", "2026-02-01T15:00:00Z")
-    sell(conn, "H-2", "US.NVDA", 30, "12", "2026-02-10T15:00:00Z")
+    buy(conn, "H-1", "US.NVDA", 100, "10", "2026-02-01T15:00:00.000000Z")
+    sell(conn, "H-2", "US.NVDA", 30, "12", "2026-02-10T15:00:00.000000Z")
     opening.record_opening(conn, ACCT, T0, {"US.NVDA": "70"}, {"USD": "500"})
     p = project(conn, ACCT)
     assert p.positions == {"US.NVDA": Decimal(70)} and p.cash == {"USD": Decimal(500)}
@@ -197,7 +201,7 @@ def test_t01_events_before_opening_are_descriptive_only(conn):
     buy(conn, "N-1", "US.NVDA", 10, "10", D1)
     assert project(conn, ACCT).positions["US.NVDA"] == 80
     with pytest.raises(LedgerError):
-        opening.record_opening(conn, ACCT, "2026-03-09T00:00:00Z", {}, {})   # 开账点不可改
+        opening.record_opening(conn, ACCT, "2026-03-09T00:00:00.000000Z", {}, {})   # 开账点不可改
     opening.record_opening(conn, ACCT, T0, {"US.NVDA": "70"}, {"USD": "500"})  # 相同内容幂等
 
 
@@ -209,10 +213,10 @@ def test_no_opening_warning(conn):
 # ---------------------------------------------------------------- T-06 拆股、T-22 股息
 def test_t06_split_factor_projection_and_late_correction(conn):
     opening.record_opening(conn, ACCT, T0, {}, {"USD": "10000"})
-    split_at = "2026-03-10T00:00:00Z"
+    split_at = "2026-03-10T00:00:00.000000Z"
     buy(conn, "D-1", "US.NVDA", 10, "100", D1)
     opening.add_split(conn, "US.NVDA", split_at, 2, 1)
-    assert project(conn, ACCT, as_of="2026-03-09T00:00:00Z").positions["US.NVDA"] == 10      # 拆股前
+    assert project(conn, ACCT, as_of="2026-03-09T00:00:00.000000Z").positions["US.NVDA"] == 10      # 拆股前
     assert project(conn, ACCT).positions["US.NVDA"] == 20
     key = fill_key(ACCT, "D-1")
     correct_event(conn, key, EventDraft(key, ACCT, "FILL", D1, "USD", code="US.NVDA", price="100", qty_delta="12", cash_delta="-1200", ref_deal_id="D-1"), "r1")
@@ -224,7 +228,7 @@ def test_t06_split_factor_projection_and_late_correction(conn):
 
 def test_t06_same_instant_split_does_not_scale_the_fill(conn):
     opening.record_opening(conn, ACCT, T0, {}, {"USD": "10000"})
-    at = "2026-03-10T00:00:00Z"
+    at = "2026-03-10T00:00:00.000000Z"
     opening.add_split(conn, "US.NVDA", at, 2, 1)
     buy(conn, "D-1", "US.NVDA", 10, "50", at)         # 与拆股同刻：先应用公司行动，再处理成交 → 成交按拆股后单位
     assert project(conn, ACCT).positions["US.NVDA"] == 10
@@ -241,7 +245,7 @@ def test_reverse_split_fractional_flagged(conn):
 def test_t22_dividend_three_data_cases_same_economics(conn, scenario):
     """总额 100、预扣税 10：三种数据情形期末应收均为 0、现金净增 90、支付日权益变化 −10。"""
     opening.record_opening(conn, ACCT, T0, {"US.NVDA": "100"}, {"USD": "0"})
-    ex, pay = "2026-03-10T00:00:00Z", "2026-03-20T00:00:00Z"
+    ex, pay = "2026-03-10T00:00:00.000000Z", "2026-03-20T00:00:00.000000Z"
     if scenario == "gross_and_tax":
         post_dividend(conn, ACCT, "DV1", "US.NVDA", "USD", accrual_at=ex, gross="100", payment_at=pay, withholding_tax="10")
     elif scenario == "net_and_tax":
@@ -249,7 +253,7 @@ def test_t22_dividend_three_data_cases_same_economics(conn, scenario):
         post_dividend(conn, ACCT, "DV1", "US.NVDA", "USD", accrual_at=ex, gross=str(net + tax), payment_at=pay, withholding_tax=str(tax))
     else:
         post_dividend(conn, ACCT, "DV1", "US.NVDA", "USD", accrual_at=ex, gross="100", payment_at=pay, cash_received="90")
-    before = project(conn, ACCT, as_of="2026-03-15T00:00:00Z")          # 除息后、支付前
+    before = project(conn, ACCT, as_of="2026-03-15T00:00:00.000000Z")          # 除息后、支付前
     assert before.cash.get("USD", Decimal(0)) == 0 and before.receivable["USD"] == 100
     after = project(conn, ACCT)
     assert after.cash["USD"] == 90                                      # 不得为 80

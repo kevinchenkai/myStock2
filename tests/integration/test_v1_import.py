@@ -65,7 +65,7 @@ def test_import_is_read_only_maps_fills_and_reports_gaps(v1_path, led):
     assert sorted(x[0] for x in rep.skipped) == ["D4", "D6"] and rep.skipped[0][1].startswith(("incomplete", "bad_code"))
     ev = {r["ref_deal_id"]: r for r in led.execute("SELECT * FROM ledger_event WHERE event_type='FILL'")}
     assert ev["D1"]["price"] == "123.45" and ev["D1"]["qty_delta"] == "10" and ev["D1"]["cash_delta"] == "-1234.5"     # 量化到 4 位小数
-    assert ev["D1"]["event_at"] == "2026-03-03T15:30:00Z"                                                              # 美东 10:30（EST，UTC-5）→ UTC
+    assert ev["D1"]["event_at"] == "2026-03-03T15:30:00.000000Z"                                                              # 美东 10:30（EST，UTC-5）→ UTC
     assert ev["D2"]["event_at"] == "2026-03-03T02:00:00.123000Z"                                                       # 港股 10:00 HKT → 02:00Z
     assert ev["D3"]["qty_delta"] == "-4" and ev["D3"]["cash_delta"] == "520"
     assert "tz_inferred" in ev["D1"]["note"] and rep.tz_inferred == 4 and rep.max_price_rounding > 0
@@ -93,7 +93,7 @@ def test_cross_channel_dedup_with_a_futu_direct_fill_and_conflict_is_reported(v1
     # 同一笔成交（deal D1）先由 Futu 直采入账（与 V1 同一规范键），再导入 V1：不重复，只补证据链接
     from mystock2.ledger.events import SourceDraft, ensure_account
     ensure_account(led, "LEGACY", "futu", "REAL")
-    post_event(led, EventDraft(fill_key("LEGACY", "D1"), "LEGACY", "FILL", "2026-03-03T15:30:00Z", "USD", code="US.NVDA", price="123.45", qty_delta="10",
+    post_event(led, EventDraft(fill_key("LEGACY", "D1"), "LEGACY", "FILL", "2026-03-03T15:30:00.000000Z", "USD", code="US.NVDA", price="123.45", qty_delta="10",
                                cash_delta="-1234.5", ref_deal_id="D1", note="v1_import;tz_inferred;quantized(price4,qty6)"),
                source=SourceDraft("futu", "D1", {"deal_id": "D1"}))
     rep = run_import(v1_path, led, account_id="LEGACY")
@@ -106,7 +106,7 @@ def test_cross_channel_dedup_with_a_futu_direct_fill_and_conflict_is_reported(v1
     c.execute("UPDATE deals SET price=999.0 WHERE deal_id='D3'")
     c.commit()
     c.close()
-    post_event(led2, EventDraft(fill_key("LEGACY", "D3"), "LEGACY", "FILL", "2026-03-05T16:00:00Z", "USD", code="US.NVDA", price="130", qty_delta="-4", cash_delta="520",
+    post_event(led2, EventDraft(fill_key("LEGACY", "D3"), "LEGACY", "FILL", "2026-03-05T16:00:00.000000Z", "USD", code="US.NVDA", price="130", qty_delta="-4", cash_delta="520",
                                 ref_deal_id="D3"))
     rep2 = run_import(v1_path, led2, account_id="LEGACY")
     assert any("D3" in x for x in rep2.conflicts)
@@ -114,7 +114,7 @@ def test_cross_channel_dedup_with_a_futu_direct_fill_and_conflict_is_reported(v1
 
 def test_post_opening_boundary_applies_to_imported_history(v1_path, led):
     run_import(v1_path, led, account_id="LEGACY")
-    opening.record_opening(led, "LEGACY", "2026-03-04T00:00:00Z", {"US.NVDA": "10", "HK.00700": "100"}, {"USD": "0"})
+    opening.record_opening(led, "LEGACY", "2026-03-04T00:00:00.000000Z", {"US.NVDA": "10", "HK.00700": "100"}, {"USD": "0"})
     p = project(led, "LEGACY")
     assert p.pre_opening_events == 2 and p.positions == {"US.NVDA": Decimal(6), "HK.00700": Decimal(100)}     # 开账前的 D1、D2 只作描述；D3 卖 4 股在开账后
 
@@ -151,17 +151,17 @@ def test_ledger_cli_open_reconcile_and_status(tmp_path):
                                    "web": {"host": "127.0.0.1", "port": 8889}}), encoding="utf-8")
     led = dbmod.connect_writer(db, "ledger")
     ensure_account(led, "A1", "futu", "REAL")
-    sid = opening.create_snapshot(led, "A1", "2026-03-02T21:00:00Z", "futu", {"US.NVDA": {"qty": "10"}}, {"USD": {"cash": "1000"}})
+    sid = opening.create_snapshot(led, "A1", "2026-03-02T21:00:00.000000Z", "futu", {"US.NVDA": {"qty": "10"}}, {"USD": {"cash": "1000"}})
     led.close()
 
     def run(*a):
         return subprocess.run([sys.executable, "-m", "mystock2", "--config", str(cfg), *a], capture_output=True, text=True, cwd=REPO_ROOT)
     r = run("ledger", "open", "--account-id", "A1")
-    assert r.returncode == 0 and "opening_at=2026-03-02T21:00:00Z" in r.stdout
+    assert r.returncode == 0 and "opening_at=2026-03-02T21:00:00.000000Z" in r.stdout
     st = run("ledger", "status", "--account-id", "A1")
     assert '"US.NVDA": "10"' in st.stdout and '"USD": "1000"' in st.stdout
     led = dbmod.connect_writer(db, "ledger")
-    post_event(led, EventDraft(fill_key("A1", "N1"), "A1", "FILL", "2026-03-03T15:00:00Z", "USD", code="US.NVDA", price="100", qty_delta="1", cash_delta="-100", ref_deal_id="N1"))
+    post_event(led, EventDraft(fill_key("A1", "N1"), "A1", "FILL", "2026-03-03T15:00:00.000000Z", "USD", code="US.NVDA", price="100", qty_delta="1", cash_delta="-100", ref_deal_id="N1"))
     led.close()
     rec = run("ledger", "reconcile", "--account-id", "A1", "--snapshot", sid)
     assert rec.returncode == 0 and '"ok": true' in rec.stdout                     # 快照在成交之前：对账只看快照时点之前的事件

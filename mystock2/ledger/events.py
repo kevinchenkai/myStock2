@@ -246,8 +246,10 @@ def _insert(conn, fields: dict, version: int, received_at, *, corrects: str | No
     return event_id
 
 
-def post_event(conn: sqlite3.Connection, draft: EventDraft, *, source: SourceDraft | None = None, received_at=None) -> PostResult:
-    """幂等写入版本 1 的规范事件。"""
+def post_event(conn: sqlite3.Connection, draft: EventDraft, *, source: SourceDraft | None = None, received_at=None, _internal_fx: bool = False) -> PostResult:
+    """幂等写入版本 1 的规范事件。FX 腿只能经 `post_fx` 成组写入（不变量 8）。"""
+    if draft.event_type == "FX" and not _internal_fx:
+        raise LedgerError("FX 腿只能通过 post_fx 成组原子写入")
     fields = validate(draft)
     h = content_hash(fields)
     with atomic(conn):
@@ -263,9 +265,23 @@ def post_event(conn: sqlite3.Connection, draft: EventDraft, *, source: SourceDra
         # 同一业务键若已有更高版本（已被更正），不允许再写版本 1
         if conn.execute("SELECT 1 FROM ledger_event WHERE business_key=?", (draft.business_key,)).fetchone():
             raise LedgerConflict(f"规范键 {draft.business_key} 已存在其他版本")
+        if draft.event_type == "DIVIDEND_PAYMENT":
+            _check_dividend_payment(conn, draft)
         _insert(conn, fields, 1, received_at, chash=h)
         _link(conn, sid, event_id)
         return PostResult(event_id, "inserted")
+
+
+def _check_dividend_payment(conn: sqlite3.Connection, d: EventDraft) -> None:
+    """支付必须结清该组已计提的全部应收（不变量 4）：同组、同标的、同币种存在有效计提，且支付后应收归零。"""
+    rows = conn.execute("SELECT event_type, code, currency, recv_delta FROM ledger_event WHERE account_id=? AND group_id=?", (d.account_id, d.group_id)).fetchall()
+    if not any(r["event_type"] == "DIVIDEND_ACCRUAL" for r in rows):
+        raise LedgerError(f"股息支付找不到同组的计提：{d.group_id}")
+    if any(r["code"] != d.code or r["currency"] != d.currency.upper() for r in rows if r["event_type"] in ("DIVIDEND_ACCRUAL", "DIVIDEND_PAYMENT")):
+        raise LedgerError("股息支付与计提的标的/币种不一致")
+    balance = sum((dec(r["recv_delta"]) for r in rows), Decimal(0)) + dec(d.recv_delta)
+    if balance != 0:
+        raise LedgerError(f"股息支付必须结清该组全部应收：支付后应收余额应为 0，实为 {balance}")
 
 
 def _require_account(conn, account_id: str) -> None:
@@ -296,15 +312,21 @@ def correct_event(conn: sqlite3.Connection, business_key: str, new_draft: EventD
         raise LedgerError("更正后的事件必须沿用同一 business_key")
     new_fields = validate(new_draft) if new_draft is not None else None
     with atomic(conn):
-        done = conn.execute("SELECT event_id FROM ledger_event WHERE correction_request_id=? ORDER BY event_version", (request_id,)).fetchall()
+        done = conn.execute("SELECT event_id, event_type, content_hash FROM ledger_event WHERE correction_request_id=? ORDER BY event_version", (request_id,)).fetchall()
         if done:
             if any(r["event_id"].rsplit("#", 1)[0] != business_key for r in done):
                 raise LedgerConflict("同一 correction_request_id 已用于其他业务事件")
+            new_rows = [r for r in done if r["event_type"] != "REVERSAL"]
+            same = (not new_rows) if new_fields is None else (len(new_rows) == 1 and new_rows[0]["content_hash"] == content_hash(new_fields))
+            if not same:
+                raise LedgerConflict("同一 correction_request_id 已用于内容不同的更正请求（幂等键不能复用）")
             return [r["event_id"] for r in done]
         rows = _versions(conn, business_key)
         if not rows:
             raise LedgerError(f"没有可更正的事件：{business_key}")
         last = rows[-1]
+        if rows[0]["event_type"] == "FX" or (last["group_id"] and rows[0]["event_type"] in ("DIVIDEND_ACCRUAL", "DIVIDEND_PAYMENT", "DIVIDEND_SHORTFALL")):
+            raise LedgerError("FX/股息属于成组事件，不得单事件更正：请用 cancel_fx / 组级处理")
         sid = record_source(conn, source, received_at) if source else None
         ids: list[str] = []
         version = last["event_version"]
@@ -314,7 +336,8 @@ def correct_event(conn: sqlite3.Connection, business_key: str, new_draft: EventD
                 "ref_order_id", "ref_event_key", "group_id", "leg_id", "adjust_class")}
             rev.update(
                 event_type="REVERSAL", qty_delta=to_db(-dec(last["qty_delta"])), cash_delta=to_db(-dec(last["cash_delta"])),
-                recv_delta=to_db(-dec(last["recv_delta"])), attrib_amount=None, note=f"reverses {last['event_type']}#{last['event_version']}",
+                recv_delta=to_db(-dec(last["recv_delta"])), attrib_amount=to_db(-dec(last["attrib_amount"])) if last["attrib_amount"] else None,
+                note=f"reverses {last['event_type']}#{last['event_version']}",
             )
             version += 1
             ids.append(_insert(conn, rev, version, received_at, corrects=last["event_id"], request_id=request_id))
@@ -341,7 +364,7 @@ def post_fx(conn: sqlite3.Connection, account_id: str, group_id: str, event_at, 
         EventDraft(f"fx:{account_id}:{group_id}:in", account_id, "FX", event_at, to_ccy, cash_delta=to_db(b), group_id=group_id, leg_id="in"),
     ]
     with atomic(conn):
-        return [post_event(conn, leg, source=source, received_at=received_at) for leg in legs]
+        return [post_event(conn, leg, source=source, received_at=received_at, _internal_fx=True) for leg in legs]
 
 
 def post_dividend(conn: sqlite3.Connection, account_id: str, group_id: str, code: str, ccy: str, *, accrual_at, gross: str,
@@ -388,6 +411,27 @@ def post_dividend(conn: sqlite3.Connection, account_id: str, group_id: str, code
             out.append(post_event(conn, EventDraft(f"{base}:tax", account_id, "TAX", payment_at, ccy, cash_delta=to_db(-w), ref_event_key=f"{base}:payment",
                                                   group_id=group_id), source=source))
         return out
+
+
+def cancel_fx(conn: sqlite3.Connection, account_id: str, group_id: str, request_id: str) -> list[str]:
+    """取消整组换汇：两腿在同一事务内一起冲销（不能只冲销一腿）。"""
+    ids: list[str] = []
+    with atomic(conn):
+        for leg in ("out", "in"):
+            key = f"fx:{account_id}:{group_id}:{leg}"
+            rows = _versions(conn, key)
+            if not rows:
+                raise LedgerError(f"没有这组换汇：{group_id}")
+            last = rows[-1]
+            if last["event_type"] == "REVERSAL":
+                continue
+            rev = {k: last[k] for k in ("business_key", "account_id", "event_at", "market", "code", "currency", "price", "ref_deal_id", "ref_order_id",
+                                        "ref_event_key", "group_id", "leg_id", "adjust_class")}
+            rev.update(event_type="REVERSAL", qty_delta=to_db(-dec(last["qty_delta"])), cash_delta=to_db(-dec(last["cash_delta"])),
+                       recv_delta=to_db(-dec(last["recv_delta"])),
+                       attrib_amount=to_db(-dec(last["attrib_amount"])) if last["attrib_amount"] else None, note=f"reverses {last['event_type']}#{last['event_version']}")
+            ids.append(_insert(conn, rev, last["event_version"] + 1, None, corrects=last["event_id"], request_id=f"{request_id}:{leg}"))
+    return ids
 
 
 # ------------------------------------------------------------------ 待匹配队列

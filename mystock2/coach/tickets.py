@@ -60,6 +60,10 @@ def freeze_tickets(conn: sqlite3.Connection, *, batch_id: str, line_id: str, kin
     """
     if kind not in KINDS or stage not in STAGES:
         raise TicketError("kind/stage 非法")
+    if (kind, state_ref_type) not in (("line_sim", "line_state"), ("live_guidance", "account_snapshot")):
+        raise TicketError(f"kind 与 state_ref_type 不匹配：{kind}/{state_ref_type}（line_sim 须引用线内状态；live_guidance 须引用账户快照，且不进正式评分）")
+    if not state_ref:
+        raise TicketError("state_ref 不能为空")
     now, deadline, gen = ensure_utc(now), ensure_utc(deadline_at), ensure_utc(generated_at)
     status = "frozen"
     if unavailable_reason:
@@ -73,6 +77,12 @@ def freeze_tickets(conn: sqlite3.Connection, *, batch_id: str, line_id: str, kin
     ids: list[str] = []
     with atomic(conn):
         for d in drafts:
+            if d.model_ref:                                  # 预测引用必须存在，且正式单只能引用前向预测（重建预测不得冒充）
+                pv = conn.execute("SELECT source_tag, code, target_session FROM prediction_version WHERE prediction_id=?", (d.model_ref,)).fetchone()
+                if pv is None:
+                    raise TicketError(f"model_ref 不存在：{d.model_ref}")
+                if pv["source_tag"] != "forward" or pv["code"] != d.code or pv["target_session"] != target_session.isoformat():
+                    raise TicketError(f"model_ref 与操作单不符或不是前向预测：{d.model_ref}")
             eff = d
             if status != "frozen":
                 reason = unavailable_reason if status == "unavailable" else "missed_deadline"
@@ -108,22 +118,30 @@ class Selection:
 
 
 def select_ticket(conn: sqlite3.Connection, cell: Cell, *, deadline_at, current_state_ref: str | None = None) -> Selection:
-    """正式评分采用的版本：截止前最后一个成功冻结（status='frozen'）且 visible_at ≤ 截止的版本。
+    """正式评分采用的版本：截止前最后一个成功冻结（status='frozen'）且 visible_at ≤ 截止的**整组**（§6A.3）。
 
-    current_state_ref 给出时校验失效条件：版本的 state_ref 与当前线内状态不符 → 失效（无订单、释放预留）。
+    选择单元是 (batch, line, kind, market, target_session)：同一次冻结写入的各标的操作单属于同一组（相同 visible_at），
+    组内取该标的的那一张；该组没有该标的（刷新只覆盖了部分标的）→ 无订单，不拼接旧组的单。
+    失效：`state_ref` 与当前线内状态不符、或已过 `valid_to`（`invalidate_if` 中其余条件由冻结器在生成时检查）。
     """
     deadline = iso_utc(deadline_at)
     rows = conn.execute(
-        "SELECT * FROM ticket WHERE batch_id=? AND line_id=? AND kind=? AND market=? AND target_session=? AND code=? AND status='frozen' "
-        "ORDER BY visible_at, rowid", (cell.batch_id, cell.line_id, cell.kind, cell.market, cell.target_session, cell.code)).fetchall()
+        "SELECT * FROM ticket WHERE batch_id=? AND line_id=? AND kind=? AND market=? AND target_session=? AND status='frozen' ORDER BY visible_at, rowid",
+        (cell.batch_id, cell.line_id, cell.kind, cell.market, cell.target_session)).fetchall()
     if not rows:
         return Selection(None, "none_frozen")
     visible = [r for r in rows if r["visible_at"] <= deadline]
     if not visible:
         return Selection(None, "not_visible_before_deadline")
-    last = visible[-1]
+    group_at = visible[-1]["visible_at"]
+    mine = [r for r in visible if r["visible_at"] == group_at and r["code"] == cell.code]
+    if not mine:
+        return Selection(None, "not_in_latest_group")
+    last = mine[-1]
     if current_state_ref is not None and last["state_ref"] != current_state_ref:
         return Selection(None, "state_changed")
+    if last["valid_to"] is not None and last["valid_to"] < deadline:
+        return Selection(None, "expired")
     return Selection(last, "selected")
 
 

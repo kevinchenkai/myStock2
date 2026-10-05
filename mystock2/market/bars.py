@@ -73,10 +73,10 @@ def put_daily(conn: sqlite3.Connection, bars: list[DailyBar], *, source: str, re
             fields = {"code": b.code, "session_date": b.session_date.isoformat(), "source": source,
                       "open": to_db(b.open), "high": to_db(b.high), "low": to_db(b.low), "close": to_db(b.close),
                       "adj_close": to_db(b.adj_close) if b.adj_close is not None else None,
-                      "volume": to_db(b.volume) if b.volume is not None else None}
+                      "volume": to_db(b.volume) if b.volume is not None else None, "quality": quality}
             h = _hash(fields)
-            last = conn.execute("SELECT version, content_hash FROM quote_daily WHERE code=? AND session_date=? AND source=? ORDER BY version DESC LIMIT 1",
-                                (b.code, fields["session_date"], source)).fetchone()
+            last = conn.execute("SELECT version, content_hash FROM quote_daily WHERE code=? AND session_date=? ORDER BY version DESC LIMIT 1",
+                                (b.code, fields["session_date"])).fetchone()
             if last and last["content_hash"] == h:
                 counts["duplicate"] += 1
                 continue
@@ -103,7 +103,10 @@ def get_daily(conn: sqlite3.Connection, code: str, start: date, end: date, *, so
     rows = conn.execute(sql + " ORDER BY session_date, version", args).fetchall()
     latest: dict[str, sqlite3.Row] = {}
     for r in rows:
-        latest[r["session_date"]] = r
+        cur = latest.get(r["session_date"])
+        # 终值（ok）优先于更晚到的 partial；同等质量取最高版本（版本号全局递增）
+        if cur is None or r["quality"] == "ok" or cur["quality"] != "ok":
+            latest[r["session_date"]] = r
     return [latest[k] for k in sorted(latest)]
 
 
@@ -127,8 +130,8 @@ def put_hourly(conn: sqlite3.Connection, bars: list[HourlyBar], *, source: str, 
                       "high": to_db(b.high), "low": to_db(b.low), "close": to_db(b.close),
                       "volume": to_db(b.volume) if b.volume is not None else None, "complete": int(b.complete)}
             h = _hash(fields)
-            last = conn.execute("SELECT version, content_hash FROM quote_hourly WHERE code=? AND bar_start=? AND source=? ORDER BY version DESC LIMIT 1",
-                                (b.code, fields["bar_start"], source)).fetchone()
+            last = conn.execute("SELECT version, content_hash FROM quote_hourly WHERE code=? AND bar_start=? ORDER BY version DESC LIMIT 1",
+                                (b.code, fields["bar_start"])).fetchone()
             if last and last["content_hash"] == h:
                 counts["duplicate"] += 1
                 continue

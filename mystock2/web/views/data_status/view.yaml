@@ -1,0 +1,24 @@
+title: 数据状态
+description: 各来源/标的最近一次成功采集与失败/空/陈旧、行情缺口交易日、预测版本数量与最新目标日、最近运行回执、账户快照、协议冻结状态（是否 pilot）。
+order: 100
+data_mode: daily
+stale_after_hours: 96
+params:
+  gap_days:
+    type: int
+    default: 30
+    min: 5
+    max: 400
+    description: 检查行情缺口的回看日历天数（起点不早于该标的最早行情日）
+  collect_stale_hours:
+    type: int
+    default: 96
+    min: 1
+    max: 2000
+    description: 最近一次成功采集超过多少小时视为陈旧
+  runs:
+    type: int
+    default: 20
+    min: 1
+    max: 200
+    description: 显示最近多少条运行回执

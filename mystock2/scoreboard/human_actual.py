@@ -22,9 +22,6 @@ from mystock2.scoreboard.types import DayResult, SimFill
 def human_actual_series(conn_ledger: sqlite3.Connection, md: MarketData, *, account_id: str, market: str, currency: str, codes: set[str],
                         budget: Decimal, d0: date, sessions: list[date]) -> list[DayResult]:
     d0_end = cal.session(market, d0).close_utc
-    proj = project(conn_ledger, account_id, as_of=d0_end)
-    qty = {c: proj.positions.get(c, Decimal(0)) for c in codes}
-    qty = {c: q for c, q in qty.items() if q}
     cash = budget
     events = [e for e in effective_events(conn_ledger, account_id) if ensure_utc(e["event_at"]) > d0_end]
     fill_ids = {e["ref_deal_id"] for e in events if e["event_type"] == "FILL" and e["code"] in codes}
@@ -39,7 +36,6 @@ def human_actual_series(conn_ledger: sqlite3.Connection, md: MarketData, *, acco
             at = ensure_utc(e["event_at"])
             if e["event_type"] == "FILL" and e["code"] in codes:
                 q, c = dec(e["qty_delta"]), dec(e["cash_delta"])
-                qty[e["code"]] = qty.get(e["code"], Decimal(0)) + q
                 cash += c
                 res.traded_notional += abs(c)
                 res.fills.append(SimFill(day, seq, e["code"], "BUY" if q > 0 else "SELL", abs(q), dec(e["price"]), Decimal(0), at))
@@ -47,6 +43,9 @@ def human_actual_series(conn_ledger: sqlite3.Connection, md: MarketData, *, acco
                 cash += dec(e["cash_delta"])
                 res.fees_day += -dec(e["cash_delta"])
         pv, missing = Decimal(0), None
+        # 数量取账本投影（含开账持仓、真实成交与拆股因子），不自己累加——拆股日不会出现数量不变、价格减半的虚假亏损
+        proj = project(conn_ledger, account_id, as_of=cal.session(market, day).close_utc)
+        qty = {c: proj.positions[c] for c in codes if proj.positions.get(c)}
         for code, q in qty.items():
             if q == 0:
                 continue

@@ -12,7 +12,7 @@ NOW = datetime(2026, 3, 11, 6, 0, tzinfo=UTC)
 
 
 def iso(dt):
-    return dt.isoformat().replace("+00:00", "Z")
+    return dt.isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
 def test_money_text_always_carries_currency_and_groups_thousands():
@@ -72,7 +72,7 @@ def test_fresh_only_when_event_and_collected_times_known_and_recent():
     assert h["event_at"] and h["collected_at"] and h["generated_at"] == iso(NOW)
 
 
-@pytest.mark.parametrize("ev,col", [(None, "2026-03-11T05:00:00Z"), ("2026-03-10T05:00:00Z", None), (None, None), ("", "")])
+@pytest.mark.parametrize("ev,col", [(None, "2026-03-11T05:00:00.000000Z"), ("2026-03-10T05:00:00.000000Z", None), (None, None), ("", "")])
 def test_unknown_time_is_never_shown_as_fresh(ev, col):
     h = hdr([C.source("账本", ev, col)])
     assert h["staleness"]["label"] == "未知" and "新鲜" not in h["staleness"]["text"]

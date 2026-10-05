@@ -78,7 +78,7 @@ def test_writer_can_write_only_owned_tables(db):
     inst = dbmod.connect_writer(db, "instruments")
     inst.execute("INSERT INTO instrument(code, market, yf_symbol, currency) VALUES ('US.NVDA','US','NVDA','USD')")
     with pytest.raises(sqlite3.DatabaseError):                      # 不属于 instruments 的表
-        inst.execute("INSERT INTO run_log(run_id, command, started_at, status) VALUES ('x','c','2026-01-01T00:00:00Z','ok')")
+        inst.execute("INSERT INTO run_log(run_id, command, started_at, status) VALUES ('x','c','2026-01-01T00:00:00.000000Z','ok')")
     with pytest.raises(sqlite3.DatabaseError):                      # 迁移账本表
         inst.execute("DELETE FROM schema_migration")
     with pytest.raises(sqlite3.DatabaseError):                      # DDL

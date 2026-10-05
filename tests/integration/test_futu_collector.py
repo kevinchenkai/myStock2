@@ -74,8 +74,8 @@ def test_deals_windows_idempotency_and_mapping(led):
     assert [(w[2], w[3]) for w in wins] == [(date(2026, 3, 1), date(2026, 5, 19)), (date(2026, 5, 20), date(2026, 6, 30))]       # 80 天窗口
     assert collect_deals(led, api, account_id=ACCT, acc_id=1, markets=["US", "HK"], start=date(2026, 3, 1), end=date(2026, 6, 30), **NOSLEEP).duplicate == 3
     ev = {r["ref_deal_id"]: r for r in led.execute("SELECT * FROM ledger_event WHERE event_type='FILL'")}
-    assert ev["D1"]["event_at"] == "2026-03-03T15:30:00Z" and ev["D1"]["cash_delta"] == "-1000" and ev["D2"]["qty_delta"] == "-4" and ev["D2"]["cash_delta"] == "422"
-    assert ev["D3"]["currency"] == "HKD" and ev["D3"]["event_at"] == "2026-03-03T02:00:00Z"
+    assert ev["D1"]["event_at"] == "2026-03-03T15:30:00.000000Z" and ev["D1"]["cash_delta"] == "-1000" and ev["D2"]["qty_delta"] == "-4" and ev["D2"]["cash_delta"] == "422"
+    assert ev["D3"]["currency"] == "HKD" and ev["D3"]["event_at"] == "2026-03-03T02:00:00.000000Z"
 
 
 def test_window_failure_is_partial_with_retry_scope_not_silent(led):
@@ -101,10 +101,10 @@ def test_bad_rows_missing_deal_id_and_conflicts(led):
 def test_snapshot_then_reconcile_fees_close_the_cash_gap(led):
     api = FakeApi()
     ensure_account(led, ACCT, "futu", "REAL")
-    opening.record_opening(led, ACCT, "2026-03-01T00:00:00Z", {"US.NVDA": "5"}, {"USD": "1900"})
+    opening.record_opening(led, ACCT, "2026-03-01T00:00:00.000000Z", {"US.NVDA": "5"}, {"USD": "1900"})
     api._deals["US"] = [deal(1, price=100.0, qty=10)]
     collect_deals(led, api, account_id=ACCT, acc_id=1, markets=["US"], start=date(2026, 3, 1), end=date(2026, 3, 31), **NOSLEEP)
-    rep = collect_snapshot(led, api, account_id=ACCT, acc_id=1, markets=["US", "HK"], captured_at="2026-03-04T21:00:00Z", **NOSLEEP)
+    rep = collect_snapshot(led, api, account_id=ACCT, acc_id=1, markets=["US", "HK"], captured_at="2026-03-04T21:00:00.000000Z", **NOSLEEP)
     assert rep.ok and led.execute("SELECT cost_basis FROM snapshot_position").fetchone()["cost_basis"] == "101.2345"
     sid = led.execute("SELECT snapshot_id FROM account_snapshot").fetchone()["snapshot_id"]
     r = reconcile(led, ACCT, sid)
@@ -119,23 +119,32 @@ def test_snapshot_failure_writes_nothing(led):
     class Broken(FakeApi):
         def funds(self, acc_id):
             raise TimeoutError("accinfo")
-    rep = collect_snapshot(led, Broken(), account_id=ACCT, acc_id=1, markets=["US"], captured_at="2026-03-04T21:00:00Z", **NOSLEEP)
+    rep = collect_snapshot(led, Broken(), account_id=ACCT, acc_id=1, markets=["US"], captured_at="2026-03-04T21:00:00.000000Z", **NOSLEEP)
     assert not rep.ok and led.execute("SELECT COUNT(*) c FROM account_snapshot").fetchone()["c"] == 0           # 缺失显式，不记零
 
 
-def test_order_fees_attached_to_last_deal_batched_and_idempotent(led):
+def test_order_fees_have_stable_order_item_identity_and_unknown_currency_goes_pending(led):
     api = FakeApi()
-    api._deals["US"] = [deal(1, order="O1", t="2026-03-03 10:30:00"), deal(2, order="O1", t="2026-03-03 10:31:00"), deal(3, order="O2")]
+    api._deals["US"] = [deal(1, order="O1", t="2026-03-03 10:30:00"), deal(3, order="O2")]
     collect_deals(led, api, account_id=ACCT, acc_id=1, markets=["US"], start=date(2026, 3, 1), end=date(2026, 3, 31), **NOSLEEP)
     api.fees = {"O1": [{"item": "Commission", "amount": 1.0, "currency": "USD"}, {"item": "Platform Fee", "amount": 0.99, "currency": "USD"}],
-                "O2": [{"item": "Commission", "amount": 0, "currency": "USD"}]}
+                "O2": [{"item": "Commission", "amount": 0, "currency": "USD"}, {"item": "SEC Fee", "amount": 0.01, "currency": None}]}
     rep = collect_order_fees(led, api, account_id=ACCT, acc_id=1, **NOSLEEP)
-    assert rep.inserted == 2                                                                                  # 金额为 0 的项跳过
-    rows = led.execute("SELECT ref_deal_id, cash_delta FROM ledger_event WHERE event_type='FEE' ORDER BY cash_delta").fetchall()
-    assert [(r["ref_deal_id"], r["cash_delta"]) for r in rows] == [("D2", "-1"), ("D2", "-0.99")] or sorted(r["cash_delta"] for r in rows) == ["-0.99", "-1"]
-    assert {r["ref_deal_id"] for r in rows} == {"D2"}                                                          # 归属订单最后一笔成交
-    assert collect_order_fees(led, api, account_id=ACCT, acc_id=1, **NOSLEEP).inserted == 0                    # 已有费用的成交不重复补
-    assert FEE_BATCH == 400
+    assert (rep.inserted, rep.pending) == (2, 1)                                                              # 金额为 0 跳过；缺币种进待匹配，不猜 USD
+    keys = sorted(r["business_key"] for r in led.execute("SELECT business_key FROM ledger_event WHERE event_type='FEE'"))
+    assert keys == [f"fee:{ACCT}:order:O1:commission", f"fee:{ACCT}:order:O1:platform_fee"]
+    # 同订单又来了第二笔成交：重复采集不会因「最后一笔成交」变了而重复入账
+    api._deals["US"].append(deal(2, order="O1", t="2026-03-03 10:31:00"))
+    collect_deals(led, api, account_id=ACCT, acc_id=1, markets=["US"], start=date(2026, 3, 1), end=date(2026, 3, 31), **NOSLEEP)
+    again = collect_order_fees(led, api, account_id=ACCT, acc_id=1, **NOSLEEP)
+    assert again.inserted == 0 and led.execute("SELECT COUNT(*) c FROM ledger_event WHERE event_type='FEE'").fetchone()["c"] == 2
+    api.fees["O1"][0]["amount"] = 2.0                                                                         # 订单费变了：冲突并报告，不静默覆盖也不重复入账
+    changed = collect_order_fees(led, api, account_id=ACCT, acc_id=1, **NOSLEEP)
+    assert changed.inserted == 0 and changed.conflicts and "请人工更正" in changed.conflicts[0]
+    assert led.execute("SELECT cash_delta FROM ledger_event WHERE business_key=?", (f"fee:{ACCT}:order:O1:commission",)).fetchone()["cash_delta"] == "-1"
+    # 显式确认「按成交市场币种」后，缺币种的费用才入账
+    ok = collect_order_fees(led, api, account_id=ACCT, acc_id=1, assume_market_currency=True, **NOSLEEP)
+    assert ok.inserted == 1 and FEE_BATCH == 400
 
 
 def test_cash_flows_require_explicit_mapping_unknown_goes_pending_and_trade_flows_are_recon_only(led):

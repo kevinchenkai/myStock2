@@ -13,6 +13,7 @@ from mystock2.coach.intents import select_human_plan
 from mystock2.coach.tickets import Cell, select_ticket
 from mystock2.core import calendars as cal
 from mystock2.core.money import dec
+from mystock2.core.timeutil import ensure_utc
 from mystock2.scoreboard.types import BUY, SELL, LineState, SimOrder
 
 
@@ -31,7 +32,8 @@ class TicketProvider:
             t = sel.ticket
             if t is None or t["action"] not in (BUY, SELL) or not t["qty"] or t["limit_price"] is None:
                 continue
-            orders.append(SimOrder(self.line_id, code, t["action"], int(t["qty"]), dec(t["limit_price"]), t["ticket_id"]))
+            orders.append(SimOrder(self.line_id, code, t["action"], int(t["qty"]), dec(t["limit_price"]), t["ticket_id"],
+                                   ensure_utc(t["valid_to"]) if t["valid_to"] else None))
         return orders
 
 
@@ -45,7 +47,11 @@ class HumanPlanProvider:
                                  deadline_at=cal.project_deadline(self.market, day))
         orders = []
         for code, p in plan.items():
-            self.flags[(day, code)] = p["flags"]
+            self.flags[(day, code)] = list(p["flags"])
             if p["action"] in (BUY, SELL):
-                orders.append(SimOrder(self.line_id, code, p["action"], int(p["qty"]), Decimal(p["limit_price"]), p["intent_id"]))
+                if p.get("state_hash") and p["state_hash"] != state.hash():       # 计划是针对另一个状态记录的：失效，按无订单（与操作单的 state_ref 规则一致）
+                    self.flags[(day, code)].append("state_changed")
+                    continue
+                orders.append(SimOrder(self.line_id, code, p["action"], int(p["qty"]), Decimal(p["limit_price"]), p["intent_id"],
+                                       ensure_utc(p["valid_to"]) if p.get("valid_to") else None))
         return orders

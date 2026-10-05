@@ -26,8 +26,8 @@ def put_rate(conn: sqlite3.Connection, pair: str, rate_date: date, rate: str, *,
     fields = {"pair": pair, "rate_date": rate_date.isoformat(), "source": source, "rate": to_db(r)}
     h = hashlib.sha256(json.dumps(fields, sort_keys=True).encode()).hexdigest()
     with atomic(conn):
-        last = conn.execute("SELECT version, content_hash FROM fx_rate WHERE pair=? AND rate_date=? AND source=? ORDER BY version DESC LIMIT 1",
-                            (pair, fields["rate_date"], source)).fetchone()
+        last = conn.execute("SELECT version, content_hash FROM fx_rate WHERE pair=? AND rate_date=? ORDER BY version DESC LIMIT 1",
+                            (pair, fields["rate_date"])).fetchone()
         if last and last["content_hash"] == h:
             return "duplicate"
         conn.execute("INSERT INTO fx_rate(pair, rate_date, version, source, rate, event_at, received_at, content_hash) VALUES (?,?,?,?,?,?,?,?)",

@@ -26,7 +26,7 @@ from mystock2.market.bars import DailyBar, put_daily
 from .ledger_helpers import ACCT
 
 UTC = timezone.utc
-T0 = "2026-03-02T00:00:00Z"                       # 开账时点
+T0 = "2026-03-02T00:00:00.000000Z"                       # 开账时点
 NOW = datetime(2026, 3, 11, 6, 0, tzinfo=UTC)      # 固定时钟：US 最近收盘日 03-10；HK 03-11 尚未收盘 → 03-10
 RECEIVED = datetime(2026, 3, 11, 5, 0, tzinfo=UTC)
 
@@ -101,19 +101,19 @@ def _build_demo_db(tmp_path, *, quotes=True, fx=True, snapshot="match", opening_
                            "HK.00700": {"qty": "200"}},
                           {"USD": {"cash": "10000"}, "HKD": {"cash": "50000"}})
     record_opening(led, ACCT, T0, {"US.NVDA": "100", "HK.00700": "200"}, {"USD": "10000", "HKD": "50000"}, snapshot_id=sid)
-    sell(led, "d0", "US.NVDA", 5, 90, "2026-02-27T15:00:00Z")                    # 开账前：只作描述
-    fee(led, "d0", "1", "2026-02-27T15:00:00Z")
-    buy(led, "d1", "US.NVDA", 10, 100, "2026-03-03T15:00:00Z", source=SourceDraft("futu", "d1", {"id": "d1"}))
-    buy(led, "d1", "US.NVDA", 10, 100, "2026-03-03T15:00:00Z", source=SourceDraft("csv", "row-7", {"id": "d1-csv"}))   # 同一成交经第二条通道到达
-    fee(led, "d1", "1", "2026-03-03T15:00:00Z")
-    fee(led, "d1", "0.5", "2026-03-03T15:00:00Z", kind="platform")
-    sell(led, "d2", "US.NVDA", 20, 110, "2026-03-04T15:00:00Z")
-    fee(led, "d2", "1", "2026-03-04T15:00:00Z")
-    buy(led, "d3", "HK.00700", 100, 310, "2026-03-03T02:00:00Z")
-    fee(led, "d3", "5", "2026-03-03T02:00:00Z", ccy="HKD")
-    sell(led, "d4", "HK.00700", 50, 320, "2026-03-05T02:00:00Z")                  # 来自无成本证据的开账持仓＋买入
-    post_event(led, EventDraft(flow_key(ACCT, "dep1", "DEPOSIT"), ACCT, "DEPOSIT", "2026-03-05T15:00:00Z", "USD", cash_delta="50000"), received_at=RECEIVED)
-    post_fx(led, ACCT, "fx1", "2026-03-06T15:00:00Z", "USD", "1000", "HKD", "7800", received_at=RECEIVED)
+    sell(led, "d0", "US.NVDA", 5, 90, "2026-02-27T15:00:00.000000Z")                    # 开账前：只作描述
+    fee(led, "d0", "1", "2026-02-27T15:00:00.000000Z")
+    buy(led, "d1", "US.NVDA", 10, 100, "2026-03-03T15:00:00.000000Z", source=SourceDraft("futu", "d1", {"id": "d1"}))
+    buy(led, "d1", "US.NVDA", 10, 100, "2026-03-03T15:00:00.000000Z", source=SourceDraft("csv", "row-7", {"id": "d1-csv"}))   # 同一成交经第二条通道到达
+    fee(led, "d1", "1", "2026-03-03T15:00:00.000000Z")
+    fee(led, "d1", "0.5", "2026-03-03T15:00:00.000000Z", kind="platform")
+    sell(led, "d2", "US.NVDA", 20, 110, "2026-03-04T15:00:00.000000Z")
+    fee(led, "d2", "1", "2026-03-04T15:00:00.000000Z")
+    buy(led, "d3", "HK.00700", 100, 310, "2026-03-03T02:00:00.000000Z")
+    fee(led, "d3", "5", "2026-03-03T02:00:00.000000Z", ccy="HKD")
+    sell(led, "d4", "HK.00700", 50, 320, "2026-03-05T02:00:00.000000Z")                  # 来自无成本证据的开账持仓＋买入
+    post_event(led, EventDraft(flow_key(ACCT, "dep1", "DEPOSIT"), ACCT, "DEPOSIT", "2026-03-05T15:00:00.000000Z", "USD", cash_delta="50000"), received_at=RECEIVED)
+    post_fx(led, ACCT, "fx1", "2026-03-06T15:00:00.000000Z", "USD", "1000", "HKD", "7800", received_at=RECEIVED)
     led.close()
 
     mk = dbmod.connect_writer(path, "market")
@@ -127,14 +127,14 @@ def _build_demo_db(tmp_path, *, quotes=True, fx=True, snapshot="match", opening_
 
     if snapshot:
         led = dbmod.connect_writer(path, "ledger")
-        p = project(led, ACCT, as_of="2026-03-10T01:00:00Z")
+        p = project(led, ACCT, as_of="2026-03-10T01:00:00.000000Z")
         pos = {c: {"qty": str(q)} for c, q in p.positions.items()}
         pos["US.NVDA"]["cost_basis"] = "85"                      # 券商成本（快照原值）；0700 的快照没有成本
         cash = {c: {"cash": str(v)} for c, v in p.cash.items()}
         if snapshot == "mismatch":
             pos["US.NVDA"] = {"qty": str(p.positions["US.NVDA"] + 3), "cost_basis": "85"}
             cash["USD"] = {"cash": str(p.cash["USD"] + D("12.34"))}
-        create_snapshot(led, ACCT, "2026-03-10T01:00:00Z", "futu", pos, cash)
+        create_snapshot(led, ACCT, "2026-03-10T01:00:00.000000Z", "futu", pos, cash)
         led.close()
     return path
 

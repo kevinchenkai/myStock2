@@ -1,0 +1,14 @@
+title: 记分牌
+description: 三类证据路径分区呈现（正式模拟线 / human_actual 描述性 / live_guidance 占位），不合成单一胜率结论；权益曲线、累计收益、最大回撤、换手、覆盖率、配对差；显示协议版本、状态包哈希与 pilot 标记。
+order: 80
+data_mode: daily
+stale_after_hours: 96
+params:
+  batch:
+    type: str
+    default: ""
+    description: 比较批次 id（留空＝最近一个有 run 的批次）
+  run:
+    type: str
+    default: ""
+    description: 记分牌 run id（留空＝该批次最新的 run；旧 run 保留，可选）

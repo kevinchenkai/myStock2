@@ -14,7 +14,7 @@ MS.registerPanel("holdings", function (root, d) {
     { key: "diluted_cost", label: "摊薄成本", num: true },
     { key: "local_cost", label: "本地移动平均成本", num: true },
     { key: "unrealized", label: "浮动盈亏（按本地成本）", num: true },
-    { key: "order", label: "当前操作单" }
+    { key: "order", label: "当前操作单（AI 线，仅状态）" }
   ];
   root.appendChild(MS.card("持仓（原币种）", [MS.table(cols, d.rows, { empty: "当前没有持仓" }),
     MS.note("三类成本并列、互不覆盖：券商成本来自快照原值；摊薄成本快照没有则「不可用」；本地移动平均成本由账本成交算出，含开账估算成本时标「估算」。")]));

@@ -135,7 +135,7 @@ def test_overview_without_any_snapshot_is_unreconciled_not_ok(tmp_path):
     dbmod.migrate(p)
     led = dbmod.connect_writer(p, "ledger")
     ensure_account(led, "A1", "futu", "REAL", "USD")
-    post_event(led, EventDraft(flow_key("A1", "d", "DEPOSIT"), "A1", "DEPOSIT", "2026-03-04T15:00:00Z", "USD", cash_delta="100"), received_at=RECEIVED)
+    post_event(led, EventDraft(flow_key("A1", "d", "DEPOSIT"), "A1", "DEPOSIT", "2026-03-04T15:00:00.000000Z", "USD", cash_delta="100"), received_at=RECEIVED)
     led.close()
     b = get_view(make_app(tmp_path, p).test_client(), "account_overview")[1]
     rc = b["data"]["reconciliation"]
@@ -155,7 +155,7 @@ def test_holdings_three_costs_side_by_side_never_overwritten(client):
     assert nv["broker_cost"]["v"] != nv["local_cost"]["v"]                                       # 互不覆盖
     tx = by(rows, "code", "HK.00700")
     assert tx["broker_cost"]["na"] is True and tx["local_cost"]["tag"] == "部分"                  # 开账持仓没有成本证据
-    assert nv["order"]["text"] == "M6 提供" and tx["order"]["text"] == "M6 提供"
+    assert nv["order"]["text"] == "无已冻结的 AI 单" and tx["order"]["text"] == "无已冻结的 AI 单"      # 没有批次/操作单时（M3b：只显示状态）
 
 
 def test_holdings_quantity_vs_broker_and_concentration(client):
@@ -220,7 +220,7 @@ def test_trades_corrected_fill_shows_version(tmp_path):
     p = build_demo_db(tmp_path)
     led = dbmod.connect_writer(p, "ledger")
     from mystock2.ledger.events import correct_event
-    correct_event(led, "fill:A1:d2", EventDraft("fill:A1:d2", "A1", "FILL", "2026-03-04T15:00:00Z", "USD", code="US.NVDA", price="111", qty_delta="-20",
+    correct_event(led, "fill:A1:d2", EventDraft("fill:A1:d2", "A1", "FILL", "2026-03-04T15:00:00.000000Z", "USD", code="US.NVDA", price="111", qty_delta="-20",
                                                 cash_delta="2220", ref_deal_id="d2"), "req-d2", received_at=RECEIVED)
     led.close()
     r = by(get_view(make_app(tmp_path, p).test_client(), "trades")[1]["data"]["rows"], "deal_id", "d2")
@@ -325,8 +325,8 @@ def test_equity_trend_deposit_with_large_amount_and_falling_stock(tmp_path):
     dbmod.migrate(p)
     led = dbmod.connect_writer(p, "ledger")
     ensure_account(led, "A1", "futu", "REAL", "USD")
-    record_opening(led, "A1", "2026-03-02T00:00:00Z", {"US.NVDA": "100"}, {"USD": "1000"})
-    post_event(led, EventDraft(flow_key("A1", "big", "DEPOSIT"), "A1", "DEPOSIT", "2026-03-04T15:00:00Z", "USD", cash_delta="1000000"), received_at=RECEIVED)
+    record_opening(led, "A1", "2026-03-02T00:00:00.000000Z", {"US.NVDA": "100"}, {"USD": "1000"})
+    post_event(led, EventDraft(flow_key("A1", "big", "DEPOSIT"), "A1", "DEPOSIT", "2026-03-04T15:00:00.000000Z", "USD", cash_delta="1000000"), received_at=RECEIVED)
     led.close()
     mk = dbmod.connect_writer(p, "market")
     put_closes(mk, "US.NVDA", {"2026-03-02": "100", "2026-03-03": "100", "2026-03-04": "90", "2026-03-05": "90", "2026-03-06": "90", "2026-03-09": "90", "2026-03-10": "90"})

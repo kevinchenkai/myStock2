@@ -65,6 +65,9 @@ TABLE_OWNERS: dict[str, str] = {
     "llm_call": "assistant",
 }
 
+# 复合写入者：需要在**同一事务**里写多个所有者的表时使用（如 veto 导入：票据 + 调用回执）。
+OWNER_GROUPS: dict[str, tuple[str, ...]] = {"veto": ("assistant", "coach")}
+
 _WRITE_ACTIONS = {sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE, sqlite3.SQLITE_DELETE}
 # DDL 与其他会改变库结构的动作
 _DDL_ACTIONS = {
@@ -78,12 +81,12 @@ class DbError(RuntimeError):
     pass
 
 
-def _authorizer_for(owner: str):
+def _authorizer_for(owners: tuple[str, ...]):
     def authorizer(action, arg1, arg2, dbname, source):
         if action in _DDL_ACTIONS:
             return sqlite3.SQLITE_DENY
         if action in _WRITE_ACTIONS:
-            if TABLE_OWNERS.get(arg1) == owner:
+            if TABLE_OWNERS.get(arg1) in owners:
                 return sqlite3.SQLITE_OK
             return sqlite3.SQLITE_DENY
         return sqlite3.SQLITE_OK
@@ -115,13 +118,14 @@ def connect_writer(path: str | Path, owner: str) -> sqlite3.Connection:
     """带写表授权器的读写连接。owner 必须是 TABLE_OWNERS 中出现过的写入者名。"""
     if owner == OWNER_MIGRATOR:
         raise DbError("迁移器连接请使用 connect_migrator")
-    if owner not in set(TABLE_OWNERS.values()):
+    owners = OWNER_GROUPS.get(owner, (owner,))
+    if not set(owners) <= set(TABLE_OWNERS.values()):
         raise DbError(f"未登记的写入者：{owner!r}")
     if not Path(path).exists():
         raise DbError(f"数据库不存在（请先 `db migrate`）：{path}")
     conn = _base_connect(path)
     conn.execute("PRAGMA journal_mode = WAL")
-    conn.set_authorizer(_authorizer_for(owner))
+    conn.set_authorizer(_authorizer_for(owners))
     return conn
 
 

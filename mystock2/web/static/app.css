@@ -5,21 +5,21 @@
   --bg: #f4f6f9; --card: #ffffff; --fg: #1b2230; --muted: #5a6577; --line: #dde2ea; --soft: #eef1f6;
   --accent: #2b59d6; --up: #d22f2f; --down: #12803f; --fx: #55688f; --na: #6f7a8d;
   --warn-bg: #fff3cf; --warn-fg: #6a4a00; --info-bg: #e7eefc; --info-fg: #1d3f95; --unk-bg: #e9ebef; --unk-fg: #3f4857;
-  --s1: #2b59d6; --s2: #00829b; --s3: #7a3fd0; --gap: rgba(120, 130, 150, .22);
+  --s1: #2b59d6; --s2: #00829b; --s3: #7a3fd0; --s4: #8a6d1d; --s5: #6b7280; --gap: rgba(120, 130, 150, .22);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #11161f; --card: #1a212d; --fg: #e6eaf1; --muted: #9aa5b8; --line: #2b3444; --soft: #232c3a;
     --accent: #7ea2ff; --up: #ff6b6b; --down: #3fc27b; --fx: #9db0d8; --na: #8f9aae;
     --warn-bg: #4a3a0c; --warn-fg: #ffe08a; --info-bg: #1f2f57; --info-fg: #b8cdff; --unk-bg: #2c3340; --unk-fg: #c3cada;
-    --s1: #7ea2ff; --s2: #4dc7e0; --s3: #b997ff; --gap: rgba(160, 170, 190, .22);
+    --s1: #7ea2ff; --s2: #4dc7e0; --s3: #b997ff; --s4: #d9b45a; --s5: #a0a8b8; --gap: rgba(160, 170, 190, .22);
   }
 }
 :root[data-theme="dark"] {
   --bg: #11161f; --card: #1a212d; --fg: #e6eaf1; --muted: #9aa5b8; --line: #2b3444; --soft: #232c3a;
   --accent: #7ea2ff; --up: #ff6b6b; --down: #3fc27b; --fx: #9db0d8; --na: #8f9aae;
   --warn-bg: #4a3a0c; --warn-fg: #ffe08a; --info-bg: #1f2f57; --info-fg: #b8cdff; --unk-bg: #2c3340; --unk-fg: #c3cada;
-  --s1: #7ea2ff; --s2: #4dc7e0; --s3: #b997ff; --gap: rgba(160, 170, 190, .22);
+  --s1: #7ea2ff; --s2: #4dc7e0; --s3: #b997ff; --s4: #d9b45a; --s5: #a0a8b8; --gap: rgba(160, 170, 190, .22);
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -103,3 +103,8 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; } ul.plain li { overflow-wrap: a
 .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0; font-size: 12px; }
 .legend .sw { display: inline-block; width: 18px; height: 0; border-top: 3px solid; vertical-align: middle; margin-right: 4px; }
 .readout { min-height: 3.2em; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+
+/* 复盘卡分栏：宽屏并排，窄屏单列（最小列宽 < 376px，不溢出） */
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.cols .card { margin: 0; }
+tr[role="button"] { cursor: pointer; }

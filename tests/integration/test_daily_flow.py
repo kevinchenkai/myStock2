@@ -53,8 +53,10 @@ def env(tmp_path):
     return {"cfg": str(cfg), "local": str(local), "db": db, "px": px, "protocol": protocol}
 
 
-def cli(env, *args):
-    r = subprocess.run([sys.executable, "-m", "mystock2", "--config", env["cfg"], *args], capture_output=True, text=True, cwd=REPO_ROOT)
+def cli(env, *args, clock=True):
+    import os
+    e = {**os.environ, **({"MYSTOCK2_ALLOW_NOW_OVERRIDE": "1"} if clock else {})}
+    r = subprocess.run([sys.executable, "-m", "mystock2", "--config", env["cfg"], *args], capture_output=True, text=True, cwd=REPO_ROOT, env=e)
     return r
 
 
@@ -147,9 +149,9 @@ def test_replay_cli_prints_cards_and_metrics_with_sample_sizes(env):
     from mystock2.ledger.events import EventDraft, ensure_account, fill_key, post_event
     led = dbmod.connect_writer(env["db"], "ledger")
     ensure_account(led, "A1", "futu", "REAL", "USD")
-    opening.record_opening(led, "A1", "2026-03-01T00:00:00Z", {}, {"USD": "100000"})
+    opening.record_opening(led, "A1", "2026-03-01T00:00:00.000000Z", {}, {"USD": "100000"})
     px = Decimal(str(env["px"])).quantize(Decimal("0.01"))
-    post_event(led, EventDraft(fill_key("A1", "D1"), "A1", "FILL", "2026-03-05T15:00:00Z", "USD", code=CODE, price=str(px), qty_delta="3", cash_delta=str(-px * 3), ref_deal_id="D1"))
+    post_event(led, EventDraft(fill_key("A1", "D1"), "A1", "FILL", "2026-03-05T15:00:00.000000Z", "USD", code=CODE, price=str(px), qty_delta="3", cash_delta=str(-px * 3), ref_deal_id="D1"))
     r = cli(env, "replay", "cards", "--account", "A1")
     assert r.returncode == 0 and "【事实】" in r.stdout and "动机未记录" in r.stdout and "事后诊断" in r.stdout
     r = cli(env, "replay", "behavior", "--account", "A1")
@@ -217,3 +219,70 @@ def test_collect_quotes_cli_uses_source_fallback_and_writes_receipts(env, monkey
     ro = dbmod.connect_ro(env["db"])
     assert ro.execute("SELECT COUNT(*) c FROM collection_log WHERE kind='hourly' AND status='empty'").fetchone()["c"] == 1
     assert ro.execute("SELECT status FROM run_log WHERE command='collect quotes'").fetchone()["status"] == "partial"
+
+
+def test_f02_now_override_is_refused_without_the_test_clock_env(env):
+    loc = ["--local-dir", env["local"]]
+    assert cli(env, "protocol", "freeze", *loc).returncode == 0
+    assert cli(env, "batch", "create", "--id", "B1", "--market", "US", "--d0", T.isoformat(), "--currency", "USD", "--budget", "10000", *loc).returncode == 0
+    r = cli(env, "coach", "run", "--batch", "B1", "--market", "US", "--stage", "close", "--as-of", T.isoformat(), "--now", NOW_CLOSE, *loc, clock=False)
+    assert r.returncode == 1 and "MYSTOCK2_ALLOW_NOW_OVERRIDE" in r.stderr                                 # 生产运行不能回填时间
+    r = cli(env, "intent", "add", "--batch", "B1", "--target", TARGET.isoformat(), "--code", CODE, "--action", "no_trade", "--now", "2026-03-05T11:00:00+00:00", *loc, clock=False)
+    assert r.returncode == 1 and "MYSTOCK2_ALLOW_NOW_OVERRIDE" in r.stderr
+
+
+def test_f01_protocol_drift_after_batch_creation_is_refused_and_unfrozen_batches_are_pilot(env):
+    loc = ["--local-dir", env["local"]]
+    # 未冻结就建批次：标 pilot
+    r = cli(env, "batch", "create", "--id", "P1", "--market", "US", "--d0", T.isoformat(), "--currency", "USD", "--budget", "10000", *loc)
+    assert r.returncode == 0 and "pilot=True" in r.stdout
+    assert "pilot=True" in cli(env, "coach", "run", "--batch", "P1", "--market", "US", "--stage", "close", "--as-of", T.isoformat(), "--now", NOW_CLOSE, *loc).stdout
+    # 冻结后建批次：非 pilot；之后改费用档案 → 运行被拒
+    assert cli(env, "protocol", "freeze", *loc).returncode == 0
+    assert cli(env, "batch", "create", "--id", "F1", "--market", "US", "--d0", T.isoformat(), "--currency", "USD", "--budget", "10000", *loc).stdout.count("pilot=False") == 1
+    fees = Path(env["local"]) / "fees.yaml"
+    fees.write_text(fees.read_text(encoding="utf-8").replace("'0.001'", "'0.002'"), encoding="utf-8")
+    r = cli(env, "coach", "run", "--batch", "F1", "--market", "US", "--stage", "close", "--as-of", T.isoformat(), "--now", NOW_CLOSE, *loc)
+    assert r.returncode == 1 and "新比较批次" in r.stderr
+    r = cli(env, "scoreboard", "run", "--batch", "F1", "--end", TARGET.isoformat(), *loc)
+    assert r.returncode == 1 and "不一致" in r.stderr
+    r = cli(env, "coach", "run", "--batch", "F1", "--market", "US", "--stage", "close", "--as-of", T.isoformat(), "--now", NOW_CLOSE, "--allow-drift", *loc)
+    assert r.returncode == 0 and "pilot=True" in r.stdout                                                   # 调试允许，但结果标 pilot
+
+
+def test_f09_batch_create_validates_positions_and_includes_other_equity_in_e0(env):
+    loc = ["--local-dir", env["local"]]
+    cli(env, "protocol", "freeze", *loc)
+    base = ["batch", "create", "--market", "US", "--d0", T.isoformat(), "--currency", "USD", "--budget", "1000", *loc]
+    r = cli(env, *base, "--id", "X1", "--positions", json.dumps({"US.TSLA": 5}))
+    assert r.returncode == 1 and "不是名单内" in r.stderr                                                   # 名单外库存不进正式模拟线
+    r = cli(env, "batch", "create", "--id", "X2", "--market", "US", "--d0", T.isoformat(), "--currency", "HKD", "--budget", "1000", *loc, "--positions", json.dumps({CODE: 1}))
+    assert r.returncode == 1 and "币种" in r.stderr
+    px = Decimal(str(env["px"]))
+    close_d0 = dbmod.connect_ro(env["db"]).execute("SELECT close FROM quote_daily WHERE code=? AND session_date=? AND quality='ok' ORDER BY version DESC LIMIT 1", (CODE, T.isoformat())).fetchone()["close"]
+    r = cli(env, *base, "--id", "X3", "--positions", json.dumps({CODE: {"qty": 10, "cost": "90", "acquired": "2026-02-01"}}), "--other-equity", "100")
+    assert r.returncode == 0, r.stderr
+    e0 = Decimal(r.stdout.split("e0=")[1].split()[0])
+    assert e0 == Decimal(1000) + 10 * Decimal(close_d0) + 100                                                # E0 = B + 库存市值 + 期初应收（开账 R=0）
+    assert "acquired_unknown" not in r.stdout and "cost_estimated" not in r.stdout                           # 给了成本与买入日：不再估计
+    r = cli(env, *base, "--id", "X4", "--positions", json.dumps({CODE: 3}))
+    assert "cost_estimated:US.NVDA" in r.stdout and "acquired_unknown:US.NVDA" in r.stdout
+    _ = px
+
+
+def test_f10_split_day_state_is_identical_for_coach_and_engine(env):
+    from mystock2.cli import ops
+    from mystock2.ledger.opening import add_split
+    loc_args = ["--local-dir", env["local"]]
+    cli(env, "protocol", "freeze", *loc_args)
+    assert cli(env, "batch", "create", "--id", "S1", "--market", "US", "--d0", T.isoformat(), "--currency", "USD", "--budget", "1000", *loc_args,
+               "--positions", json.dumps({CODE: {"qty": 10, "cost": "100", "acquired": "2026-02-01"}})).returncode == 0
+    w = dbmod.connect_writer(env["db"], "ledger")
+    add_split(w, CODE, "2026-03-05T12:00:00Z", 2, 1)                                                          # 目标日开盘前 2:1 拆股
+    w.close()
+    ro = dbmod.connect_ro(env["db"])
+    loc = ops.load_local(Path(env["local"]))
+    b = ops.load_batch(ro, "S1")
+    coach_state, _ = ops.state_at_open(ro, loc, b, "ai", TARGET)
+    run = ops.simulate_line(ro, loc, b, "ai", TARGET)
+    assert coach_state.qty(CODE) == Decimal(20) and coach_state.hash() == run.start_states[TARGET].hash()     # coach 冻结时的状态哈希＝引擎执行时的状态哈希

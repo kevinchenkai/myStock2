@@ -61,5 +61,15 @@
 | M3-b | 盈亏成本口径（移动平均；无证据/估算/精确三类按比例消耗；见 `ledger/pnl.py` 头注释）需负责人确认 | 待确认 |
 | M8 | LightGBM+CQR 候选线：预测器与评估框架完成；探索性评估未过门槛（+0.57%，3/6），**不晋级**；回执 [m8-lgbm-cqr](records/m8-lgbm-cqr_claude_20261005.md) | 完成（负结果） |
 | M10 | 交接文档：[真实数据启动指南](guides/real-data-startup_claude_20261005.md)、[切换运行手册](guides/cutover-runbook_claude_20261005.md)；**`quoted` 近实时、公开导出白名单（D8）、切换执行均未做** | 文档完成，执行待决定/授权 |
-| M3b | 操作单（密封）/记分牌/复盘/数据状态视图 | 进行中（子任务） |
+| M3b | 操作单（密封）/记分牌/复盘/数据状态视图：回执 [m3b-web-ops-views](records/m3b-web-ops-views_claude_20261005.md)；复盘「对照」栏、记分牌下钻/敏感性并列/经济增量表未做 | ✅ 已完成（合成数据） |
+| CR-1 | 代码评审第 1 轮（gpt 26 条＋grok 独有项）：[处置记录](records/code-review-disposition_claude_r1_20261005.md) | ✅ 已处置（局限已登记） |
 | CLI | 新增：`collect quotes/futu`、`v1 import`、`ledger open/reconcile/status`、`batch`、`protocol`、`coach`、`intent`、`veto`、`scoreboard`、`replay` | ✅ |
+
+## 代码评审遗留（来自 [CR-1 处置记录](records/code-review-disposition_claude_r1_20261005.md)）
+
+| 编号 | 事项 | 状态 |
+| --- | --- | --- |
+| PT-01 | 点时重建：引擎读取行情/汇率按 `received_by`，`eval_run` 记录证据快照 id（ADR 0002 局限 5）；**正式评分前必须完成** | 待办 |
+| PT-02 | `human_plan` 冻结 ticket 路径的 `state_ref` 对齐；`ai_lgbm` 接入 `coach run` 的显式开关 | 待办 |
+| PT-03 | 否决外发包里 ticket 的 qty×价格仍可粗略反推账户规模：人工外发前确认（关联 D7） | 待办 |
+| PT-04 | M3b 决策点：①揭示是否只显示 `version_hashes` 覆盖到的版本；②密封期是否显示「哪只标的缺单」；③pilot 判定规则固化进协议登记 | 待负责人答复 |

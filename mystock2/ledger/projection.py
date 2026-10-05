@@ -68,22 +68,28 @@ def _splits(conn, as_of) -> dict[str, list[tuple[str, int, int]]]:
 def project(conn: sqlite3.Connection, account_id: str, as_of=None) -> Projection:
     opening = conn.execute("SELECT opening_at FROM account_opening WHERE account_id=?", (account_id,)).fetchone()
     t0 = opening["opening_at"] if opening else None
+    t_open = t0
     p = Projection(account_id, iso_utc(as_of) if as_of is not None else None, t0)
     if t0 is None:
         p.warnings.append("no_opening")
     events = load_events(conn, account_id, as_of)
     splits = _splits(conn, as_of)
+    bad_fx = set(incomplete_fx_groups(conn, account_id))              # 缺腿/不合规的 FX 组整组不生效（不变量 8）
+    for g in sorted(bad_fx):
+        p.warnings.append(f"fx_group_incomplete:{g}")
     with localcontext() as ctx:
         ctx.prec = 40
         for e in events:
-            if t0 is not None and e["event_type"] not in OPENING_TYPES and e["event_at"] <= t0:
+            t = e["event_type"]
+            if t == "REVERSAL":                      # 按被冲销事件的类型归类（note 形如 "reverses FILL#1"）
+                t = (e["note"] or "").split()[1].split("#")[0]
+            if e["group_id"] in bad_fx and t == "FX":
+                continue
+            if t_open is not None and t not in OPENING_TYPES and e["event_at"] <= t_open:      # 开账边界按「被冲销事件」的类型判断
                 p.pre_opening_events += 1
                 continue
             ccy = e["currency"]
             cash, recv, qty = dec(e["cash_delta"]), dec(e["recv_delta"]), dec(e["qty_delta"])
-            t = e["event_type"]
-            if t == "REVERSAL":                      # 按被冲销事件的类型归类（note 形如 "reverses FILL#1"）
-                t = (e["note"] or "").split()[1].split("#")[0]
             if cash:
                 _add(p.cash, ccy, cash)
                 if t in EXTERNAL_TYPES or (t == "ADJUST" and e["adjust_class"] == "EXTERNAL_FLOW"):
@@ -94,7 +100,7 @@ def project(conn: sqlite3.Connection, account_id: str, as_of=None) -> Projection
                     _add(p.taxes, ccy, cash)
             if recv:
                 _add(p.receivable, ccy, recv)
-            if e["event_type"] == "DIVIDEND_SHORTFALL" and e["attrib_amount"]:
+            if t == "DIVIDEND_SHORTFALL" and e["attrib_amount"]:
                 _add(p.attributed_shortfall, ccy, dec(e["attrib_amount"]))
             if qty:
                 q = qty

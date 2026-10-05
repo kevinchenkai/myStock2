@@ -24,7 +24,7 @@ def env(tmp_path):
     dbmod.migrate(p)
     led, mkt = dbmod.connect_writer(p, "ledger"), dbmod.connect_writer(p, "market")
     ensure_account(led, ACCT, "futu", "REAL", "USD")
-    opening.record_opening(led, ACCT, "2026-03-01T00:00:00Z", {}, {"USD": "100000"})
+    opening.record_opening(led, ACCT, "2026-03-01T00:00:00.000000Z", {}, {"USD": "100000"})
     # 行情：价格从 100 起每天 +1；high=close+2, low=close−2；复权价=收盘价（无分红）
     bars = []
     for i, d in enumerate(DAYS):

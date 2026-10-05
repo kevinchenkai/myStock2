@@ -51,6 +51,8 @@ def match_order(order: SimOrder, bars: list[HBar], protocol: ExecProtocol, *, lo
         return Match([BarFill(b, order.qty, _slip(b.open, order.side, protocol.slippage_bps))], 0, "filled", ())
     unknown_volume = False
     for b in bars:
+        if order.valid_until is not None and b.start >= order.valid_until:     # 计划/操作单有效期之后的 bar 不可成交
+            continue
         if not crosses(order.side, order.limit_price, b):
             continue
         crossed.append(b.start)
@@ -64,10 +66,12 @@ def match_order(order: SimOrder, bars: list[HBar], protocol: ExecProtocol, *, lo
         if q > 0:
             fills.append(BarFill(b, q, _slip(order.limit_price, order.side, protocol.slippage_bps)))
             remaining -= q
-    if remaining == 0:
+    if unknown_volume:
+        status = "unknown"                              # 早期穿越 bar 的容量未知：即使后续 bar 补满，成交时点/分笔/费用也可能不同 → 不可知
+    elif remaining == 0:
         status = "filled"
-    elif unknown_volume or not complete:
-        status = "unknown"                              # 缺失的 bar/容量里可能已成交：无法确定
+    elif not complete:
+        status = "unknown"                              # 缺失的 bar 里可能已成交：无法确定
     elif fills:
         status = "partial"
     else:

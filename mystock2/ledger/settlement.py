@@ -36,18 +36,24 @@ def settle_date(rule: SettlementRule, trade_day: date) -> date:
 
 
 def unsettled_sell_proceeds(conn: sqlite3.Connection, account_id: str, rules: dict[str, SettlementRule], as_of: datetime) -> dict[str, Decimal]:
-    """as_of 时点尚未结算的卖出回款（逐币种）。结算日当天视为已结算。"""
+    """as_of 时点尚未结算的卖出回款（逐币种）。结算日当天视为已结算。
+
+    只统计**有效**卖出（更正/取消后的当前有效版本）且在开账点之后的成交——与账本投影共享同一边界与更正语义。
+    """
+    from mystock2.ledger.projection import effective_events
+
     as_of = ensure_utc(as_of)
+    opening = conn.execute("SELECT opening_at FROM account_opening WHERE account_id=?", (account_id,)).fetchone()
+    t0 = opening["opening_at"] if opening else None
     out: dict[str, Decimal] = {}
-    q = ("SELECT market, currency, cash_delta, event_at FROM ledger_event WHERE account_id=? AND event_type='FILL' AND qty_delta LIKE '-%' "
-         "AND event_at <= ?")
-    from mystock2.core.timeutil import iso_utc
-    for r in conn.execute(q, (account_id, iso_utc(as_of))):
+    for r in effective_events(conn, account_id):
+        if r["event_type"] != "FILL" or not r["qty_delta"].startswith("-") or ensure_utc(r["event_at"]) > as_of:
+            continue
+        if t0 is not None and r["event_at"] <= t0:
+            continue
         rule = rules.get(r["market"]) or SettlementRule(r["market"], None)
-        trade_day = to_market_time(r["event_at"], r["market"]).date()
-        sd = settle_date(rule, trade_day)
-        settled_by = to_market_time(as_of, r["market"]).date()
-        if settled_by < sd:
+        sd = settle_date(rule, to_market_time(r["event_at"], r["market"]).date())
+        if to_market_time(as_of, r["market"]).date() < sd:
             out[r["currency"]] = out.get(r["currency"], Decimal(0)) + dec(r["cash_delta"])
     return out
 

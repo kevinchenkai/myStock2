@@ -7,10 +7,10 @@ from mystock2.core import db as dbmod
 from mystock2.ledger.events import EventDraft, SourceDraft, ensure_account, fee_key, fill_key, post_event
 
 ACCT = "A1"
-T0 = "2026-03-02T00:00:00Z"        # 开账时点
-D1 = "2026-03-03T15:00:00Z"
-D2 = "2026-03-04T15:00:00Z"
-D3 = "2026-03-05T15:00:00Z"
+T0 = "2026-03-02T00:00:00.000000Z"        # 开账时点
+D1 = "2026-03-03T15:00:00.000000Z"
+D2 = "2026-03-04T15:00:00.000000Z"
+D3 = "2026-03-05T15:00:00.000000Z"
 
 
 def make_db(tmp_path):

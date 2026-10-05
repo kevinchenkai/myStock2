@@ -18,6 +18,7 @@ import yaml
 from mystock2.core import db as dbmod
 from mystock2.core.config import REPO_ROOT
 from tests.unit.test_web_fixtures import build_demo_db, make_app, make_config
+from tests.unit.test_web_opsdata import TARGET, build_ops_db
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 WRITE_SQL = ("INSERT", "UPDATE", "DELETE", "REPLACE", "CREATE", "DROP", "ALTER", "VACUUM", "ATTACH", "REINDEX", "ANALYZE")
@@ -56,15 +57,18 @@ def all_get_urls(app):
                 url = rule.rule.replace("<view_id>", vid)
                 urls.append((url, {}))
                 if rule.rule.startswith("/api/v/"):
-                    urls += [(url, {"base_ccy": "HKD"}), (url, {"base_ccy": "CNY", "pair": "USDCNY"}), (url, {"code": "US.NVDA"}), (url, {"account": "zz"})]
+                    urls += [(url, {"base_ccy": "HKD"}), (url, {"base_ccy": "CNY", "pair": "USDCNY"}), (url, {"code": "US.NVDA"}), (url, {"account": "zz"}),
+                             (url, {"batch": "B1", "market": "US", "target": TARGET}), (url, {"batch": "B1", "run": "R1"}), (url, {"target": "2026-03-04"}),
+                             (url, {"gap_days": "60", "runs": "5"})]
         else:
             urls.append((rule.rule, {}))
     return urls
 
 
-@pytest.fixture()
-def env(tmp_path):
-    db = build_demo_db(tmp_path)
+@pytest.fixture(params=["sealed", "revealed"])
+def env(tmp_path, request):
+    """含批次/操作单/记分牌 run/暴露记录的合成库：密封与已揭示两种状态都要遍历一遍（新视图也必须只读）。"""
+    db = build_ops_db(tmp_path, reveal_target=request.param == "revealed")
     extra = tmp_path / "extra"
     (extra / "demo_view").mkdir(parents=True)
     (extra / "demo_view" / "view.yaml").write_text(yaml.safe_dump({"title": "示例视图"}, allow_unicode=True), encoding="utf-8")
@@ -96,7 +100,7 @@ def test_every_route_leaves_database_bytes_unchanged_and_writes_nothing(env, mon
         monkeypatch.setattr(dbmod, name, forbid(name))
     client = app.test_client()
     urls = all_get_urls(app)
-    assert len(urls) > 40
+    assert len(urls) > 80
     seen_status = set()
     for url, q in urls:
         r = client.get(url, query_string=q)
@@ -253,3 +257,20 @@ def test_cli_web_with_missing_database_starts_and_explains(tmp_path):
         proc.wait(timeout=10)
     assert not db.exists()                                      # Web 不会创建库
     assert os.path.exists(tmp_path) and not list(tmp_path.glob("*.db*"))
+
+
+def test_traversal_covers_the_ops_views_and_sealed_content_stays_sealed(env):
+    """遍历的路由里包含 M3b 的四个视图；密封状态下遍历全部路由后，没有任何响应带出 AI 单内容。"""
+    from tests.unit.test_web_opsdata import LEAK_VALUES
+    db, app = env
+    urls = all_get_urls(app)
+    for vid in ("tickets", "scoreboard", "replay", "data_status"):
+        assert any(u == f"/api/v/{vid}" for u, _ in urls), vid
+    revealed = bool(dbmod.connect_ro(db).execute("SELECT 1 FROM intent_exposure").fetchone())
+    client = app.test_client()
+    if not revealed:
+        for url, q in urls:
+            if url.startswith("/api/v/") and url.split("/")[-1] in ("tickets", "holdings", "replay", "data_status", "scoreboard"):
+                text = client.get(url, query_string=q).get_data(as_text=True)
+                for v in LEAK_VALUES:
+                    assert v not in text, (url, q, v)

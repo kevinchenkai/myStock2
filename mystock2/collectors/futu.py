@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import sqlite3
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -25,7 +26,6 @@ from mystock2.ledger.events import (
     LedgerError,
     SourceDraft,
     ensure_account,
-    fee_key,
     fill_key,
     flow_key,
     post_event,
@@ -150,18 +150,27 @@ def collect_snapshot(ledger, api: TradeApi, *, account_id: str, acc_id: int, mar
     return rep
 
 
-def collect_order_fees(ledger, api: TradeApi, *, account_id: str, acc_id: int, sleep=time.sleep, min_interval: float = 3.2) -> CollectReport:
-    """为尚无费用事件的成交补订单费用：每个订单的各项费用归属该订单的**最后一笔成交**（聚合语义以费用档案为准）。"""
+def collect_order_fees(ledger, api: TradeApi, *, account_id: str, acc_id: int, sleep=time.sleep, min_interval: float = 3.2,
+                       assume_market_currency: bool = False) -> CollectReport:
+    """为成交补订单费用。
+
+    - **稳定身份**：费用的规范键是「订单＋费用项」（`fee:{acct}:order:{oid}:{item}`），不随成交到达顺序变化；
+      元数据 `ref_deal_id` 记录采集时该订单的最后一笔成交（仅作归属说明，不参与冲突判断）。
+      同一订单同一费用项重复采集：金额相同＝重复；金额变化（如又来了新成交使订单费变化）＝**冲突并报告**，不重复入账、不静默覆盖。
+    - **币种不猜**：接口未给出费用币种时进入待匹配队列；仅在显式 `assume_market_currency=True`（首跑核实后）时按成交市场币种入账。
+    """
+    from mystock2.instruments.code_map import currency_of
+
     rep = CollectReport("order_fees")
     ensure_account(ledger, account_id, "futu", "REAL")
     rows = ledger.execute(
-        "SELECT ref_order_id, ref_deal_id, event_at FROM ledger_event WHERE account_id=? AND event_type='FILL' AND ref_order_id IS NOT NULL ORDER BY event_at, ref_deal_id",
+        "SELECT ref_order_id, ref_deal_id, code, event_at FROM ledger_event WHERE account_id=? AND event_type='FILL' AND ref_order_id IS NOT NULL ORDER BY event_at, ref_deal_id",
         (account_id,)).fetchall()
-    last_deal: dict[str, str] = {}
+    last_deal: dict[str, sqlite3.Row] = {}
     for r in rows:
-        last_deal[r["ref_order_id"]] = r["ref_deal_id"]
-    have = {r["ref_deal_id"] for r in ledger.execute("SELECT ref_deal_id FROM ledger_event WHERE account_id=? AND event_type='FEE'", (account_id,))}
-    todo = [o for o, d in last_deal.items() if d not in have]
+        last_deal[r["ref_order_id"]] = r
+    have = {r["business_key"]: r["cash_delta"] for r in ledger.execute("SELECT business_key, cash_delta FROM ledger_event WHERE account_id=? AND event_type='FEE'", (account_id,))}
+    todo = list(last_deal)
     for i in range(0, len(todo), FEE_BATCH):
         chunk = todo[i:i + FEE_BATCH]
         sleep(min_interval)
@@ -172,22 +181,37 @@ def collect_order_fees(ledger, api: TradeApi, *, account_id: str, acc_id: int, s
             rep.failed_scopes.append(f"order_fees[{i}:{i + len(chunk)}]: {type(exc).__name__}: {exc}")
             continue
         for oid, items in fees.items():
-            deal = last_deal.get(oid)
-            if not deal:
+            fill = last_deal.get(oid)
+            if fill is None:
                 continue
             for it in items:
                 amount = dec(str(it["amount"]))
                 if amount == 0:
                     continue
+                item = str(it["item"]).lower().replace(" ", "_")
+                key = f"fee:{account_id}:order:{oid}:{item}"
+                src = SourceDraft("futu", f"fee:{oid}:{it['item']}", {"order_id": oid, "item": it["item"], "amount": str(it["amount"])})
+                ccy = (it.get("currency") or "").upper() or (currency_of(fill["code"]) if assume_market_currency else "")
+                if not ccy:
+                    queue_pending(ledger, src, "订单费用缺少币种：未核实前不猜（首跑核对后可用 assume_market_currency）")
+                    rep.pending += 1
+                    continue
+                if key in have:
+                    if dec(have[key]) != -abs(amount):                    # 同订单同费用项金额变了（如又有新成交）：冲突并报告，不覆盖不重复入账
+                        rep.conflicts.append(f"{oid}/{it['item']}: 已入账 {have[key]}，现为 {-abs(amount)}；请人工更正")
+                    else:
+                        rep.duplicate += 1
+                    continue
                 try:
-                    res = post_event(ledger, EventDraft(fee_key(account_id, deal, str(it["item"]).lower().replace(" ", "_")), account_id, "FEE",
-                                                        _fill_time(ledger, account_id, deal), it.get("currency", "USD").upper(), cash_delta=str(-abs(amount)),
-                                                        ref_deal_id=deal, ref_order_id=oid, note="futu order_fee_query"),
-                                     source=SourceDraft("futu", f"fee:{oid}:{it['item']}", {"order_id": oid, "item": it["item"], "amount": str(it["amount"])}))
+                    res = post_event(ledger, EventDraft(key, account_id, "FEE", _fill_time(ledger, account_id, fill["ref_deal_id"]), ccy, cash_delta=str(-abs(amount)),
+                                                        ref_deal_id=fill["ref_deal_id"], ref_order_id=oid, note="futu order_fee_query"), source=src)
                     rep.inserted += res.status == "inserted"
                     rep.duplicate += res.status == "duplicate"
-                except LedgerError as exc:
+                    have[key] = str(-abs(amount))
+                except LedgerConflict as exc:
                     rep.conflicts.append(f"{oid}/{it['item']}: {exc}")
+                except LedgerError as exc:
+                    rep.notes.append(f"invalid:{oid}/{it['item']}:{exc}")
     return rep
 
 
@@ -305,7 +329,7 @@ class FutuTradeApi:
             out: dict[str, list[dict]] = {}
             for r in df.itertuples():
                 for item, amount in (r.fee_details or []):
-                    out.setdefault(str(r.order_id), []).append({"item": item, "amount": amount, "currency": "USD"})   # 币种字段未核实：须首跑核对
+                    out.setdefault(str(r.order_id), []).append({"item": item, "amount": amount, "currency": None})   # 币种字段未核实：缺则进待匹配，不猜
             return out
         finally:
             ctx.close()
