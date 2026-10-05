@@ -53,3 +53,4 @@
 | M4 | 行情与预测基线：回执 [m4-market-baseline](records/m4-market-baseline_claude_20261005.md) | ✅ 已完成（合成数据＋公开行情冒烟） |
 | M5 | 记分牌：引擎/指标/统计/持久化完成，回执 [m5-scoreboard](records/m5-scoreboard_claude_20261005.md)；页面与 CLI 待 M3/M6 | 核心完成 |
 | M6 | 教练：核心/密封/暴露/冻结/选择规则与记分牌接入完成（合成端到端），回执 [m6-coach](records/m6-coach_claude_20261005.md)；**合格前向计时待 D1–D6/D12–D15 与真实账户授权** | 核心完成，待启动 |
+| M7 | 复盘：卡片/回合/行为指标完成，回执 [m7-replay](records/m7-replay_claude_20261005.md)；「不操作」反事实待真实数据 | ✅ 已完成（合成数据） |

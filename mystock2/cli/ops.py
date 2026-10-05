@@ -427,6 +427,27 @@ def cmd_scoreboard_run(args) -> int:
     return 0
 
 
+def cmd_replay(args) -> int:
+    from mystock2.replay.behavior import behavior_metrics
+    from mystock2.replay.cards import build_cards, fills_and_fees, render_card_text
+    from mystock2.replay.rounds import build_rounds
+
+    cfg = load_config(args.config)
+    ro = _conn_ro(cfg)
+    cards = build_cards(ro, ro, args.account, code=args.code)
+    if args.rcmd == "cards":
+        for c in cards:
+            print(f"=== {c.code} {c.side} {c.local_date} deal={c.deal_id}")
+            print(render_card_text(c))
+        print(f"（共 {len(cards)} 张；全部为事后诊断，不定义「当时应成交的最优价」）")
+        return 0
+    fills, fees = fills_and_fees(ro, args.account)
+    rounds, _ = build_rounds([f for f in fills if not args.code or f["code"] == args.code], fees)
+    for m in behavior_metrics(cards, rounds):
+        print(f"{m.name}: {m.display}  (n={m.n}; {m.definition})")
+    return 0
+
+
 def register(sub) -> None:
     ld = {"help": "本地私有配置目录（默认 config/local/）"}
     b = sub.add_parser("batch", help="比较批次").add_subparsers(dest="bcmd", required=True)
@@ -481,6 +502,12 @@ def register(sub) -> None:
     fh.add_argument("--now")
     fh.add_argument("--local-dir", **ld)
     fh.set_defaults(fn=cmd_human_plan_freeze)
+    rp = sub.add_parser("replay", help="复盘（事后诊断）").add_subparsers(dest="rcmd", required=True)
+    for name, h in (("cards", "逐笔复盘卡"), ("behavior", "行为指标（含样本量）")):
+        x = rp.add_parser(name, help=h)
+        x.add_argument("--account", required=True)
+        x.add_argument("--code")
+        x.set_defaults(fn=cmd_replay)
     sc = sub.add_parser("scoreboard", help="记分牌").add_subparsers(dest="scmd", required=True)
     rn = sc.add_parser("run", help="重算各线并写入新 run")
     rn.add_argument("--batch", required=True)

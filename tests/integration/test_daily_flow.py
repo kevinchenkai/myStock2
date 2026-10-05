@@ -140,3 +140,17 @@ def test_template_protocol_cannot_be_frozen_and_missing_local_dir_errors(env, tm
     assert r.returncode == 2 and "TEMPLATE" in r.stderr
     r = cli(env, "protocol", "freeze", "--local-dir", str(tmp_path / "nope"))
     assert r.returncode == 1 and "缺少" in r.stderr
+
+
+def test_replay_cli_prints_cards_and_metrics_with_sample_sizes(env):
+    from mystock2.ledger import opening
+    from mystock2.ledger.events import EventDraft, ensure_account, fill_key, post_event
+    led = dbmod.connect_writer(env["db"], "ledger")
+    ensure_account(led, "A1", "futu", "REAL", "USD")
+    opening.record_opening(led, "A1", "2026-03-01T00:00:00Z", {}, {"USD": "100000"})
+    px = Decimal(str(env["px"])).quantize(Decimal("0.01"))
+    post_event(led, EventDraft(fill_key("A1", "D1"), "A1", "FILL", "2026-03-05T15:00:00Z", "USD", code=CODE, price=str(px), qty_delta="3", cash_delta=str(-px * 3), ref_deal_id="D1"))
+    r = cli(env, "replay", "cards", "--account", "A1")
+    assert r.returncode == 0 and "【事实】" in r.stdout and "动机未记录" in r.stdout and "事后诊断" in r.stdout
+    r = cli(env, "replay", "behavior", "--account", "A1")
+    assert r.returncode == 0 and "不足" in r.stdout and "n=" in r.stdout
