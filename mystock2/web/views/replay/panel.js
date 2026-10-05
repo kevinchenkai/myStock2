@@ -36,16 +36,7 @@ MS.registerPanel("replay", function (root, d) {
     { key: "o20", label: "+20日", num: true, render: function (r) { return r.outcomes[2].change; } },
     { key: "open", label: "卡片", render: function (r) { return { text: "查看" }; } }
   ];
-  var table = MS.table(cols, c.rows, { empty: "没有成交（开账日前的历史成交只作描述，不生成复盘卡）" });
-  // 点击行打开复盘卡
-  var trs = table.querySelectorAll ? table.querySelectorAll("tbody tr") : [];
-  Array.prototype.forEach.call(trs, function (tr, i) {
-    tr.setAttribute("tabindex", "0");
-    tr.setAttribute("role", "button");
-    tr.setAttribute("aria-label", "打开复盘卡：" + c.rows[i].code + " " + c.rows[i].date);
-    tr.addEventListener("click", function () { showCard(c.rows[i]); });
-    tr.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showCard(c.rows[i]); } });
-  });
+  var table = MS.table(cols, c.rows, { empty: "没有成交（开账日前的历史成交只作描述，不生成复盘卡）", onRowClick: showCard });   // 排序/筛选/翻页后点击仍打开对应行的复盘卡
   root.appendChild(MS.card(c.title + "（共 " + c.total + " 笔，显示 " + c.shown + " 笔，最新在前）", [table, MS.note(c.note), MS.note("点击某一行打开该笔的复盘卡（事实/证据/诊断/结果/缺口分栏）。")]));
   root.appendChild(detailHost);
   if (c.rows.length) showCard(c.rows[0]);

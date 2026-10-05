@@ -9,12 +9,55 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from mystock2.core.timeutil import MARKET_TZ, ensure_utc
+from mystock2.instruments.code_map import CodeError, currency_of, market_of
 from mystock2.ledger.pnl import QUALITY_TEXT, compute_realized_pnl, trade_net_cashflow
 from mystock2.web import common as C
 from mystock2.web.ledgerdata import load_trades
 from mystock2.web.rowcells import sell_pnl_cell
 
 ZERO = Decimal(0)
+
+
+def _finance(fills: list[dict], year: str) -> dict:
+    """年度财务统计（沿用 V1「财务统计」口径）：只看交易所本地日期落在该年的成交，不跨年配对成本；
+    净现金流＝当年卖出额 − 当年买入额（成交额不含费用）；按美股/港股分别汇总，币种为标的本币，两市场不相加。
+    另列费用合计与含费用净现金流（V1 没有费用数据）。当年只建仓未卖出时净现金流为负是支出，不是亏损。"""
+    years: set[str] = set()
+    agg: dict[str, dict] = {}
+    for f in fills:
+        try:
+            m = market_of(f["code"])
+        except CodeError:
+            continue
+        y = str(ensure_utc(f["event_at"]).astimezone(MARKET_TZ[m]).year)
+        years.add(y)
+        if y != year:
+            continue
+        a = agg.setdefault(m, {"buy": ZERO, "sell": ZERO, "buy_qty": ZERO, "sell_qty": ZERO, "buy_n": 0, "sell_n": 0, "fees": ZERO})
+        amt = f["price"] * f["qty"]
+        k = "buy" if f["side"] == "BUY" else "sell"
+        a[k] += amt
+        a[k + "_qty"] += f["qty"]
+        a[k + "_n"] += 1
+        a["fees"] += f["fee_total"]
+    markets = []
+    for m in ("US", "HK"):
+        if m not in agg:
+            continue
+        a = agg[m]
+        ccy = currency_of("US.X" if m == "US" else "HK.00000")
+        markets.append({
+            "market": m, "market_text": "美股" if m == "US" else "港股", "currency": ccy,
+            "net_cashflow": C.money_cell(a["sell"] - a["buy"], ccy, sign=True),
+            "sell_amount": C.money_cell(a["sell"], ccy), "buy_amount": C.money_cell(a["buy"], ccy),
+            "sell_qty": C.qty_cell(a["sell_qty"]), "buy_qty": C.qty_cell(a["buy_qty"]),
+            "sell_count": a["sell_n"], "buy_count": a["buy_n"], "deal_count": a["sell_n"] + a["buy_n"],
+            "fees_total": C.money_cell(a["fees"], ccy), "net_after_fees": C.money_cell(a["sell"] - a["buy"] - a["fees"], ccy, sign=True),
+        })
+    return {"year": year, "years": sorted(years, reverse=True), "markets": markets,
+            "note": "口径：年度现金流（当年卖出总额 − 当年买入总额，成交额不含费用），只统计该年度内的成交，不跨年配对成本。金额为标的本币（美股 USD / 港股 HKD），两市场不可相加。"
+                    "若当年只建仓未卖出，净现金流为负属正常支出，不是真实亏损。这是现金流，不是盈亏，不着色；盈亏见上方「已实现盈亏」。"}
 
 
 def run(conn, params):
@@ -79,9 +122,10 @@ def run(conn, params):
     ]
     if any(w.startswith("oversold:") for w in res.warnings):
         notes.append("存在超出可追溯库存的卖出（账本口径不完整），超出部分盈亏不可用")
+    year = (params.get("year") or "").strip() or str(C.now_of(params).year)
     return {
         "account_id": aid, "accounts": [a["account_id"] for a in accts], "opening_at": t.opening_at, "code_filter": code or None,
-        "summary": summary, "by_code": codes, "sells": sells, "pre_opening": pre,
+        "finance": _finance(t.fills, year), "summary": summary, "by_code": codes, "sells": sells, "pre_opening": pre,
         "warnings": sorted(set(res.warnings) | set(t.warnings)),
         "_freshness": C.freshness([C.ledger_source(conn, aid)], notes),
     }

@@ -448,3 +448,19 @@ def test_opening_cost_evidence_uses_average_cost_never_diluted_and_never_after_a
     opening = {e.code: e.price for e in lt.trade_events if e.kind == "OPENING"}
     assert opening["US.TSLA"] == D("321")                      # 平均成本；不是 cost_basis/摊薄成本（负数）
     assert opening["US.NVDA"] is None                          # 开账后有成交：平均成本已变，不能代表开账时的成本
+
+
+def test_pnl_finance_statistics_yearly_cashflow_by_market(client):
+    d = get_view(client, "pnl")[1]["data"]                      # 演示库的「当年」取 NOW 所在年（2026）
+    f = d["finance"]
+    assert f["year"] == "2026" and f["years"] == ["2026"]
+    us = by(f["markets"], "market", "US")
+    assert us["sell_amount"]["text"] == "2,650.00 USD" and us["buy_amount"]["text"] == "1,000.00 USD"          # 5×90＋20×110；10×100（同一成交跨通道只算一次）
+    assert us["net_cashflow"]["text"] == "+1,650.00 USD" and "dir" not in us["net_cashflow"]                    # 现金流不是盈亏：不着色
+    assert (us["sell_count"], us["buy_count"]) == (2, 1)
+    assert us["fees_total"]["text"] == "3.50 USD" and us["net_after_fees"]["text"] == "+1,646.50 USD"
+    hk = by(f["markets"], "market", "HK")
+    assert hk["buy_amount"]["text"] == "31,000.00 HKD" and hk["sell_amount"]["text"] == "16,000.00 HKD" and hk["net_cashflow"]["text"] == "-15,000.00 HKD"   # 只建仓未全卖：负数是支出
+    assert [m["market"] for m in f["markets"]] == ["US", "HK"]                                                 # 固定顺序，币种不相加
+    other = get_view(client, "pnl", year="2025")[1]["data"]["finance"]
+    assert other["year"] == "2025" and other["markets"] == [] and other["years"] == ["2026"]                     # 该年没有成交

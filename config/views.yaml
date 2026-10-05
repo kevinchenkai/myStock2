@@ -27,7 +27,7 @@ views:
       window: 120
   - id: replay
     params:
-      limit: 100
+      limit: 1000          # 全部成交的复盘卡（页面翻页显示）
   - id: data_status
   - id: stock               # 股票详情（弹窗里点代码打开；只读；各块独立，来源缺失只让该块「不可用」）
     hidden: true

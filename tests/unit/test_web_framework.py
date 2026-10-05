@@ -168,9 +168,10 @@ def test_empty_migrated_database_reports_no_account(tmp_path):
     for vid in ("account_overview", "holdings", "trades", "pnl", "equity_trend", "replay"):
         code, body = get_view(c, vid)
         assert body["status"] == "unavailable" and body["error"]["code"] == "no_account", vid
-    for vid in ("tickets", "scoreboard"):                                # 没有比较批次：业务状态，不是错误
-        code, body = get_view(c, vid)
-        assert body["status"] == "unavailable" and body["error"]["code"] == "no_batch", vid
+    code, body = get_view(c, "scoreboard")                               # 没有比较批次：业务状态，不是错误
+    assert body["status"] == "unavailable" and body["error"]["code"] == "no_batch"
+    code, body = get_view(c, "tickets")                                  # 操作单：没有批次时 AI 单为空，但订单区块照常（此处也为空）
+    assert body["status"] == "ok" and body["data"]["batch_id"] is None and body["data"]["orders"]["total"] == 0 and body["data"]["no_batch_text"]
     code, body = get_view(c, "data_status")                            # 数据状态不依赖账户：空库照常回答，新鲜度「未知」
     assert body["status"] == "ok" and body["header"]["staleness"]["label"] == "未知" and body["data"]["protocols"]["verdict"]["pilot"] is True
     code, body = get_view(c, "fx")                                      # 外汇不依赖账户：没有汇率 → 全部不可用

@@ -338,3 +338,53 @@ def test_stock_panel_uses_server_cells_and_never_claims_tickets():
     assert "innerHTML" not in t and "Number(" not in t and "parseFloat" not in t and "toFixed" not in t
     mk = CSS[CSS.index(".chart .mark-buy"):]
     assert "var(--s1)" in mk and "var(--s4)" in mk and "var(--up)" not in mk.split(".mk-sell")[0]    # 买卖标记用非红非绿的曲线色
+
+
+@pytest.mark.skipif(node is None, reason="需要 node")
+def test_table_pagination_with_sort_filter_and_row_click():
+    script = r"""
+    const vm = require('vm'), fs = require('fs');
+    class El {
+      constructor(t){ this.tag=t; this.children=[]; this.attrs={}; this.listeners={}; this.className=''; this._text=''; this.nodeType=1; this.value=''; this.parentNode=null; }
+      setAttribute(k,v){ this.attrs[k]=v; } appendChild(c){ c.parentNode=this; this.children.push(c); return c; }
+      addEventListener(e,f){ (this.listeners[e]=this.listeners[e]||[]).push(f); }
+      set textContent(v){ this._text=String(v); this.children=[]; } get textContent(){ return this._text + this.children.map(c=>c.textContent).join(''); }
+      click(){ (this.listeners.click||[]).forEach(f=>f({target:this})); }
+      change(v){ this.value=v; (this.listeners.change||[]).forEach(f=>f()); }
+      find(pred, out=[]){ if(pred(this)) out.push(this); this.children.forEach(c=>c.find&&c.find(pred,out)); return out; }
+    }
+    const store = {};
+    const ctx = { window: { localStorage: { getItem:k=>store[k]||null, setItem:(k,v)=>{store[k]=v;} } }, console,
+      document: { createElement: t => new El(t), createElementNS: (n,t) => new El(t), createTextNode: s => { const e=new El('#text'); e._text=String(s); return e; } } };
+    vm.createContext(ctx);
+    vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), ctx);
+    const MS = ctx.window.MS;
+    const rows = []; for (let i = 1; i <= 120; i++) rows.push({ code: (i % 2 ? 'US.' : 'HK.') + String(i).padStart(5,'0'), n: {text:String(i), v:String(i)} });
+    const clicked = [];
+    const host = MS.table([{key:'code',label:'标的'},{key:'n',label:'序号',num:true}], rows, { onRowClick: r => clicked.push(r.code) });
+    const body = () => host.find(e=>e.tag==='tbody')[0].children;
+    const firstCodes = () => body().map(tr=>tr.children[0].textContent);
+    const btn = label => host.find(e=>e.tag==='button').filter(b=>b.textContent===label)[0];
+    const pagerText = () => host.find(e=>e.className==='pager')[0].textContent;
+    const out = {};
+    out.page1 = [body().length, firstCodes()[0], firstCodes()[49]];                 // 默认 50 条/页
+    btn('下一页 ›').click(); out.page2 = [body().length, firstCodes()[0]];
+    btn('下一页 ›').click(); out.page3 = [body().length, firstCodes()[0]];           // 末页：120−100＝20
+    out.nextDisabled = btn('下一页 ›').attrs.disabled === '';
+    const size = host.find(e=>e.tag==='select').filter(s=>s.attrs['aria-label']==='每页条数')[0];
+    size.change('20'); out.size20 = [body().length, store['mystock2.pageSize']];    // 改每页条数：回到第 1 页并记住
+    btn('美股').click(); out.us = [body().length, host.find(e=>e.className==='pager')[0].textContent.includes('共 60 行')];   // 筛选后总数 60，回到第 1 页
+    const th = host.find(e=>e.tag==='th').filter(t=>t.textContent.startsWith('序号'))[0];
+    th.click(); out.sortedFirst = firstCodes()[0];                                   // 数值列先降序：美股最大序号 119
+    body()[0].click(); out.clicked = clicked;                                         // 排序/翻页重绘后点击仍对应当前行
+    console.log(JSON.stringify(out));
+    """
+    r = subprocess.run([node, "-e", script, str(STATIC / "ui.js")], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    import json
+    o = json.loads(r.stdout.strip())
+    assert o["page1"] == [50, "US.00001", "HK.00050"] and o["page2"] == [50, "US.00051"] and o["page3"] == [20, "US.00101"]
+    assert o["nextDisabled"] is True
+    assert o["size20"] == [20, "20"]
+    assert o["us"] == [20, True]
+    assert o["sortedFirst"] == "US.00119" and o["clicked"] == ["US.00119"]

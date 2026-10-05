@@ -122,11 +122,20 @@
     if (typeof a === "number" && typeof b === "number") return a - b;
     return String(a).localeCompare(String(b), "zh");
   }
+  /* 翻页：行数超过每页条数时在表下方出现翻页条（首页/上一页/页码/下一页/末页 + 每页条数）；与排序、市场筛选配合（先筛选、再排序、最后切页）。
+     每页条数记在 localStorage（可选）。opts.pageSize 指定默认值，opts.paginate === false 关闭；opts.onRowClick(row) 给每一行绑定点击（排序/翻页重绘后仍有效）。 */
+  var PAGE_KEY = "mystock2.pageSize", PAGE_SIZES = [20, 50, 100, 200];
+  function storedPageSize(def) {
+    try { var v = parseInt(window.localStorage.getItem(PAGE_KEY), 10); if (PAGE_SIZES.indexOf(v) >= 0) return v; } catch (e) { /* 无存储也能用 */ }
+    return def;
+  }
+  function storePageSize(n) { try { window.localStorage.setItem(PAGE_KEY, String(n)); } catch (e) { /* ignore */ } }
   function table(columns, rows, opts) {
     opts = opts || {};
     if (!rows || !rows.length) return h("p", { class: "muted", text: opts.empty || "（暂无数据）" });
     var host = h("div", { class: "tbl-host" });
-    var state = { sortKey: null, dir: 1, market: storedMarket() };
+    var state = { sortKey: null, dir: 1, market: storedMarket(), page: 1, pageSize: opts.paginate === false ? 0 : storedPageSize(opts.pageSize || 50) };
+    var pagerEl = h("div", { class: "pager" });
     var hasMarket = opts.market !== false && rows.length > 1 && rows.filter(function (r) { return marketOf(r); }).length * 2 >= rows.length;
     var canSort = opts.sortable !== false && rows.length > 1;
     var tableEl = h("table", { class: "tbl" + (columns.length >= 8 ? " wide" : "") });
@@ -148,7 +157,11 @@
       return out;
     }
     function draw() {
-      var shown = visibleRows();
+      var all = visibleRows(), shown = all;
+      var pages = state.pageSize ? Math.max(1, Math.ceil(all.length / state.pageSize)) : 1;
+      if (state.page > pages) state.page = pages;
+      if (state.pageSize && all.length > state.pageSize) shown = all.slice((state.page - 1) * state.pageSize, state.page * state.pageSize);
+      drawPager(all.length, pages);
       var thead = h("thead", null, h("tr", null, columns.map(function (c) {
         var active = state.sortKey === c.key;
         var th = h("th", { class: (c.num ? "num" : "") + (canSort ? " sortable" : "") + (active ? " sorted" : ""),
@@ -158,19 +171,44 @@
         return th;
       })));
       var tbody = h("tbody", null, shown.map(function (r) {
-        return h("tr", null, columns.map(function (c) {
+        var tr = h("tr", null, columns.map(function (c) {
           var v = typeof c.render === "function" ? c.render(r) : r[c.key];
           var node = cell(v);
           if (c.key === "code" && isCode(r.code)) node = codeNode(r, node);
           return h("td", { class: c.num ? "num" : null, "data-label": c.label }, node);
         }));
+        if (typeof opts.onRowClick === "function") {
+          tr.setAttribute("tabindex", "0");
+          tr.setAttribute("role", "button");
+          tr.addEventListener("click", function (e) { if (!(e.target && e.target.closest && e.target.closest("a,button"))) opts.onRowClick(r); });
+          tr.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); opts.onRowClick(r); } });
+        }
+        return tr;
       }));
       tableEl.textContent = "";
       tableEl.appendChild(thead);
       tableEl.appendChild(tbody);
-      if (countEl) countEl.textContent = shown.length === rows.length ? rows.length + " 行" : shown.length + " / " + rows.length + " 行";
+      if (countEl) countEl.textContent = all.length === rows.length ? rows.length + " 行" : all.length + " / " + rows.length + " 行";
       if (selectEl) selectEl.value = state.sortKey === null ? "" : state.sortKey;
       if (dirBtn) dirBtn.textContent = state.dir === 1 ? "升序 ▲" : "降序 ▼";
+    }
+    function drawPager(total, pages) {
+      pagerEl.textContent = "";
+      if (!state.pageSize || total <= state.pageSize) return;          // 行数不超过每页条数：不显示翻页条
+      function go(n) { return function () { state.page = Math.min(pages, Math.max(1, n)); draw(); }; }
+      function btn(label, n, disabled) {
+        var b = h("button", { type: "button", class: "seg-btn", text: label, disabled: disabled ? true : null });
+        if (!disabled) b.addEventListener("click", go(n));
+        return b;
+      }
+      var from = (state.page - 1) * state.pageSize + 1, to = Math.min(total, state.page * state.pageSize);
+      var sizeSel = h("select", { "aria-label": "每页条数" }, PAGE_SIZES.map(function (n) { return h("option", { value: String(n), selected: n === state.pageSize ? true : null, text: n + " 条/页" }); }));
+      sizeSel.addEventListener("change", function () { state.pageSize = parseInt(sizeSel.value, 10); storePageSize(state.pageSize); state.page = 1; draw(); });
+      var jump = h("select", { "aria-label": "页码" }, Array.apply(null, { length: pages }).map(function (_, i) { return h("option", { value: String(i + 1), selected: i + 1 === state.page ? true : null, text: "第 " + (i + 1) + " 页" }); }));
+      jump.addEventListener("change", function () { go(parseInt(jump.value, 10))(); });
+      pagerEl.appendChild(h("span", { class: "muted small", text: "第 " + from + "–" + to + " 行，共 " + total + " 行" }));
+      pagerEl.appendChild(h("span", { class: "pager-ctl" }, [btn("«", 1, state.page === 1), btn("‹ 上一页", state.page - 1, state.page === 1), jump, h("span", { class: "muted small", text: "/ " + pages + " 页" }),
+        btn("下一页 ›", state.page + 1, state.page === pages), btn("»", pages, state.page === pages), sizeSel]));
     }
     function sortBy(key) {
       var first = columns.filter(function (c) { return c.key === key; })[0].num ? -1 : 1;     // 数值列先降序（大的在前），文本列先升序
@@ -178,6 +216,7 @@
         if (state.dir === first) state.dir = -first;             // 第二次点：反向
         else { state.sortKey = null; state.dir = 1; }            // 第三次点：恢复原顺序
       } else { state.sortKey = key; state.dir = first; }
+      state.page = 1;
       draw();
     }
     if (hasMarket || canSort) {
@@ -186,7 +225,7 @@
         kids.push(h("span", { class: "seg", role: "group", "aria-label": "市场筛选" }, [["ALL", "全部"], ["US", "美股"], ["HK", "港股"]].map(function (m) {
           var b = h("button", { type: "button", class: "seg-btn" + (state.market === m[0] ? " on" : ""), text: m[1], "aria-pressed": state.market === m[0] ? "true" : "false" });
           b.addEventListener("click", function () {
-            state.market = m[0]; storeMarket(m[0]);
+            state.market = m[0]; storeMarket(m[0]); state.page = 1;
             Array.prototype.forEach.call(b.parentNode.children, function (x) { var on = x === b; x.className = "seg-btn" + (on ? " on" : ""); x.setAttribute("aria-pressed", on ? "true" : "false"); });
             draw();
           });
@@ -198,6 +237,7 @@
         selectEl.addEventListener("change", function () {
           state.sortKey = selectEl.value === "" ? null : selectEl.value;
           state.dir = state.sortKey && columns.filter(function (c) { return c.key === state.sortKey; })[0].num ? -1 : 1;
+          state.page = 1;
           draw();
         });
         dirBtn = h("button", { type: "button", class: "seg-btn", text: "升序 ▲", title: "切换升序/降序" });
@@ -210,6 +250,7 @@
       host.appendChild(toolbar);
     }
     host.appendChild(wrap);
+    host.appendChild(pagerEl);
     draw();
     return host;
   }

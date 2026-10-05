@@ -1,5 +1,24 @@
 MS.registerPanel("tickets", function (root, d) {
   var h = MS.h;
+  var o = d.orders;
+  if (o) {
+    var okv = [["订单总数", String(o.total)]].concat(o.by_status.map(function (x) { return [x.text, String(x.count)]; }));
+    root.appendChild(MS.card("我的订单（券商，实际操作；含已撤/失败）", [
+      MS.kv(okv),
+      MS.table([
+        { key: "created_at", label: "下单时间", render: function (r) { return { text: MS.fmtTime(r.created_at), title: r.time_trust === "assumed_local_tz" ? "交易所本地时间按市场补时区（推断）" : null }; } },
+        { key: "code", label: "标的" }, { key: "side_text", label: "方向" }, { key: "order_type", label: "类型" },
+        { key: "status_text", label: "状态" }, { key: "price", label: "委托价", num: true }, { key: "qty", label: "委托数量", num: true },
+        { key: "dealt_qty", label: "已成交数量", num: true }, { key: "dealt_avg_price", label: "成交均价", num: true },
+        { key: "source", label: "来源" }
+      ], o.rows, { empty: "没有订单记录" }),
+      MS.note(o.note + (o.shown < o.total ? "（只显示最近 " + o.shown + " 条）" : ""))
+    ]));
+  }
+  if (d.batch_id === null) {
+    root.appendChild(MS.card("AI 操作单", [h("p", { class: "state", text: "暂无" }), MS.note(d.no_batch_text), MS.note(d.live_guidance.note)]));
+    return;
+  }
   root.appendChild(MS.card("批次 " + d.batch_id, [
     MS.kv([["批次起点", d.batch_start], ["币种", d.batch_currency], ["AI 线", (d.ai_lines || []).join("、") || "无"]]),
     MS.note("密封规则：未揭示的目标日只显示「已密封」与计数；揭示只能经命令行（coach show、人工否决包导出）写入暴露日志，网页不提供揭示入口。人类线与 live_guidance 不在此显示。")

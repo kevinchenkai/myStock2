@@ -1,4 +1,4 @@
-MS.registerPanel("pnl", function (root, d) {
+MS.registerPanel("pnl", function (root, d, ctx) {
   var h = MS.h;
   d.summary.forEach(function (s) {
     var kids = [MS.kv([
@@ -27,6 +27,26 @@ MS.registerPanel("pnl", function (root, d) {
       { key: "at", label: "时间", render: function (r) { return MS.fmtTime(r.at); } }, { key: "code", label: "标的" }, { key: "side", label: "方向" },
       { key: "qty", label: "数量", num: true }, { key: "price", label: "价格", num: true }, { key: "pnl", label: "盈亏", num: true }
     ], d.pre_opening), MS.note("开账日前没有成本证据，这些成交不产生精确盈亏（不可用）。")]));
+  }
+  var f = d.finance;
+  if (f) {
+    var years = f.years.indexOf(f.year) >= 0 ? f.years : [f.year].concat(f.years);
+    var chips = h("span", { class: "seg", role: "group", "aria-label": "财务统计年度" }, years.map(function (y) {
+      var b = h("button", { type: "button", class: "seg-btn" + (y === f.year ? " on" : ""), text: y, "aria-pressed": y === f.year ? "true" : "false" });
+      b.addEventListener("click", function () { if (ctx && ctx.go) ctx.go({ year: y }); });
+      return b;
+    }));
+    var fkids = [h("div", { class: "tbl-toolbar" }, [h("span", { class: "muted small", text: "年度" }), chips])];
+    if (!f.markets.length) fkids.push(MS.note(f.year + " 年度无成交记录。"));
+    f.markets.forEach(function (m) {
+      fkids.push(h("div", { class: "card" }, [h("h3", { text: m.market_text + " · " + m.currency }), MS.kv([
+        ["净现金流（卖出额 − 买入额）", m.net_cashflow], ["卖出额", m.sell_amount], ["买入额", m.buy_amount],
+        ["卖出 / 买入笔数", m.sell_count + " / " + m.buy_count], ["卖出 / 买入股数", m.sell_qty.text + " / " + m.buy_qty.text],
+        ["费用合计", m.fees_total], ["含费用净现金流", m.net_after_fees]
+      ])]));
+    });
+    fkids.push(MS.note(f.note));
+    root.appendChild(MS.card("财务统计（年度现金流）", fkids));
   }
   var n = (d.warnings || []).map(function (w) { return w === "no_opening" ? "未登记开账点：全部成交按开账后处理，结果可能不完整" : w.indexOf("oversold:") === 0 ? "超卖：" + w.split(":")[1] + " 的卖出超过账本可追溯库存" : w; });
   root.appendChild(MS.card("口径说明", [MS.notes(["已实现盈亏＝移动平均成本法、费用后；不含股息、利息、汇兑。",

@@ -193,7 +193,8 @@ def test_tickets_unavailable_without_batch_and_ok_for_batch_without_tickets(tmp_
     p = tmp_path / "e.db"
     dbmod.migrate(p)
     code, b = get_view(make_app(tmp_path, p).test_client(), "tickets")
-    assert b["status"] == "unavailable" and b["error"]["code"] == "no_batch"
+    assert b["status"] == "ok" and b["data"]["batch_id"] is None and b["data"]["markets"] == []        # 没有批次：AI 单为空（给出原因），不是错误
+    assert "coach run" in b["data"]["no_batch_text"]
     sub = tmp_path / "y"
     sub.mkdir()
     db = build_demo_db(sub)
@@ -588,3 +589,23 @@ def test_group_atomic_selection_a_partial_refresh_does_not_splice_older_group(tm
     assert rows["US.NVDA"]["effective"]["code"] == "selected" and rows["US.NVDA"]["qty"]["v"] == "11"
     assert rows["US.TSLA"]["effective"]["code"] == "not_in_latest_group" and "不拼接旧组" in rows["US.TSLA"]["effective"]["text"]
     assert rows["US.TSLA"]["qty"]["v"] == "5"                                   # 已揭示时仍显示这条记录本身（标明不采用）
+
+
+def test_tickets_view_lists_broker_orders_even_without_a_batch(tmp_path):
+    p = tmp_path / "o.db"
+    dbmod.migrate(p)
+    lw = dbmod.connect_writer(p, "ledger")
+    rows = [("O1", "HK", "HK.00700", "BUY", "NORMAL", "CANCELLED_ALL", "500", "100", "0", None, "2026-03-03T05:00:39.918000Z", "v1"),
+            ("O2", "US", "US.NVDA", "SELL", "NORMAL", "FILLED_ALL", "130", "4", "4", "129.5", "2026-03-05T16:00:00.000000Z", "futu"),
+            ("O3", "US", "US.NVDA", "BUY", "NORMAL", "FAILED", "100", "5", "0", None, "2026-03-06T15:00:00.000000Z", "futu")]
+    for oid, mk, code, side, typ, st, price, qty, dq, dap, at, src in rows:
+        lw.execute("INSERT INTO broker_order(account_id, order_id, market, code, side, order_type, status, price, qty, dealt_qty, dealt_avg_price, created_at, updated_at, "
+                   "time_trust, source, first_seen_at) VALUES ('A',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (oid, mk, code, side, typ, st, price, qty, dq, dap, at, at, "assumed_local_tz", src, at))
+    lw.close()
+    code, b = get_view(make_app(tmp_path, p).test_client(), "tickets")
+    o = b["data"]["orders"]
+    assert b["status"] == "ok" and o["total"] == 3 and [r["order_id"] for r in o["rows"]] == ["O3", "O2", "O1"]          # 最新在前
+    assert {x["status"]: x["count"] for x in o["by_status"]} == {"CANCELLED_ALL": 1, "FILLED_ALL": 1, "FAILED": 1}
+    r2 = o["rows"][1]
+    assert r2["side_text"] == "卖出" and r2["status_text"] == "全部成交" and r2["dealt_avg_price"]["text"].startswith("129.50 USD")
+    assert o["rows"][2]["dealt_avg_price"]["na"] is True and o["rows"][2]["status_text"] == "全部撤单"               # 未成交：不显示 0

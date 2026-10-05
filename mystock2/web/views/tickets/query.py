@@ -115,11 +115,52 @@ def _revealed_rows(conn, batch_id: str, market: str, target: str, rows, deadline
     return out
 
 
+ORDER_STATUS_TEXT = {"FILLED_ALL": "全部成交", "FILLED_PART": "部分成交", "CANCELLED_ALL": "全部撤单", "CANCELLED_PART": "部分成交后撤单", "FAILED": "失败",
+                     "SUBMITTED": "已提交", "SUBMITTING": "提交中", "WAITING_SUBMIT": "待提交", "DISABLED": "已失效", "DELETED": "已删除", "UNKNOWN": "未知"}
+
+
+def _orders_block(conn) -> dict:
+    """券商订单（你的实际操作，含已撤/失败）。订单是「意图」，成交才是事实：这里只用于看操作轨迹，不进入账本和式。"""
+    rows = conn.execute("SELECT * FROM broker_order ORDER BY created_at DESC, order_id DESC LIMIT 5000").fetchall()
+    total = conn.execute("SELECT COUNT(*) FROM broker_order").fetchone()[0]
+    by_status: Counter = Counter()
+    out = []
+    for r in rows:
+        ccy = _ccy(r["code"])
+        by_status[r["status"]] += 1
+        def num(fn, v, *a, miss="没有数据"):
+            if v in (None, "", "0", "0.0000"):
+                return C.na_cell(miss)
+            try:
+                return fn(v, *a)
+            except ValueError:                                  # 来源里的脏数字：只让该格「不可用」，不让整页失败
+                return C.na_cell("无法解析的数值")
+        out.append({
+            "order_id": r["order_id"], "created_at": r["created_at"], "code": r["code"], "currency": ccy,
+            "side": r["side"], "side_text": "买入" if r["side"] == "BUY" else "卖出",
+            "order_type": r["order_type"] or "—", "status": r["status"], "status_text": ORDER_STATUS_TEXT.get(r["status"], r["status"]),
+            "price": num(C.price_cell, r["price"], ccy, miss="没有价格"),
+            "qty": num(C.qty_cell, r["qty"], miss="没有数量"),
+            "dealt_qty": C.qty_cell(r["dealt_qty"]) if r["dealt_qty"] in ("0", "0.000000") else num(C.qty_cell, r["dealt_qty"], miss="没有成交数量"),
+            "dealt_avg_price": num(C.price_cell, r["dealt_avg_price"], ccy, miss="未成交"),
+            "source": r["source"], "time_trust": r["time_trust"],
+        })
+    return {"total": total, "shown": len(out), "rows": out,
+            "by_status": [{"status": k, "text": ORDER_STATUS_TEXT.get(k, k), "count": v} for k, v in sorted(by_status.items(), key=lambda kv: -kv[1])],
+            "note": "订单是你的操作意图（含撤单、失败），成交才是事实：账本只认成交/费用/资金流水。订单时间是交易所本地时间（接口无时区），已按市场补时区后以 UTC 显示（推断）。"
+                    "来源 v1＝V1 迁移，futu＝富途直采。"}
+
+
 def run(conn, params):
     now = C.now_of(params)
+    orders = _orders_block(conn)
     batches = conn.execute("SELECT * FROM comparison_batch ORDER BY created_at DESC, batch_id").fetchall()
-    if not batches:
-        raise C.ViewUnavailable("no_batch", "还没有比较批次：尚未运行 batch create（比较批次由受控 CLI 写入，Web 只读）")
+    if not batches:                                   # 还没有比较批次：AI 操作单为空，但订单历史照常显示
+        src = conn.execute("SELECT MAX(created_at) AS e, MAX(first_seen_at) AS r FROM broker_order").fetchone()
+        return {"batch_id": None, "batches": [], "batch_currency": None, "batch_start": None, "ai_lines": [], "markets": [], "live_guidance": LIVE_GUIDANCE,
+                "now": iso_utc(now), "orders": orders,
+                "no_batch_text": "还没有比较批次：AI 操作单由 `coach run` 在比较批次（`batch create`）下每日生成并冻结；批次需要先确定预算、持仓上限、止损天数等参数（待办 D3–D6、D12–D15）。在此之前这里只显示你的券商订单。",
+                "_freshness": C.freshness([C.source("券商订单", src["e"], src["r"])], ["还没有比较批次，AI 操作单为空", "订单是意图，成交才是事实"])}
     want = (params.get("batch") or "").strip()
     row = next((b for b in batches if b["batch_id"] == want), None) if want else None
     if want and row is None:
@@ -169,6 +210,6 @@ def run(conn, params):
         notes.append("该批次还没有任何 AI 单")
     return {
         "batch_id": batch_id, "batches": [b["batch_id"] for b in batches], "batch_currency": row["currency"], "batch_start": row["start_date"],
-        "ai_lines": ai_lines, "markets": entries, "live_guidance": LIVE_GUIDANCE, "now": iso_utc(now),
+        "ai_lines": ai_lines, "markets": entries, "live_guidance": LIVE_GUIDANCE, "now": iso_utc(now), "orders": orders,
         "_freshness": C.freshness(srcs, notes),
     }

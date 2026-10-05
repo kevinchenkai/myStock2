@@ -12,3 +12,7 @@ params:
     type: str
     default: ""
     description: 只看某个标的
+  year:
+    type: str
+    default: ""
+    description: 财务统计的年度（留空＝当年）
