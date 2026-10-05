@@ -1,0 +1,93 @@
+mystock2/web/static/ui.js
+  s_97d138eaf84b50::t_f3321250766d88 46-50
+  s_97d138eaf84b50::t_9a010f9f7cb6f3 188-279,298
+tests/unit/test_web_frontend.py
+  s_97d138eaf84b50::t_8d2b2502a375e0 16
+mystock2/collectors/futu.py
+  s_97d138eaf84b50::t_2c774f98c891d8 142-144,336-337
+mystock2/web/static/app.js
+  s_97d138eaf84b50::t_9a010f9f7cb6f3 46-52
+  s_97d138eaf84b50::t_6fd5028044238f 45,53
+mystock2/ledger/opening.py
+  s_97d138eaf84b50::t_2c774f98c891d8 19,32,34-36
+mystock2/web/views/holdings/query.py
+  s_97d138eaf84b50::t_36c43808995f7f 85
+  s_97d138eaf84b50::t_2c774f98c891d8 83-84,86
+tests/unit/test_web_fixtures.py
+  s_97d138eaf84b50::t_5202f949cdaf95 100,132,135
+tests/integration/test_futu_collector.py
+  s_97d138eaf84b50::t_364efc35eaa3b4 39,109-110
+  s_97d138eaf84b50::t_5ab33bf63e51bb 195-205
+config/views.yaml
+  s_97d138eaf84b50::t_a77e5f9e689098 24-27
+mystock2/web/views/holdings/panel.js
+  s_97d138eaf84b50::t_de7b3821c7c0bc 13
+docs/records/first-real-run_claude_20261005.md
+  s_97d138eaf84b50::t_5f74ea268b9cbd 1-53
+mystock2/web/views/forecast/view.yaml
+  s_97d138eaf84b50::t_3d0b63d07eb59f 1-20
+mystock2/web/common.py
+  s_97d138eaf84b50::t_85e312743291b6 253-254
+docs/records/m3c-forecast-view_claude_20261005.md
+  s_97d138eaf84b50::t_8c509eb840103e 1-70
+tests/unit/test_web_views.py
+  s_97d138eaf84b50::t_1f8bbcda1d4085 437,439-445,447-448,450-453
+  s_97d138eaf84b50::t_5202f949cdaf95 151-152,430-436,438,446,449
+  s_97d138eaf84b50::t_3ffdbe0cc294d8 416-429
+migrations/0008_snapshot_costs.sql
+  s_97d138eaf84b50::t_2c774f98c891d8 1-5
+mystock2/web/ledgerdata.py
+  s_97d138eaf84b50::t_2c774f98c891d8 34-60,88
+mystock2/web/views/forecast/panel.js
+  s_97d138eaf84b50::t_f3321250766d88 97,100-103,109-113
+  s_97d138eaf84b50::t_abb910be7f7a5d 107
+  s_97d138eaf84b50::t_91084dbfc6d7da 46-47,51-54,56-58,60,62-63,68,70
+  s_97d138eaf84b50::t_a77e5f9e689098 99
+  s_97d138eaf84b50::t_6fd5028044238f 1-45,48-50,55,59,61,64-67,69,71-96,98,104-106,108,114-119
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_d55deb0bd44213 60,77,79
+  s_97d138eaf84b50::t_82e7023eae7c03 21-22,51,76,78
+mystock2/web/views/forecast/query.py
+  s_97d138eaf84b50::t_b61028c6d05f8a 349-352,363
+  s_97d138eaf84b50::t_a3d58fc59d6df2 1-53,55-73,75-205,207-238,240-326,328-336,371-386,391-394,397-400,411-416,420-484,488-498
+  s_97d138eaf84b50::t_89149dd26358d0 401-410,417-419
+  s_97d138eaf84b50::t_91084dbfc6d7da 239,355-356,485-487
+  s_97d138eaf84b50::t_5162ef92ccd51e 337-348,353-354,357-362,364-370,387-390,395-396
+  s_97d138eaf84b50::t_abb910be7f7a5d 327
+  s_97d138eaf84b50::t_9a010f9f7cb6f3 74
+  s_97d138eaf84b50::t_0665988428ffd4 54,206
+mystock2/web/static/app.css
+  s_97d138eaf84b50::t_9a010f9f7cb6f3 103
+tests/unit/test_web_framework.py
+  s_97d138eaf84b50::t_8d2b2502a375e0 15,107
+mystock2/ledger/events.py
+  s_97d138eaf84b50::t_5ab33bf63e51bb 223-226
+tests/unit/test_web_forecast.py
+  s_97d138eaf84b50::t_65c5e152fc91e2 10,26-28,31-32,78,88-89
+  s_97d138eaf84b50::t_25b215d8e976b9 120,184,306
+  s_97d138eaf84b50::t_abb910be7f7a5d 401
+  s_97d138eaf84b50::t_f5f9866ece48f5 171,174,176-178,426
+  s_97d138eaf84b50::t_bc6a6ddaed14b7 308
+  s_97d138eaf84b50::t_77c64e3b7b14ac 1-9,11-25,29-30,33-77,79-87,90-119,121-139,141-146,148-152,154-170,172-173,175,179-183,185-305,307,309-313,315-345,349-354,356-400,402-425,427-437,446-463,465-491,493-500
+  s_97d138eaf84b50::t_a9bf9c3bfe1137 501-511
+  s_97d138eaf84b50::t_cf103a239aea57 140,147,314,346-348,438-445,492
+  s_97d138eaf84b50::t_3e97c57c45c6d6 153
+  s_97d138eaf84b50::t_91084dbfc6d7da 464
+  s_97d138eaf84b50::t_f73c94f9642e01 355,512-521
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "2fd824caec3f6d024c78cf5dd68cae8561059cd5",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
