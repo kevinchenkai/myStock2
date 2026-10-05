@@ -23,6 +23,19 @@ TABLE_OWNERS: dict[str, str] = {
     "schema_migration": OWNER_MIGRATOR,
     "run_log": "core",
     "instrument": "instruments",
+    # ledger（M2a）
+    "account": "ledger",
+    "account_opening": "ledger",
+    "source_record": "ledger",
+    "ledger_event": "ledger",
+    "source_link": "ledger",
+    "pending_match": "ledger",
+    "pending_resolution": "ledger",
+    "corporate_action": "ledger",
+    "fee_profile": "ledger",
+    "account_snapshot": "ledger",
+    "snapshot_position": "ledger",
+    "snapshot_cash": "ledger",
 }
 
 _WRITE_ACTIONS = {sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE, sqlite3.SQLITE_DELETE}

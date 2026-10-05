@@ -15,10 +15,11 @@ def db(tmp_path):
 
 def test_migrate_creates_schema_and_is_idempotent(tmp_path):
     path = tmp_path / "t.db"
+    latest = [m.version for m in dbmod.discover_migrations()]
     first = dbmod.migrate(path)
-    assert first == [1]
+    assert first == latest
     assert dbmod.migrate(path) == []          # 重复迁移幂等
-    assert dbmod.schema_version(path) == 1
+    assert dbmod.schema_version(path) == latest[-1]
 
 
 def test_every_table_has_an_owner(db):

@@ -3,6 +3,7 @@ import sys
 
 import yaml
 
+from mystock2.core import db as dbmod
 from mystock2.core.config import REPO_ROOT
 
 
@@ -30,10 +31,11 @@ def test_help_and_version():
 def test_migrate_twice_with_run_receipts(tmp_path):
     cfg = make_cfg(tmp_path)
     a = run("db", "migrate", cfg=cfg)
-    assert a.returncode == 0 and "applied=[1]" in a.stdout and "run_id=r_" in a.stdout
+    latest = [m.version for m in dbmod.discover_migrations()]
+    assert a.returncode == 0 and f"applied={latest}" in a.stdout and "run_id=r_" in a.stdout
     b = run("db", "migrate", cfg=cfg)
     assert b.returncode == 0 and "applied=[]" in b.stdout
-    assert "schema_version=1" in run("db", "status", cfg=cfg).stdout
+    assert f"schema_version={latest[-1]}" in run("db", "status", cfg=cfg).stdout
 
 
 def test_universe_check_template_and_bare_code(tmp_path):
