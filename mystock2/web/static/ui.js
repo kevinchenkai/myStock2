@@ -67,10 +67,26 @@
     }));
   }
 
+  /* ---- 标的名称与详情入口：row.code_name 由服务器按代码补上（instrument_name）；这里只负责显示，排序/市场筛选仍只用 code。 ---- */
+  var names = {};
+  function setNames(m) { if (m && typeof m === "object") Object.keys(m).forEach(function (k) { names[k] = m[k]; }); }
+  function isCode(s) { return typeof s === "string" && /^(US|HK)\.[A-Z0-9][A-Z0-9.\-]*$/.test(s); }
+  function nameOf(code) { return isCode(code) && names[code] ? names[code] : ""; }
+  function codeLabel(code) { var n = nameOf(code); return n ? code + " " + n : String(code); }
+  function codeNode(r, inner) {
+    var code = r.code, nm = r.code_name || nameOf(code);
+    var link = h("span", { class: "code-link", role: "button", tabindex: "0", title: "查看 " + code + " 的详情", "aria-label": "查看 " + code + (nm ? " " + nm : "") + " 的详情" }, inner);
+    function open(e) { if (e && e.stopPropagation) e.stopPropagation(); if (typeof window.MS.openStock === "function") window.MS.openStock(code, link); }
+    link.addEventListener("click", open);
+    link.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(e); } });
+    return nm ? h("div", { class: "code-cell" }, [link, h("div", { class: "small muted code-name", text: nm })]) : link;
+  }
+
   /* 表格：columns=[{key,label,num}]；窄屏由 CSS 折成卡片（用 data-label）。
+       · 「code」列：显示中文名小字副行，点击代码弹出该标的详情（MS.openStock，由 app.js 提供）；
      交互（纯前端，只改显示顺序/可见行，不改数据）：
        · 点表头排序（再点切换升/降；第三次点恢复服务器原顺序）；窄屏表头被折叠，用工具条的「排序」下拉；
-       · 市场筛选：行里有 code（US./HK. 前缀）或 currency（USD/HKD）时，工具条出现「全部 / 美股 / 港股」；选择记在 localStorage（可选），各表共用；
+       · 市场筛选（opts.market === false 可关闭，如单一标的的弹窗）：行里有 code（US./HK. 前缀）或 currency（USD/HKD）时，工具条出现「全部 / 美股 / 港股」；选择记在 localStorage（可选），各表共用；
          没有市场归属的行（如汇总行）始终显示。
      排序键：单元的 v（规范十进制字符串，转 Number 只用于比较）；没有 v 则取文本；不可用/缺失一律排最后。 */
   var MARKET_KEY = "mystock2.market";
@@ -111,7 +127,7 @@
     if (!rows || !rows.length) return h("p", { class: "muted", text: opts.empty || "（暂无数据）" });
     var host = h("div", { class: "tbl-host" });
     var state = { sortKey: null, dir: 1, market: storedMarket() };
-    var hasMarket = rows.length > 1 && rows.filter(function (r) { return marketOf(r); }).length * 2 >= rows.length;
+    var hasMarket = opts.market !== false && rows.length > 1 && rows.filter(function (r) { return marketOf(r); }).length * 2 >= rows.length;
     var canSort = opts.sortable !== false && rows.length > 1;
     var tableEl = h("table", { class: "tbl" + (columns.length >= 8 ? " wide" : "") });
     var wrap = h("div", { class: "tbl-wrap" }, tableEl);
@@ -144,7 +160,9 @@
       var tbody = h("tbody", null, shown.map(function (r) {
         return h("tr", null, columns.map(function (c) {
           var v = typeof c.render === "function" ? c.render(r) : r[c.key];
-          return h("td", { class: c.num ? "num" : null, "data-label": c.label }, cell(v));
+          var node = cell(v);
+          if (c.key === "code" && isCode(r.code)) node = codeNode(r, node);
+          return h("td", { class: c.num ? "num" : null, "data-label": c.label }, node);
         }));
       }));
       tableEl.textContent = "";
@@ -218,6 +236,13 @@
     if (neg && /[1-9]/.test(out)) out = "-" + out;
     return out;
   }
+  function fmtPx(s) {                                   // 价格：至少 2 位、至多 4 位小数（字符串处理，不经 float）
+    var t = fmtDec(s, 4), m = /^(-?[\d,]+)\.(\d+)$/.exec(t);
+    if (!m) return t;
+    var f = m[2].replace(/0+$/, "");
+    while (f.length < 2) f += "0";
+    return m[1] + "." + f;
+  }
   function fmtMoney(s, ccy) { return s === null || s === undefined ? "不可用" : fmtDec(s, 2) + " " + ccy; }
   function fmtTime(iso) {
     if (!iso) return "未知";
@@ -226,7 +251,9 @@
   }
 
   /* ---- 折线图（纯 SVG）。缺口（y 为 null）断开折线；gap 日用灰带标出；flows 用小三角标记。
-     opts: {series:[{name,color,dash,points:[{x,y,note}]}], xs:[date...], gaps:{date:text}, marks:[{x,label}], ccy, height}
+     opts: {series:[{name,color,dash,points:[{x,y,note}]}], xs:[date...], gaps:{date:text}, marks:[{x,label}|{x,side:"BUY"|"SELL",y,label}], ccy, height}
+     marks：只有 x/label 的是底部小三角（如外部资金流）；带 side/y 的是买卖标记（买＝向上三角、卖＝向下三角，落在成交均价处，颜色不用红绿）。
+     点按/悬停图表时，读数里列出该日所有标记的说明。
      点的 y 是十进制字符串或 null；仅绘图时转 Number，所有展示文本仍由字符串格式化。 ---- */
   function lineChart(host, opts) {
     var xs = opts.xs, series = opts.series, ccy = opts.ccy || "";
@@ -240,6 +267,7 @@
       var L = 52, R = 8, T = 8, B = 22, pw = W - L - R, ph = H - T - B;
       var vals = [];
       series.forEach(function (s) { s.points.forEach(function (p) { if (p.y !== null && p.y !== undefined) vals.push(Number(p.y)); }); });
+      (opts.marks || []).forEach(function (m) { if (m.side && m.y !== null && m.y !== undefined && xs.indexOf(m.x) >= 0) vals.push(Number(m.y)); });
       var lo = vals.length ? Math.min.apply(null, vals) : 0, hi = vals.length ? Math.max.apply(null, vals) : 1;
       if (lo === hi) { lo -= 1; hi += 1; }
       var pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
@@ -271,6 +299,13 @@
       });
       (opts.marks || []).forEach(function (m) {
         var i = xs.indexOf(m.x); if (i < 0) return;
+        if (m.side) {                                              // 买卖标记：落在成交均价处，三角贴在价格点的下方（买）/上方（卖），不遮住折线
+          var cy = Y(Number(m.y)), buy = m.side === "BUY", mx = X(i);
+          var tri = buy ? "M" + (mx - 5) + " " + (cy + 9) + " L" + (mx + 5) + " " + (cy + 9) + " L" + mx + " " + (cy + 1) + " Z"
+                        : "M" + (mx - 5) + " " + (cy - 9) + " L" + (mx + 5) + " " + (cy - 9) + " L" + mx + " " + (cy - 1) + " Z";
+          root.appendChild(svg("path", { d: tri, class: buy ? "mark-buy" : "mark-sell" }, svg("title", {}, m.label)));
+          return;
+        }
         root.appendChild(svg("path", { d: "M" + (X(i) - 4) + " " + (T + ph) + " L" + (X(i) + 4) + " " + (T + ph) + " L" + X(i) + " " + (T + ph - 8) + " Z", class: "flow" }, svg("title", {}, m.label)));
       });
       var cursor = svg("line", { x1: 0, x2: 0, y1: T, y2: T + ph, class: "cursor", visibility: "hidden" });
@@ -289,6 +324,7 @@
           var shown = p && p.y !== null && p.y !== undefined ? (opts.fmt ? opts.fmt(p.y) : fmtMoney(p.y, ccy)) : "不可用";
           readout.appendChild(h("div", null, s.name + "：" + shown));
         });
+        (opts.marks || []).forEach(function (m) { if (m.x === xs[i] && m.label) readout.appendChild(h("div", null, m.label)); });
       }
       ["mousemove", "mousedown", "touchstart", "touchmove"].forEach(function (e) { hit.addEventListener(e, at, { passive: true }); });
       root.appendChild(hit);
@@ -410,7 +446,7 @@
 
   window.MS = {
     h: h, svg: svg, cell: cell, badge: badge, card: card, note: note, notes: notes, kv: kv, table: table,
-    fmtDec: fmtDec, fmtMoney: fmtMoney, fmtTime: fmtTime, lineChart: lineChart, bandChart: bandChart, legend: legend,
+    fmtDec: fmtDec, fmtPx: fmtPx, fmtMoney: fmtMoney, fmtTime: fmtTime, setNames: setNames, nameOf: nameOf, codeLabel: codeLabel, lineChart: lineChart, bandChart: bandChart, legend: legend,
     registerPanel: function (id, fn) { panels[id] = fn; },
     getPanel: function (id) { return panels[id]; }
   };

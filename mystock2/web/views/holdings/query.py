@@ -18,6 +18,7 @@ from mystock2.ledger.projection import project
 from mystock2.web import common as C
 from mystock2.web import sealing
 from mystock2.web.ledgerdata import load_trades
+from mystock2.web.rowcells import concentration, cost_cells, weight_cell
 from mystock2.web.valuation import latest_close
 
 ZERO = Decimal(0)
@@ -62,14 +63,7 @@ def run(conn, params):
     ai_state = sealing.latest_ai_status_by_code(conn, now)
 
     # 每个币种的已估值市值合计，用于集中度（占该币种持仓市值，币种之间不相加）
-    mv_by_ccy: dict[str, Decimal] = {}
-    missing_by_ccy: dict[str, bool] = {}
-    for c, q in proj.positions.items():
-        ccy = currency_of(c)
-        if prices[c].close is None:
-            missing_by_ccy[ccy] = True
-        else:
-            mv_by_ccy[ccy] = mv_by_ccy.get(ccy, ZERO) + q * prices[c].close
+    mv_by_ccy, missing_by_ccy = concentration(proj.positions, prices)
 
     rows = []
     for code in sorted(set(proj.positions) | {c for c, r in spos.items() if dec(r["qty"]) != 0}):
@@ -79,33 +73,8 @@ def run(conn, params):
         sp = spos.get(code)
         cp = pnl.by_code.get(code)
         mv = qty * px.close if px.close is not None else None
-        # 券商成本（快照原值）
-        broker_cost = C.price_cell(dec(sp["average_cost"]), ccy, tag="券商平均成本") if sp is not None and sp["average_cost"] is not None else \
-            C.na_cell("最近快照没有该标的的平均成本" if sp is not None else "没有快照")
-        diluted = C.price_cell(dec(sp["diluted_cost"]), ccy, tag="券商摊薄成本", title="摊薄成本把已实现盈亏摊入持仓，可为负；它不是持仓的平均成本") \
-            if sp is not None and sp["diluted_cost"] is not None else C.na_cell("最近快照没有摊薄成本")
-        # 本地移动平均成本
-        if cp is None or cp.avg_cost is None:
-            local = C.na_cell("没有可追溯的成本证据（开账持仓无成本，且之后无买入）" if cp is not None or qty else "无持仓")
-            unreal = C.na_cell("本地成本不可用")
-        else:
-            tag = "估算" if cp.cost_estimated else None
-            if cp.unknown_qty > 0:
-                tag = "部分" if tag is None else tag + "·部分"
-            title = []
-            if cp.cost_estimated:
-                title.append("平均成本混有开账快照成本（估算）")
-            if cp.unknown_qty > 0:
-                title.append(f"另有 {C.fmt_qty(cp.unknown_qty)} 股没有成本证据，不在此平均成本内")
-            local = C.price_cell(cp.avg_cost, ccy, tag=tag, title="；".join(title) or None)
-            if px.close is None:
-                unreal = C.na_cell("缺行情")
-            else:
-                u = (px.close - cp.avg_cost) * cp.known_qty
-                unreal = C.money_cell(u, ccy, colored=True, sign=True, tag=tag, title="仅含有成本证据的股份" if cp.unknown_qty > 0 else None)
-        weight = None
-        if mv is not None and not missing_by_ccy.get(ccy) and mv_by_ccy.get(ccy):
-            weight = C.pct_cell(mv / mv_by_ccy[ccy])
+        costs = cost_cells(code, qty, px, sp, cp)
+        weight = weight_cell(code, mv, mv_by_ccy, missing_by_ccy)
         sq = dec(sp["qty"]) if sp is not None else None
         rows.append({
             "code": code, "currency": ccy,
@@ -115,8 +84,7 @@ def run(conn, params):
             "qty_match": None if sq is None else sq == qty,
             "price": C.price_cell(px.close, ccy, tag=f"陈旧 {px.session_date}" if px.stale else None, title=f"收盘日 {px.session_date}") if px.close is not None else C.na_cell(px.reason),
             "market_value": C.money_cell(mv, ccy) if mv is not None else C.na_cell(px.reason),
-            "weight": weight if weight is not None else C.na_cell("缺行情或无市值，无法算集中度"),
-            "broker_cost": broker_cost, "diluted_cost": diluted, "local_cost": local, "unrealized": unreal,
+            "weight": weight, **costs,
             "order": _order_cell(ai_state.get(code)),
         })
 

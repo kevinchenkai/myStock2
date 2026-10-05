@@ -146,7 +146,7 @@ def run(conn, params):
     fills, fees = fills_and_fees(conn, aid)
     if code:
         fills = [f for f in fills if f["code"] == code]
-    rounds, open_lots = build_rounds(fills, fees)
+    rounds, _ = build_rounds(fills, fees)
     metrics = behavior_metrics(cards, rounds)
 
     limit = params.get("limit", 100)
@@ -161,16 +161,13 @@ def run(conn, params):
             ev.append(r["e"])
             rc.append(r["r"])
         srcs.append(C.source("行情（日线）", min(ev) if all(ev) else None, min(rc) if all(rc) else None))
-    unclosed = [{"code": c, "currency": _ccy(c), "lots": [{"date": lot["date"].isoformat(), "qty": C.qty_cell(lot["qty"]),
-                                                          "cost": C.price_cell(lot["cost"], _ccy(c)) if lot["cost"] is not None else C.na_cell("期初库存无成本证据")}
-                                                         for lot in lots]} for c, lots in sorted(open_lots.items())]
     return {
         "account_id": aid, "accounts": [a["account_id"] for a in accts], "code_filter": code,
         "cards": {"title": "逐笔复盘卡", "total": len(cards), "shown": len(card_rows), "rows": card_rows,
                   "note": "数据来自账本与行情，不是重撮合；事实与推测分开；无事前意图则写「动机未记录」。「对照」（AI 单与不操作反事实）未实现。"},
         "behavior": {"title": "行为指标（描述性）", "min_sample": MIN_SAMPLE, "rows": [_metric_row(m) for m in metrics],
                      "note": f"样本 < {MIN_SAMPLE} 显示「{INSUFFICIENT}」，不显示 0，不下确定性结论。"},
-        "rounds": {"title": "诊断回合（FIFO）", "rows": [_round_row(r) for r in rounds], "unclosed": unclosed, "tag": "诊断回合",
-                   "note": "诊断回合按先进先出配对真实成交，用于行为诊断；它不是账本收益口径（盈亏视图用移动平均成本法），两者不可相加或直接比较；未平仓部分不算胜负。"},
+        "rounds": {"title": "诊断回合（FIFO）", "rows": [_round_row(r) for r in rounds], "tag": "诊断回合",
+                   "note": "诊断回合按先进先出配对真实成交，用于行为诊断；它不是账本收益口径（盈亏视图用移动平均成本法），两者不可相加或直接比较。"},
         "_freshness": C.freshness(srcs, ["复盘卡与回合是诊断口径，与账本/记分牌的收益口径不同，分区呈现"]),
     }

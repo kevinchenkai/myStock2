@@ -29,3 +29,5 @@ views:
     params:
       limit: 100
   - id: data_status
+  - id: stock               # 股票详情（弹窗里点代码打开；只读；各块独立，来源缺失只让该块「不可用」）
+    hidden: true

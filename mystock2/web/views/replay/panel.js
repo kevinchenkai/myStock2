@@ -13,7 +13,7 @@ MS.registerPanel("replay", function (root, d) {
     outItems.push("持有窗口内最大不利变动：" + oc.max_adverse.text);
     outItems.push("持有窗口内最大有利变动：" + oc.max_favorable.text);
     outItems.push("库存：成交前 " + x.inventory.before.text + " → 成交后 " + x.inventory.after.text);
-    detailHost.appendChild(MS.card("复盘卡 · " + r.side_text + " " + r.code + " · " + r.date, [
+    detailHost.appendChild(MS.card("复盘卡 · " + r.side_text + " " + MS.codeLabel(r.code) + " · " + r.date, [
       h("div", { class: "cols" }, [
         column("事实", x.facts, "无"),
         column("证据（当时已有）", x.evidence, "无"),
@@ -68,11 +68,6 @@ MS.registerPanel("replay", function (root, d) {
       { key: "holding_days", label: "持有天数", num: true },
       { key: "flags", label: "缺口", render: function (x) { return x.flags.join("；") || "—"; } }
     ], r.rows, { empty: "没有已平仓回合" })];
-  if (r.unclosed.length) {
-    rk.push(MS.note("未平仓部分（不算胜负）：" + r.unclosed.map(function (u) {
-      return u.code + " " + u.lots.map(function (l) { return l.date + " 余 " + l.qty.text; }).join("、");
-    }).join("；")));
-  }
   rk.push(MS.note(r.note));
   root.appendChild(MS.card(r.title, rk));
 });

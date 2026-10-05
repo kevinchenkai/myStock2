@@ -10,9 +10,9 @@ from decimal import Decimal
 
 from mystock2.web import common as C
 from mystock2.web.ledgerdata import load_trades
+from mystock2.web.rowcells import fill_row
 
 ZERO = Decimal(0)
-FEE_KIND_TEXT = {"commission": "佣金", "platform": "平台费", "tax": "税费", "stamp": "印花税", "settlement": "交收费"}
 
 
 def run(conn, params):
@@ -25,28 +25,7 @@ def run(conn, params):
     total = len(fills)
     shown = fills[: params.get("limit", 200)]
 
-    rows = []
-    for f in shown:
-        ccy = f["currency"]
-        # 费用及归属：每个费用事件单独列出；没有费用事件＝「费用未入账」而不是 0
-        if f["fees"]:
-            fee_text = "；".join(f"{FEE_KIND_TEXT.get(i['kind'], i['kind'])} {C.fmt_money(i['amount'], ccy)}" for i in f["fees"])
-            fee = C.money_cell(f["fee_total"], ccy, title=fee_text, tag=None)
-            fee_detail = fee_text
-            net = f["cash_delta"] - f["fee_total"]
-        else:
-            fee = C.na_cell("该成交没有费用事件入账（可能晚到），不记为 0")
-            fee_detail = "未入账"
-            net = None
-        rows.append({
-            "event_at": f["event_at"], "code": f["code"], "side": C.text_cell("买入" if f["side"] == "BUY" else "卖出"),
-            "qty": C.qty_cell(f["qty"]), "price": C.price_cell(f["price"], ccy),
-            "notional": C.money_cell(abs(f["cash_delta"]), ccy),
-            "fee": fee, "fee_detail": fee_detail,
-            "net_cashflow": C.money_cell(net, ccy, sign=True, reason="费用未入账"),      # 现金流水：中性色，不着色
-            "currency": ccy, "sources": f["sources"], "versions": f["versions"], "corrected": f["versions"] > 1,
-            "pre_opening": f["pre_opening"], "deal_id": f["deal_id"] or "",
-        })
+    rows = [fill_row(f) for f in shown]
 
     # 逐币种：成交净现金流合计（只在同币种内相加）；只含已入账费用
     totals: dict[str, Decimal] = {}

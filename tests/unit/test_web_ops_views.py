@@ -443,7 +443,7 @@ def test_replay_rounds_are_labelled_diagnostic_and_not_the_ledger_pnl_basis(tmp_
     nv = next(r for r in rd["rows"] if r["code"] == "US.NVDA")
     assert nv["pnl"]["na"] is True and any("成本未知" in f for f in nv["flags"])                          # 期初库存无成本证据：不给盈亏
     assert nv["cost_unit"]["na"] is True and nv["currency"] == "USD"
-    assert any(u["code"] == "HK.00700" for u in rd["unclosed"])                                          # 未平仓部分单列，不算胜负
+    assert "unclosed" not in rd and "未平仓" not in json.dumps(rd, ensure_ascii=False)                    # 「未平仓部分」块已移除（复盘页减负）
     # 与盈亏视图分区：回合行里没有「已实现盈亏」口径字段
     assert "realized" not in json.dumps(rd)
 

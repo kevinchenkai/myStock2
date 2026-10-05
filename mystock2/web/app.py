@@ -23,7 +23,7 @@ from mystock2.core import db as dbmod
 from mystock2.core.config import REPO_ROOT, Config, ConfigError, is_loopback
 from mystock2.core.money import to_db
 from mystock2.core.timeutil import iso_utc, utc_now
-from mystock2.web import registry
+from mystock2.web import names, registry
 from mystock2.web.common import ViewUnavailable, build_header
 
 log = logging.getLogger("mystock2.web")
@@ -97,6 +97,8 @@ def create_app(config: Config, *, extra_views_dirs: list[Path] | tuple[Path, ...
         resp.headers["Referrer-Policy"] = "no-referrer"
         if request.path.startswith("/api/") or request.path == "/" or request.path.endswith("/panel.js"):
             resp.headers["Cache-Control"] = "no-store"
+        elif request.path.startswith("/static/"):
+            resp.headers["Cache-Control"] = "no-cache"            # 每次校验（ETag）：更新后不会拿旧的 ui.js 去配新的面板脚本
         return resp
 
     @app.get("/")
@@ -182,9 +184,12 @@ def _run_view(state: WebState, entry: registry.ViewEntry) -> tuple[Response, int
         if not isinstance(result, dict):
             raise TypeError("query.run 必须返回 dict")
         fresh = result.pop("_freshness", None)
+        names.annotate(conn, result)                              # 标的中文名（展示用；查不到不报错）
         return jsonify(_envelope(state, entry, params, "ok", now, data=result, fresh=fresh))
     except ViewUnavailable as exc:
         return unavailable(exc.code, exc.message)
+    except registry.ViewError as exc:                           # 视图自己校验的参数（如 stock 的 code）不合法
+        return _err(400, "bad_param", str(exc))
     except sqlite3.OperationalError as exc:
         if "no such table" in str(exc) or "no such column" in str(exc):
             return unavailable("schema_missing", "库结构不完整，请先 db migrate")

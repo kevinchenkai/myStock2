@@ -13,7 +13,7 @@ STATIC = Path(registry.__file__).resolve().parent / "static"
 CSS = (STATIC / "app.css").read_text(encoding="utf-8")
 HTML = (STATIC / "index.html").read_text(encoding="utf-8")
 JS_FILES = sorted(STATIC.glob("*.js")) + sorted(registry.BUILTIN_VIEWS_DIR.glob("*/panel.js"))
-BUILTIN = ["account_overview", "holdings", "trades", "pnl", "equity_trend", "fx", "tickets", "scoreboard", "forecast", "replay", "data_status"]
+BUILTIN = ["account_overview", "holdings", "trades", "pnl", "equity_trend", "fx", "tickets", "scoreboard", "forecast", "replay", "data_status", "stock"]
 
 
 def block(selector_start: str) -> str:
@@ -119,6 +119,7 @@ def test_static_assets_and_index_are_served(tmp_path):
         assert c.get(path).status_code == 200, path
     assert b"viewport" in c.get("/").data
     assert c.get("/static/../../etc/passwd").status_code in (404, 400)
+    assert c.get("/static/ui.js").headers["Cache-Control"] == "no-cache"          # 静态脚本每次校验，避免更新后新旧脚本混用
 
 
 node = shutil.which("node")
@@ -224,3 +225,116 @@ def test_table_sorting_and_market_filter_behaviour():
     assert [c for c in o["codeAsc"] if c != "汇总"] == ["HK.00700", "HK.09926", "US.NVDA", "US.TSLA"]       # 文本列升序
     assert set(o["hk"]) == {"HK.00700", "HK.09926", "汇总"} and set(o["us"]) == {"US.NVDA", "US.TSLA", "汇总"}
     assert o["stored"] == "US"
+
+
+# ---------------------------------------------------------------- M3d：中文名、点击代码弹出详情、买卖标记
+FAKE_DOM = r"""
+const vm = require('vm'), fs = require('fs');
+class El {
+  constructor(t){ this.tag=t; this.children=[]; this.attrs={}; this.listeners={}; this.className=''; this._text=''; this.nodeType=1; this.value=''; this.parentNode=null; this.style={}; }
+  setAttribute(k,v){ this.attrs[k]=v; } appendChild(c){ c.parentNode=this; this.children.push(c); return c; }
+  addEventListener(e,f){ (this.listeners[e]=this.listeners[e]||[]).push(f); }
+  set textContent(v){ this._text=String(v); this.children=[]; } get textContent(){ return this._text + this.children.map(c=>c.textContent).join(''); }
+  fire(e, ev){ (this.listeners[e]||[]).forEach(f=>f(ev||{})); } click(ev){ this.fire('click', ev); }
+  getBoundingClientRect(){ return { left: 0, width: 600 }; }
+  find(pred, out=[]){ if(pred(this)) out.push(this); this.children.forEach(c=>c.find&&c.find(pred,out)); return out; }
+}
+const store = {};
+const ctx = { window: { localStorage: { getItem:k=>store[k]||null, setItem:(k,v)=>{store[k]=v;} }, addEventListener(){} }, console,
+  document: { createElement: t => new El(t), createElementNS: (n,t) => new El(t), createTextNode: s => { const e=new El('#text'); e._text=String(s); return e; },
+              body: { contains: () => true } } };
+vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), ctx);
+const MS = ctx.window.MS;
+"""
+
+
+@pytest.mark.skipif(node is None, reason="需要 node")
+def test_code_column_shows_chinese_name_and_click_opens_stock_detail_without_touching_sort_or_filter():
+    script = FAKE_DOM + r"""
+    const opened = [];
+    MS.openStock = (code) => opened.push(code);
+    MS.setNames({ 'US.TSLA': '字典里的名字' });
+    const rows = [
+      { code: 'US.NVDA', code_name: '合成英伟达', qty: {text:'66', v:'66'} },
+      { code: 'HK.00700', code_name: '合成腾讯', qty: {text:'11,807', v:'11807'} },
+      { code: 'US.TSLA', qty: {text:'56', v:'56'} },                 // 行里没有 code_name：回退到 MS.setNames 的字典
+      { code: 'HK.09926', qty: {text:'1,000', v:'1000'} },           // 没有名称：只显示代码，不报错
+      { code: '汇总', qty: {text:'—', na:true} },
+    ];
+    const host = MS.table([{key:'code',label:'标的'},{key:'qty',label:'数量',num:true}], rows);
+    const tds = () => host.find(e=>e.tag==='tbody')[0].children.map(tr=>tr.children[0]);
+    const links = () => host.find(e=>e.attrs && e.attrs.role==='button' && e.className==='code-link');
+    const out = {};
+    out.cells = tds().map(td=>td.textContent);
+    out.nLinks = links().length;                                   // 「汇总」不是代码，不可点
+    out.names = host.find(e=>e.className && e.className.indexOf('code-name')>=0).map(e=>e.textContent);
+    links()[0].click({ stopPropagation(){ out.stopped = true; } });
+    links()[1].fire('keydown', { key: 'Enter', preventDefault(){}, stopPropagation(){} });
+    links()[2].fire('keydown', { key: 'a', preventDefault(){}, stopPropagation(){} });     // 其他键不触发
+    out.opened = opened.slice();
+    host.find(e=>e.tag==='th')[1].fire('click');                    // 排序仍只用代码/数值，不受名称影响
+    out.afterSort = tds().map(td=>td.textContent);
+    host.find(e=>e.tag==='button').filter(b=>b.textContent==='港股')[0].click();     // 市场筛选仍只看 code 前缀
+    out.hk = tds().map(td=>td.textContent);
+    console.log(JSON.stringify(out));
+    """
+    r = subprocess.run([node, "-e", script, str(STATIC / "ui.js")], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    import json
+    o = json.loads(r.stdout.strip())
+    assert o["cells"] == ["US.NVDA合成英伟达", "HK.00700合成腾讯", "US.TSLA字典里的名字", "HK.09926", "汇总"]
+    assert o["nLinks"] == 4 and o["names"] == ["合成英伟达", "合成腾讯", "字典里的名字"] and o["stopped"] is True
+    assert o["opened"] == ["US.NVDA", "HK.00700"]
+    assert o["afterSort"][0].startswith("HK.00700") and o["afterSort"][1].startswith("HK.09926")        # 数量降序：11,807 / 1,000 / 66 / 56
+    assert [c[:8] for c in o["hk"] if c != "汇总"] == ["HK.00700", "HK.09926"]
+
+
+@pytest.mark.skipif(node is None, reason="需要 node")
+def test_line_chart_draws_buy_sell_marks_at_trade_price_and_lists_them_in_the_readout():
+    script = FAKE_DOM + r"""
+    const host = new El('div');
+    const xs = ['2026-03-02','2026-03-03','2026-03-04','2026-03-05'];
+    MS.lineChart(host, { xs, ccy: 'USD', fmt: v => MS.fmtPx(v), height: 200,
+      series: [{ name: '收盘价', color: '#000', points: ['100','110','105','108'].map(y => ({ y })) }],
+      marks: [ { x: '2026-03-03', side: 'BUY', y: '105.5', label: 'B 标记说明' }, { x: '2026-03-04', side: 'SELL', y: '107', label: 'S 标记说明' },
+               { x: '2099-01-01', side: 'BUY', y: '1', label: '不在图上' }, { x: '2026-03-05', label: '外部资金流说明' } ] });
+    const buys = host.find(e=>e.attrs['class']==='mark-buy'), sells = host.find(e=>e.attrs['class']==='mark-sell'), flows = host.find(e=>e.attrs['class']==='flow');
+    const readout = host.children[1];
+    const hit = host.find(e=>e.tag==='rect' && e.attrs.fill==='transparent')[0];
+    hit.fire('mousemove', { clientX: 52 + (600 - 52 - 8) / 3 * 1 });                     // 第 2 个点（03-03）
+    const out = { buys: buys.length, sells: sells.length, flows: flows.length, buyTitle: buys[0].children[0].textContent, readout: readout.textContent,
+                  px: [MS.fmtPx('105.5'), MS.fmtPx('100'), MS.fmtPx('0.12345'), MS.fmtPx('1234.5')] };
+    console.log(JSON.stringify(out));
+    """
+    r = subprocess.run([node, "-e", script, str(STATIC / "ui.js")], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    import json
+    o = json.loads(r.stdout.strip())
+    assert (o["buys"], o["sells"], o["flows"]) == (1, 1, 1)                            # 不在 xs 内的标记不画；无 side 的仍是原来的底部小三角
+    assert o["buyTitle"] == "B 标记说明" and "B 标记说明" in o["readout"] and "S 标记说明" not in o["readout"]      # 读数只列当日标记
+    assert o["px"] == ["105.50", "100.00", "0.1234", "1,234.50"]
+
+
+def test_stock_modal_contract_in_app_js_and_css():
+    app = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert "MS.openStock = openStock" in app and "/api/v/stock?code=" in app
+    assert '"Escape"' in app and "closeStock" in app and "modal-backdrop" in app and 'role: "dialog"' in app and '"aria-modal": "true"' in app
+    assert "downOnBackdrop" in app and 'addEventListener("hashchange"' in app          # 点背景可关；换页时关闭
+    open_fn = app[app.index("function openStock"): app.index("MS.openStock = openStock")]
+    assert "location" not in open_fn and "pushState" not in open_fn, "弹窗不得改变 hash/历史（页面可返回性不变）"
+    assert "body.classList.add(\"modal-open\")" in app and "focus()" in app            # 打开时聚焦、关闭后恢复焦点
+    assert re.search(r"\.modal-backdrop\s*\{[^}]*position:\s*fixed", CSS)
+    narrow = CSS[CSS.index("@media (max-width: 720px) {\n  .modal-backdrop"):]
+    assert "height: 100%" in narrow and "border-radius: 0" in narrow and "max-width: none" in narrow   # 窄屏全屏
+    assert ".modal-head" in CSS and ".modal-body" in CSS and "overflow-y: auto" in CSS             # 页头（关闭按钮）固定，正文单独滚动
+
+
+def test_stock_panel_uses_server_cells_and_never_claims_tickets():
+    t = (registry.BUILTIN_VIEWS_DIR / "stock" / "panel.js").read_text(encoding="utf-8")
+    assert 'MS.registerPanel("stock"' in t and "事后重建" in t and "非前向" in t
+    assert "不可用" in t and "意图，不是成交" in t
+    assert "ticket" not in t.lower()
+    assert "innerHTML" not in t and "Number(" not in t and "parseFloat" not in t and "toFixed" not in t
+    mk = CSS[CSS.index(".chart .mark-buy"):]
+    assert "var(--s1)" in mk and "var(--s4)" in mk and "var(--up)" not in mk.split(".mk-sell")[0]    # 买卖标记用非红非绿的曲线色

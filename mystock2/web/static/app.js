@@ -44,7 +44,7 @@
       if (p.name === "account") return;                                    // 账户选择器见下
       if (p.name === "symbol" && data && data.codes) {   // 标的选择器：选项来自视图数据（不是配置里的固定列表）
         var ssel = h("select", { "aria-label": "symbol" }, [h("option", { value: "", text: "（自动）" })].concat(data.codes.map(function (c) {
-          return h("option", { value: c, selected: c === data.symbol ? true : null, text: c });
+          return h("option", { value: c, selected: c === data.symbol ? true : null, text: MS.codeLabel(c) });
         })));
         ssel.addEventListener("change", function () { var np = Object.assign({}, params); np.symbol = ssel.value; go(view.id, np); });
         box.appendChild(field("symbol", "标的", ssel));
@@ -68,10 +68,7 @@
     }
   }
 
-  function renderFresh(header) {
-    var box = $("fresh");
-    box.textContent = "";
-    if (!header) return;
+  function freshCard(header) {
     var s = header.staleness || {}, kind = s.label === "新鲜" ? "fresh-ok" : s.label === "陈旧" ? "fresh-stale" : "fresh-unknown";
     var grid = h("div", { class: "fresh" }, [
       h("div", null, [h("div", { class: "k", text: "数据模式" }), h("div", { class: "v", text: header.data_mode_label || "未知" })]),
@@ -86,7 +83,13 @@
           { key: "collected_at", label: "采集时间", render: function (r) { return MS.fmtTime(r.collected_at); } }, { key: "text", label: "陈旧度" }], header.sources)]));
     }
     if (header.notes && header.notes.length) kids.push(MS.notes(header.notes));
-    box.appendChild(h("div", { class: "card" }, kids));
+    return h("div", { class: "card" }, kids);
+  }
+  function renderFresh(header) {
+    var box = $("fresh");
+    box.textContent = "";
+    if (!header) return;
+    box.appendChild(freshCard(header));
   }
 
   var loaded = {};
@@ -121,6 +124,7 @@
     getJSON("/api/v/" + encodeURIComponent(view.id) + (qs ? "?" + qs : "")).then(function (payload) {
       if (my !== seq) return;
       root.textContent = "";
+      if (payload.data && payload.data.code_names) MS.setNames(payload.data.code_names);
       renderParams(view, payload, route.params);
       renderFresh(payload.header || null);
       if (payload.status === "ok") {
@@ -140,6 +144,70 @@
     });
   }
 
+
+  /* ---- 股票详情弹窗：点任何表格里的代码打开；只读视图 stock 取数并用其面板渲染。
+     不改 hash（页面与可返回性不受影响）；Esc / 点背景 / 关闭按钮可关；窄屏全屏；关闭后焦点回到触发处。 ---- */
+  var stockModal = null, stockSeq = 0;
+  function closeStock() {
+    if (!stockModal) return;
+    var m = stockModal;
+    stockModal = null; stockSeq += 1;
+    document.removeEventListener("keydown", m.onKey, true);
+    if (m.root.parentNode) m.root.parentNode.removeChild(m.root);
+    document.body.classList.remove("modal-open");
+    try { if (m.opener && m.opener.focus && document.body.contains(m.opener)) m.opener.focus(); } catch (e) { /* 焦点恢复失败不影响使用 */ }
+  }
+  function openStock(code, opener) {
+    closeStock();
+    var my = ++stockSeq;
+    var body = h("div", { class: "modal-body" }, h("p", { class: "muted", text: "加载中…" }));
+    var title = h("h2", { id: "stock-modal-title", text: MS.codeLabel(code) });
+    var closeBtn = h("button", { type: "button", class: "btn modal-close", "aria-label": "关闭详情", text: "关闭 ✕" });
+    var dialog = h("div", { class: "modal", role: "dialog", "aria-modal": "true", "aria-labelledby": "stock-modal-title" }, [h("div", { class: "modal-head" }, [title, closeBtn]), body]);
+    var backdrop = h("div", { class: "modal-backdrop" }, dialog);
+    var downOnBackdrop = false;
+    backdrop.addEventListener("mousedown", function (e) { downOnBackdrop = e.target === backdrop; });
+    backdrop.addEventListener("click", function (e) { if (downOnBackdrop && e.target === backdrop) closeStock(); downOnBackdrop = false; });
+    closeBtn.addEventListener("click", closeStock);
+    function onKey(e) {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeStock(); return; }
+      if (e.key !== "Tab") return;
+      var f = Array.prototype.filter.call(dialog.querySelectorAll("a[href],button,select,input,[tabindex]"), function (x) { return x.getAttribute("tabindex") !== "-1" && !x.disabled; });
+      if (!f.length) return;
+      var first = f[0], last = f[f.length - 1];
+      if (!dialog.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+      else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+    document.addEventListener("keydown", onKey, true);
+    document.body.appendChild(backdrop);
+    document.body.classList.add("modal-open");
+    stockModal = { root: backdrop, opener: opener || null, onKey: onKey };
+    closeBtn.focus();
+    getJSON("/api/v/stock?code=" + encodeURIComponent(code)).then(function (payload) {
+      if (my !== stockSeq) return;
+      body.textContent = "";
+      if (payload.status !== "ok") {
+        var err = payload.error || {};
+        showState(body, payload.status === "unavailable" ? "unavailable" : "error", payload.status === "unavailable" ? "数据不可用" : "详情无法显示", err.message || "未知错误", err.code);
+        return;
+      }
+      if (payload.data && payload.data.code_names) MS.setNames(payload.data.code_names);
+      title.textContent = MS.codeLabel(code);
+      if (payload.header) body.appendChild(freshCard(payload.header));
+      return loadPanel("stock").then(function () {
+        if (my !== stockSeq) return;
+        try { MS.getPanel("stock")(body, payload.data, { params: { code: code }, applied: payload.params, header: payload.header, view: { id: "stock" }, modal: true, go: function () {} }); }
+        catch (e) { showState(body, "error", "面板渲染失败", String(e && e.message || e)); }
+      });
+    }).catch(function (e) {
+      if (my !== stockSeq) return;
+      body.textContent = "";
+      showState(body, "error", "详情无法加载", String(e && e.message || e));
+    });
+  }
+  MS.openStock = openStock;
+
   function init() {
     var btn = $("theme-btn");
     if (btn) btn.addEventListener("click", function () { MSTheme.cycle(); });
@@ -151,7 +219,7 @@
       if (j.db && j.db.state === "missing") msgs.push(j.db.message);
       (j.problems || []).forEach(function (p) { msgs.push("视图问题（" + p.view + "）：" + p.message); });
       if (msgs.length) { banner.hidden = false; banner.textContent = msgs.join("　|　"); }
-      window.addEventListener("hashchange", render);
+      window.addEventListener("hashchange", function () { closeStock(); render(); });
       render();
     }).catch(function (e) {
       var banner = $("banner"); banner.hidden = false; banner.textContent = "无法连接服务：" + e;

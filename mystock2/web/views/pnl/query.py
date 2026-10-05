@@ -12,6 +12,7 @@ from decimal import Decimal
 from mystock2.ledger.pnl import QUALITY_TEXT, compute_realized_pnl, trade_net_cashflow
 from mystock2.web import common as C
 from mystock2.web.ledgerdata import load_trades
+from mystock2.web.rowcells import sell_pnl_cell
 
 ZERO = Decimal(0)
 
@@ -60,11 +61,7 @@ def run(conn, params):
     sells = []
     for s in sorted(res.sells, key=lambda s: s.at, reverse=True):
         label = QUALITY_TEXT[s.quality]
-        if s.realized is None:
-            pnl_cell = C.na_cell(s.note or "没有成本证据")
-        else:
-            pnl_cell = C.money_cell(s.realized, s.currency, colored=True, sign=True, tag=None if s.quality == "exact" else label,
-                                    title=s.note or None)
+        pnl_cell = sell_pnl_cell(s)
         sells.append({"at": s.at, "code": s.code, "qty": C.qty_cell(s.qty), "price": C.price_cell(s.price, s.currency),
                       "avg_cost": C.price_cell(s.avg_cost, s.currency) if s.avg_cost is not None else C.na_cell("没有成本证据"),
                       "net_proceeds": C.money_cell(s.net_proceeds, s.currency), "realized": pnl_cell, "quality": s.quality,
