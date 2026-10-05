@@ -1,0 +1,39 @@
+config/protocol.example.yaml
+  s_97d138eaf84b50::t_128165c7dd01ff 1-3,5-6,8-9,11,13,15-46
+scripts/explore_lgbm_vs_baseline.py
+  s_97d138eaf84b50::t_265c17581f3365 16
+config/fees.example.yaml
+  s_97d138eaf84b50::t_128165c7dd01ff 1-5
+mystock2/cli/ops.py
+  s_97d138eaf84b50::t_9a2abe96554a2a 585-626,721-727
+  s_97d138eaf84b50::t_85ebc01584025a 502-530,703-709
+tests/integration/test_v1_import.py
+  s_97d138eaf84b50::t_9a2abe96554a2a 137-168
+docs/guides/cutover-runbook_claude_20261005.md
+  s_97d138eaf84b50::t_bd58ecf23af2b6 1-49
+config/futu_cashflow_map.example.yaml
+  s_97d138eaf84b50::t_128165c7dd01ff 1-5
+docs/guides/real-data-startup_claude_20261005.md
+  s_97d138eaf84b50::t_bd58ecf23af2b6 1-94
+  s_97d138eaf84b50::t_a619068ec8c635 95-99
+tests/integration/test_daily_flow.py
+  s_97d138eaf84b50::t_85ebc01584025a 195-219
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_8d72b0dd98ba1c 63-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "9d969a7f32563ec319e3eede3b0055a4a72987da",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
