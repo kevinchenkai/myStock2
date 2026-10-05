@@ -51,3 +51,4 @@
 | M0b | V1 库 schema/行数、备份演练（需授权访问 V1 运行库） | 待授权 |
 | M2a | 账本（最小前向包）：核心逻辑与合成测试完成，回执 [m2a-ledger-core](records/m2a-ledger-core_claude_20261005.md)；Futu 采集与真实对账待授权与 M0a | 进行中 |
 | M4 | 行情与预测基线：回执 [m4-market-baseline](records/m4-market-baseline_claude_20261005.md) | ✅ 已完成（合成数据＋公开行情冒烟） |
+| M5 | 记分牌：引擎/指标/统计/持久化完成，回执 [m5-scoreboard](records/m5-scoreboard_claude_20261005.md)；页面与 CLI 待 M3/M6 | 核心完成 |

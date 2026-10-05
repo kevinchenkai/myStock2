@@ -47,6 +47,14 @@ TABLE_OWNERS: dict[str, str] = {
     "evidence_snapshot": "market",
     "security_rule": "instruments",
     "prediction_version": "forecast",
+    # scoreboard（M5）
+    "comparison_batch": "scoreboard",
+    "strategy_line": "scoreboard",
+    "eval_run": "scoreboard",
+    "sleeve_daily": "scoreboard",
+    "line_state": "scoreboard",
+    "sim_fill": "scoreboard",
+    "run_cost": "scoreboard",
 }
 
 _WRITE_ACTIONS = {sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE, sqlite3.SQLITE_DELETE}
