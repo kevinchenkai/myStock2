@@ -8,16 +8,17 @@ version = "0.1.0"
 description = "myStock2：港美股「账本·透视·教练·记分牌」系统"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
-dependencies = ["PyYAML>=6.0", "Flask>=3.0", "yfinance==1.7.0"]
+dependencies = ["PyYAML>=6.0", "Flask>=3.0", "yfinance==1.7.0", "numpy>=1.26", "lightgbm>=4.0"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "hypothesis>=6", "ruff>=0.5", "numpy>=1.26"]
+dev = ["pytest>=8", "hypothesis>=6", "ruff>=0.5"]
 
 [tool.setuptools.packages.find]
 include = ["mystock2*"]
 
 [tool.setuptools.package-data]
 "mystock2.core" = ["data/calendars/*.csv", "data/calendars/*.md"]
+"mystock2.web" = ["static/*", "views/*/*.yaml", "views/*/*.js", "views/*/*.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

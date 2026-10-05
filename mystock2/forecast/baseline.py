@@ -50,6 +50,7 @@ class Bar:
     low: Decimal
     close: Decimal            # 原始收盘价
     adj_close: Decimal | None
+    volume: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -65,7 +66,7 @@ class Prediction:
 
 def bars_from_rows(rows) -> list[Bar]:
     return [Bar(date.fromisoformat(r["session_date"]), dec(r["open"]), dec(r["high"]), dec(r["low"]), dec(r["close"]),
-                dec(r["adj_close"]) if r["adj_close"] is not None else None) for r in rows]
+                dec(r["adj_close"]) if r["adj_close"] is not None else None, dec(r["volume"]) if r["volume"] is not None else None) for r in rows]
 
 
 def _quantile(sorted_vals: list[float], q: float) -> float:

@@ -1,0 +1,16 @@
+title: 资产趋势
+description: 三条曲线分开命名——持仓市值、账户权益、剔除外部资金流的收益；缺行情的日子显式标缺口，不连线；入金当天不显示为收益。
+order: 50
+data_mode: daily
+stale_after_hours: 72
+params:
+  account:
+    type: str
+    default: ""
+    description: 账户 id（留空＝第一个账户）
+  max_points:
+    type: int
+    default: 250
+    min: 5
+    max: 2000
+    description: 每个币种最多显示最近多少个交易日

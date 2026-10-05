@@ -13,7 +13,7 @@ from datetime import date
 from mystock2.core import calendars as cal
 from mystock2.core.db import atomic
 from mystock2.core.timeutil import EvidenceTimes, check_time_chain, ensure_utc, iso_utc, utc_now
-from mystock2.forecast.baseline import FEATURE_VERSION, MODEL_VERSION, BaselineParams, Prediction, prediction_fields
+from mystock2.forecast.baseline import FEATURE_VERSION, MODEL_VERSION, Prediction, prediction_fields
 from mystock2.instruments.code_map import market_of
 from mystock2.market.evidence import verify_inputs
 
@@ -22,8 +22,9 @@ class VersionError(ValueError):
     pass
 
 
-def record_prediction(conn: sqlite3.Connection, code: str, pred: Prediction, params: BaselineParams, input_snapshot_ids: list[str],
-                      *, input_cutoff_at, generated_at, available_at, source_tag: str) -> str:
+def record_prediction(conn: sqlite3.Connection, code: str, pred: Prediction, params, input_snapshot_ids: list[str],
+                      *, input_cutoff_at, generated_at, available_at, source_tag: str, model_version: str = MODEL_VERSION,
+                      feature_version: str = FEATURE_VERSION) -> str:
     if source_tag not in ("forward", "rebuilt"):
         raise VersionError("source_tag 必须是 forward 或 rebuilt")
     market = market_of(code)
@@ -38,7 +39,7 @@ def record_prediction(conn: sqlite3.Connection, code: str, pred: Prediction, par
         raise VersionError("拒绝写入预测版本：" + "; ".join(problems))
     fields = prediction_fields(pred)
     body = {"code": code, "as_of_session": pred.as_of_session.isoformat(), "target_session": target.isoformat(),
-            "model_version": MODEL_VERSION, "feature_version": FEATURE_VERSION, "params": params.as_dict(), "fields": fields,
+            "model_version": model_version, "feature_version": feature_version, "params": params.as_dict(), "fields": fields,
             "inputs": sorted(input_snapshot_ids), "input_cutoff_at": iso_utc(input_cutoff_at), "source_tag": source_tag}
     h = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
     pid = h[:24]
@@ -49,7 +50,7 @@ def record_prediction(conn: sqlite3.Connection, code: str, pred: Prediction, par
             "INSERT INTO prediction_version(prediction_id, code, as_of_session, target_session, model_version, feature_version, params_json, y_low, y_high, "
             "low_price, high_price, scale, n_train, input_snapshot_ids, input_cutoff_at, generated_at, available_at, source_tag, content_hash, created_at) "
             "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (pid, code, body["as_of_session"], body["target_session"], MODEL_VERSION, FEATURE_VERSION, json.dumps(params.as_dict(), sort_keys=True),
+            (pid, code, body["as_of_session"], body["target_session"], model_version, feature_version, json.dumps(params.as_dict(), sort_keys=True),
              fields["y_low"], fields["y_high"], fields["low_price"], fields["high_price"], fields["scale"], fields["n_train"],
              json.dumps(sorted(input_snapshot_ids)), iso_utc(input_cutoff_at), iso_utc(generated_at), iso_utc(available_at), source_tag, h, iso_utc(utc_now())))
     return pid

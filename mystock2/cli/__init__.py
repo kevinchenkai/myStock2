@@ -59,6 +59,18 @@ def _cmd_universe_check(args) -> int:
     return 0 if rep.ok else 2
 
 
+def _cmd_web(args) -> int:
+    """启动只读 Web（仅回环；库不存在时页面提示先 db migrate，而不是崩溃）。"""
+    from mystock2.web.app import serve
+
+    cfg = load_config(args.config)
+    if not cfg.db_path.exists():
+        print(f"提示：库不存在（{cfg.db_path}），页面将提示先 db migrate；Web 只读，不会创建数据库", file=sys.stderr)
+    print(f"myStock2 Web（只读）: http://{cfg.web.host}:{cfg.web.port}/  （Ctrl+C 停止）", file=sys.stderr)
+    serve(cfg)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="mystock2", description="myStock2：账本·透视·教练·记分牌")
     p.add_argument("--config", help="配置文件路径（默认 config.yaml，缺失时回退 config.example.yaml）")
@@ -68,6 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
     d = sub.add_parser("db", help="数据库命令").add_subparsers(dest="dbcmd", required=True)
     d.add_parser("migrate", help="应用迁移").set_defaults(fn=_cmd_db_migrate)
     d.add_parser("status", help="显示 schema 版本").set_defaults(fn=_cmd_db_status)
+    sub.add_parser("web", help="启动只读 Web（回环地址；端口见 web.port，开发期 8889）").set_defaults(fn=_cmd_web)
     u = sub.add_parser("universe", help="标的名单").add_subparsers(dest="ucmd", required=True)
     c = u.add_parser("check", help="校验名单")
     c.add_argument("--file", help="名单文件（默认 config/local/universe.yaml）")

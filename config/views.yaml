@@ -1,2 +1,21 @@
-# 视图启用/顺序/默认参数（M3 视图框架读取）。
-views: []
+# 视图启用/隐藏/顺序/默认参数（M3 视图框架读取；用户级自定义放这里，不进代码）。
+#
+# - 顺序＝本列表中的位置；未列出的视图（例如新增的视图文件夹）默认启用，按各自 view.yaml 的 order 排在其后。
+# - enabled: false  视图停用（导航不显示，/api/v/<id> 返回 404）。
+# - hidden: true    视图不在导航显示，但仍可通过 #/<id> 直接访问。
+# - params          覆盖 view.yaml 里声明的参数默认值（未声明的参数会被忽略并在 /api/views 的 problems 中提示）。
+views:
+  - id: account_overview
+    params:
+      base_ccy: ""          # 留空＝不合计；可选 USD / HKD / CNY（选了才合计，且须有可用汇率）
+  - id: holdings
+  - id: trades
+    params:
+      limit: 200
+  - id: pnl
+  - id: equity_trend
+    params:
+      max_points: 250
+  - id: fx
+    params:
+      pair: USDHKD

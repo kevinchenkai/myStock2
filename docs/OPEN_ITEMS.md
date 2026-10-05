@@ -56,3 +56,7 @@
 | M7 | 复盘：卡片/回合/行为指标完成，回执 [m7-replay](records/m7-replay_claude_20261005.md)；「不操作」反事实待真实数据 | ✅ 已完成（合成数据） |
 | M9 | LLM 否决（人工通道）：回执 [m9-llm-veto](records/m9-llm-veto_claude_20261005.md)；API 通道（D7）未做 | ✅ 已完成（合成数据） |
 | M2b | V1 历史导入器：回执 [m2b-v1-import](records/m2b-v1-import_claude_20261005.md)；**真实导入待 M0b 授权** | 代码完成，待授权 |
+| M3 | 透视（Web）：框架＋六个视图完成，回执 [m3-web-views](records/m3-web-views_claude_20261005.md)；LN-07（K 线/资金流向/公司资料）未做 | ✅ 已完成（合成数据） |
+| M3-a | `snapshot_position.cost_basis` 口径：Web 按**每股**处理；V1 导入器与 Futu 采集器按每股成本价（V1/富途 `cost_price`）写入，口径一致，**真实首跑须核对** | 待核对（真实数据） |
+| M3-b | 盈亏成本口径（移动平均；无证据/估算/精确三类按比例消耗；见 `ledger/pnl.py` 头注释）需负责人确认 | 待确认 |
+| M8 | LightGBM+CQR 候选线：预测器与评估框架完成；探索性评估未过门槛（+0.57%，3/6），**不晋级**；回执 [m8-lgbm-cqr](records/m8-lgbm-cqr_claude_20261005.md) | 完成（负结果） |

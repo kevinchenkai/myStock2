@@ -13,5 +13,6 @@ dependencies:
       - pytest>=8
       - hypothesis>=6
       - ruff>=0.5
-      - numpy>=1.26      # 测试中独立核对预测器
+      - numpy>=1.26      # LightGBM 候选线与测试
+      - lightgbm>=4.0    # M8 候选线（原生 API，不依赖 scikit-learn；缺失时明确失败，不静默回退）
       # 后续里程碑按需加入：futu-api（M2a）、scikit-learn/lightgbm（M8），加入时锁定版本并说明理由

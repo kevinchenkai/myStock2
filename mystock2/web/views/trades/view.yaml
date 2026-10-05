@@ -1,0 +1,20 @@
+title: 交易流水
+description: 成交流水（账本中的有效版本）：币种、费用及其归属、来源数、是否被更正；开账日前的成交只作描述。
+order: 30
+data_mode: cached
+stale_after_hours: 72
+params:
+  account:
+    type: str
+    default: ""
+    description: 账户 id（留空＝第一个账户）
+  code:
+    type: str
+    default: ""
+    description: 只看某个标的（完整富途代码，如 US.NVDA）
+  limit:
+    type: int
+    default: 200
+    min: 1
+    max: 2000
+    description: 最多显示多少笔（最新在前）

@@ -1,0 +1,21 @@
+title: 账户总览
+description: 逐币种现金、持仓市值与权益（原币种）；选了基准币种才合计，并显示汇率来源与时间；附对账状态与未对账项。
+order: 10
+data_mode: cached
+stale_after_hours: 72
+params:
+  account:
+    type: str
+    default: ""
+    description: 账户 id（留空＝第一个账户）
+  base_ccy:
+    type: str
+    default: ""
+    choices: ["", "USD", "HKD", "CNY"]
+    description: 基准币种（留空＝不合计，只看原币种）
+  fx_max_stale_days:
+    type: int
+    default: 4
+    min: 0
+    max: 30
+    description: 汇率最多可比估值日早几天（周末/假日）；超出则该币种换算「不可用」

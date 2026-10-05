@@ -1,0 +1,23 @@
+title: 外汇
+description: USD/HKD/CNY 换算路径（直接、反向或经 USD 中转）与汇率历史；缺汇率显示「不可用」；汇率用中性色。
+order: 60
+data_mode: daily
+stale_after_hours: 72
+params:
+  pair:
+    type: str
+    default: "USDHKD"
+    choices: ["USDHKD", "USDCNY", "HKDCNY"]
+    description: 要看历史的币对（1 前者 = rate 后者）
+  days:
+    type: int
+    default: 120
+    min: 5
+    max: 2000
+    description: 历史回看的日历天数
+  max_stale_days:
+    type: int
+    default: 4
+    min: 0
+    max: 30
+    description: 换算时汇率最多可比今天早几天（周末/假日）；超出即「不可用」
