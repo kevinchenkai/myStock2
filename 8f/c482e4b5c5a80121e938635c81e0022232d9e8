@@ -1,0 +1,37 @@
+docs/plans/mystock-v2-implementation-plan_claude_20261005.md
+  s_97d138eaf84b50::t_840fb872064f91 482-503,511-515
+  s_97d138eaf84b50::t_c1679769df600c 64
+  s_97d138eaf84b50::t_30c0841d96ebb7 350,356-383,389,393-399,401,411-412,424,426-427,429,440-455,459
+  s_97d138eaf84b50::t_536beb613e7f5c 169-173,176-181,184,192-203,206
+  s_97d138eaf84b50::t_587bae3a467c19 5,8-9,24,26-35
+  s_97d138eaf84b50::t_fc36867df61658 212,214,218-225,227-232,238-244,247,249,253-263,265-267,273,275,278,280,287-291,295-296,299-305,307,313-323,329,336,340
+  s_97d138eaf84b50::t_d76f10c4df2f09 60,63,66-69,77-78,103-104,127-128,149,153-155
+  s_97d138eaf84b50::t_53bb340004b4b6 12,168
+  s_97d138eaf84b50::t_4a5c850594b0dd 567-568,572,578-579,581,589,593-595,601-602
+.gitignore
+  s_97d138eaf84b50::t_e48f36f183ad3e 227
+docs/plans/plan-review-log_claude_20261005.md
+  s_97d138eaf84b50::t_c1679769df600c 1-71
+docs/plans/plan-review_gpt_20261005.md
+  s_97d138eaf84b50::t_c6afe5ebe77c35 1-84
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_c1679769df600c 5,16,22-23,26-27,29-35,41-42
+docs/README.md
+  s_97d138eaf84b50::t_c1679769df600c 9-11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "8fc482e4b5c5a80121e938635c81e0022232d9e8",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
