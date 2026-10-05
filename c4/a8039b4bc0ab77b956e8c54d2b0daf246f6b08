@@ -1,0 +1,29 @@
+docs/plans/mystock-v2-implementation-plan_claude_20261005.md
+  s_97d138eaf84b50::t_a49d2192657b82 5,8-9,11,79,427,439,445-446,455,469,473,546,552-555,557,573-574,711
+docs/plans/plan-review_gpt_r6_20261005.md
+  s_97d138eaf84b50::t_eaa856d92c477f 1-56
+docs/plans/plan-review_grok_r2_20261005.md
+  s_97d138eaf84b50::t_eaa856d92c477f 1-49
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_f119125d88faf4 5,41-42
+docs/README.md
+  s_97d138eaf84b50::t_34ef8f27229f88 9,11-12
+docs/plans/plan-review-log_claude_20261005.md
+  s_97d138eaf84b50::t_79db568546eb32 5,8,166-194,197
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "c4a8039b4bc0ab77b956e8c54d2b0daf246f6b08",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
