@@ -1,0 +1,36 @@
+tests/unit/test_ledger_events.py
+  s_97d138eaf84b50::t_84af4d872b149f 112-122
+tests/integration/test_v1_import.py
+  s_97d138eaf84b50::t_8451a96e54718b 1-136
+mystock2/cli/ops.py
+  s_97d138eaf84b50::t_0b225043fbdfd8 502-513,589-594
+mystock2/ledger/events.py
+  s_97d138eaf84b50::t_be71443ea8b59e 198-203,205-206
+tests/unit/test_db.py
+  s_97d138eaf84b50::t_422365ab5d31d1 94
+mystock2/collectors/v1_import.py
+  s_97d138eaf84b50::t_be71443ea8b59e 125-128
+  s_97d138eaf84b50::t_0b225043fbdfd8 1-124,129-194
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_9cbb3611d4c228 58
+docs/adr/0001-ledger-event-model.md
+  s_97d138eaf84b50::t_b7e39b95473868 11
+docs/records/m2b-v1-import_claude_20261005.md
+  s_97d138eaf84b50::t_64ae93ca7f4089 1-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "b34fecaed7aef25b6eb1b59d0b3115cbfba8bd20",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
