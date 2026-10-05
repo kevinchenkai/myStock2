@@ -17,7 +17,7 @@
 
 ## 与 V1 的关系
 
-[V1 `kevinchenkai/myStock`](https://github.com/kevinchenkai/myStock) 已能采集、展示、预测次日高低区间，但账本不含费用与资金流水、人类基线被重新撮合、各策略资金口径不一致，因此还不能公平回答上面的问题。V2 是**新仓库、新数据库、账本优先**：V1 只读保留，数据一次性只读导入，代码按需拷贝复用。
+[V1 `kevinchenkai/myStock`](https://github.com/kevinchenkai/myStock) 已能采集、展示、预测次日高低区间，但账本不含费用与资金流水、人类基线被重新撮合、各策略资金口径不一致，因此还不能公平回答上面的问题。V2 是**新仓库、新数据库、账本优先**，**将替代 V1**：V1 代码已锁定只读、在 V2 完成前继续在 8888 运行；数据一次性只读导入，代码可借用也可全新生成。开发期 V2 用 8889；完成后 V1 切到 8887 过渡数天，V2 用 8888（[切换计划](docs/plans/mystock-v2-implementation-plan_claude_20261005.md)）。
 
 ## 文档导航
 

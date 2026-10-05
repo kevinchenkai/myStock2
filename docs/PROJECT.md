@@ -6,7 +6,7 @@
 | 负责人 | kevinchenkai |
 | 立项日期 | 2026-10-05 |
 | 仓库 | https://github.com/kevinchenkai/myStock2 · 本地 `/Users/kk/Work/myStock2/` |
-| V1 | https://github.com/kevinchenkai/myStock · 本地 `/Users/kk/Work/Workpace/GitHub/Seattle/myStock/`（只读参照） |
+| V1 | https://github.com/kevinchenkai/myStock · 本地 `/Users/kk/Work/Workpace/GitHub/Seattle/myStock/`（代码已锁定只读；**V2 将替代 V1**：开发期 V1 在 8888、V2 在 8889；完成后 V1 → 8887 过渡数天，V2 → 8888） |
 | 许可证 | Apache-2.0 |
 | 状态 | 立项；实施方案评审中，**方案获批前不编码** |
 
@@ -39,3 +39,4 @@
 | 日期 | 变更 |
 | --- | --- |
 | 2026-10-05 | 立项；补充 README／AGENTS／CLAUDE、协作约定与实施方案（评审中） |
+| 2026-10-05 | 负责人确认：V2 替代 V1；V1 锁定只读，代码可借用或全新生成；端口切换计划（V2 完成后 V1→8887、V2→8888） |
