@@ -1,0 +1,42 @@
+tests/unit/test_web_framework.py
+  s_97d138eaf84b50::t_5c24f96679762e 97,110,114-115
+mystock2/web/views/fx/panel.js
+  s_97d138eaf84b50::t_d454c9574ee339 3
+config/views.yaml
+  s_97d138eaf84b50::t_66131cd6e9a14c 21
+mystock2/web/static/ui.js
+  s_97d138eaf84b50::t_806ed1a15d8460 158,160,162
+  s_97d138eaf84b50::t_25d6b8cd765a49 70-108,112-148,150-157,159,161,163-196
+mystock2/web/static/app.css
+  s_97d138eaf84b50::t_d454c9574ee339 118
+  s_97d138eaf84b50::t_25d6b8cd765a49 112-117,119-125
+mystock2/web/views/holdings/query.py
+  s_97d138eaf84b50::t_2c9410b0c5a610 4-5,129
+tests/unit/test_web_frontend.py
+  s_97d138eaf84b50::t_2c5e62086b6efa 168-222,225-226
+  s_97d138eaf84b50::t_ac5642acc2bd23 223-224
+tests/unit/test_web_views.py
+  s_97d138eaf84b50::t_5c24f96679762e 356,359-361,363-364,370,374,379-380
+mystock2/web/views/holdings/panel.js
+  s_97d138eaf84b50::t_2c9410b0c5a610 20
+mystock2/web/views/fx/query.py
+  s_97d138eaf84b50::t_d454c9574ee339 1,16,40,58
+mystock2/web/views/fx/view.yaml
+  s_97d138eaf84b50::t_d454c9574ee339 2,9-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "d48865d18da03c017f028aa4800af741365f8fe5",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
