@@ -1,0 +1,44 @@
+mystock2/ledger/opening.py
+  s_97d138eaf84b50::t_056ffe63c203a6 73-105
+  s_97d138eaf84b50::t_cb3fba9b9a5a82 9
+mystock2/cli/ops.py
+  s_97d138eaf84b50::t_d8e7de7b5fd2bd 696-707,879-881
+  s_97d138eaf84b50::t_ad0797195218dd 648-653,863
+config/views.yaml
+  s_97d138eaf84b50::t_6af1fc3839f7f0 18
+  s_97d138eaf84b50::t_6d0a3cd2b74897 14
+mystock2/collectors/quotes.py
+  s_97d138eaf84b50::t_2cd68c15ef9471 16,61,105
+tests/unit/test_market.py
+  s_97d138eaf84b50::t_47b8ab5b872b08 211-217
+mystock2/instruments/code_map.py
+  s_97d138eaf84b50::t_7b942d2a425084 43-46,48-49
+mystock2/collectors/futu.py
+  s_97d138eaf84b50::t_79c6e189d2225b 44-58,255,262,268-284,316-320,322-338
+  s_97d138eaf84b50::t_ad0797195218dd 342-358
+tests/integration/test_futu_collector.py
+  s_97d138eaf84b50::t_50b084d4b53ea7 206-230
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_c5c3e39e0cb644 80-81
+docs/records/first-real-run_claude_20261005.md
+  s_97d138eaf84b50::t_c5c3e39e0cb644 54-66
+tests/unit/test_ledger_fees_settlement_reconcile.py
+  s_97d138eaf84b50::t_1ea87726176926 147-168
+  s_97d138eaf84b50::t_677ce44054445c 169
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "3e0df3ed1fd4478a33ae6336cb09f0a5b2d20197",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
