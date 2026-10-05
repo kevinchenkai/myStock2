@@ -1,0 +1,42 @@
+tests/integration/test_daily_flow.py
+  s_97d138eaf84b50::t_97bcac9147b87e 157-194
+mystock2/assistant/__init__.py
+  s_97d138eaf84b50::t_db2ec71b92127a 1
+mystock2/assistant/veto.py
+  s_97d138eaf84b50::t_db2ec71b92127a 1-21,23-273,281-284
+  s_97d138eaf84b50::t_7e8339fc453f0d 22,274-280
+mystock2/core/db.py
+  s_97d138eaf84b50::t_89796520c3eaf9 63-65
+mystock2/scoreboard/veto_stats.py
+  s_97d138eaf84b50::t_6d5df5bffe58e2 1-68
+tests/test_import_boundaries.py
+  s_97d138eaf84b50::t_17d4842312aabd 70-82
+mystock2/cli/ops.py
+  s_97d138eaf84b50::t_7e8339fc453f0d 291,430-501,583-596
+migrations/0006_assistant.sql
+  s_97d138eaf84b50::t_89796520c3eaf9 1-35
+tests/unit/test_veto.py
+  s_97d138eaf84b50::t_07c45de7ff2fee 1-6,14-234
+  s_97d138eaf84b50::t_97bcac9147b87e 7-13
+  s_97d138eaf84b50::t_6d5df5bffe58e2 235-261
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_d4b98815906828 57
+docs/records/m9-llm-veto_claude_20261005.md
+  s_97d138eaf84b50::t_34c09cb5e012f1 1-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "dbb395fbcfda7bbecea341392d3f363bf711d799",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
