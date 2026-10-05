@@ -1,0 +1,103 @@
+mystock2/forecast/__init__.py
+  s_97d138eaf84b50::t_1e9f1b5b135c3b 1
+tests/unit/test_config.py
+  s_97d138eaf84b50::t_996d3e7e06214c 1-70
+mystock2/core/money.py
+  s_97d138eaf84b50::t_7f9669ba17f6e2 1-119
+mystock2/instruments/__init__.py
+  s_97d138eaf84b50::t_b6371b0019b18a 1
+config/universe.example.yaml
+  s_97d138eaf84b50::t_b6371b0019b18a 1-13
+config.example.yaml
+  s_97d138eaf84b50::t_b6371b0019b18a 1-24
+tests/unit/test_db.py
+  s_97d138eaf84b50::t_996d3e7e06214c 1-123
+config/views.yaml
+  s_97d138eaf84b50::t_b6371b0019b18a 1-2
+environment.yml
+  s_97d138eaf84b50::t_f110a62915cc30 1-15
+mystock2/ledger/__init__.py
+  s_97d138eaf84b50::t_1e9f1b5b135c3b 1
+mystock2/coach/__init__.py
+  s_97d138eaf84b50::t_1e9f1b5b135c3b 1
+mystock2/instruments/code_map.py
+  s_97d138eaf84b50::t_b6371b0019b18a 1-81
+mystock2/assistant/__init__.py
+  s_97d138eaf84b50::t_1e9f1b5b135c3b 1
+mystock2/core/calendars.py
+  s_97d138eaf84b50::t_7f9669ba17f6e2 1-17,19-166
+  s_97d138eaf84b50::t_2c01041b17e424 18
+pyproject.toml
+  s_97d138eaf84b50::t_f110a62915cc30 1-32
+mystock2/__main__.py
+  s_97d138eaf84b50::t_1e9f1b5b135c3b 1-3
+mystock2/cli/__init__.py
+  s_97d138eaf84b50::t_f110a62915cc30 1-85
+mystock2/core/config.py
+  s_97d138eaf84b50::t_b6371b0019b18a 1-122
+tests/unit/test_money.py
+  s_97d138eaf84b50::t_2c01041b17e424 6-12
+  s_97d138eaf84b50::t_5f118b2d6745cd 1-5,13-70
+tests/test_import_boundaries.py
+  s_97d138eaf84b50::t_996d3e7e06214c 1-73
+tests/unit/test_universe.py
+  s_97d138eaf84b50::t_996d3e7e06214c 1-80
+scripts/check_docs.py
+  s_97d138eaf84b50::t_19c7770ac2e6d3 1-76
+mystock2/scoreboard/__init__.py
+  s_97d138eaf84b50::t_1e9f1b5b135c3b 1
+tests/integration/test_cli.py
+  s_97d138eaf84b50::t_996d3e7e06214c 1-50
+mystock2/core/db.py
+  s_97d138eaf84b50::t_1bb5bb5f73c904 1-180
+mystock2/core/__init__.py
+  s_97d138eaf84b50::t_7f9669ba17f6e2 1
+mystock2/core/runs.py
+  s_97d138eaf84b50::t_1bb5bb5f73c904 1-52
+mystock2/core/timeutil.py
+  s_97d138eaf84b50::t_7f9669ba17f6e2 1-94
+mystock2/instruments/universe.py
+  s_97d138eaf84b50::t_b6371b0019b18a 1-119
+config/protocol.example.yaml
+  s_97d138eaf84b50::t_b6371b0019b18a 1-25
+mystock2/market/__init__.py
+  s_97d138eaf84b50::t_1e9f1b5b135c3b 1
+migrations/0001_core.sql
+  s_97d138eaf84b50::t_1bb5bb5f73c904 1-23
+mystock2/web/__init__.py
+  s_97d138eaf84b50::t_1e9f1b5b135c3b 1
+tests/unit/test_timeutil.py
+  s_97d138eaf84b50::t_5f118b2d6745cd 1-44
+mystock2/collectors/__init__.py
+  s_97d138eaf84b50::t_1e9f1b5b135c3b 1
+mystock2/replay/__init__.py
+  s_97d138eaf84b50::t_1e9f1b5b135c3b 1
+tests/unit/test_calendars.py
+  s_97d138eaf84b50::t_5f118b2d6745cd 1-79
+mystock2/__init__.py
+  s_97d138eaf84b50::t_1e9f1b5b135c3b 1-4
+AGENTS.md
+  s_97d138eaf84b50::t_77a2188bfcbb19 5,25
+README.md
+  s_97d138eaf84b50::t_21aea8338349bd 18-28
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_20fb8eb8e9cbf2 50
+docs/records/m1-foundation_claude_20261005.md
+  s_97d138eaf84b50::t_d5a37419e09c30 1-42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "ace61d8ce4ea6478a97461edd9568518dfd7b311",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
