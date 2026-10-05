@@ -1,0 +1,38 @@
+tests/unit/test_replay.py
+  s_97d138eaf84b50::t_c49a99ae8056fc 2-154
+  s_97d138eaf84b50::t_98819222523c8f 1
+mystock2/replay/behavior.py
+  s_97d138eaf84b50::t_402bd52e6a2bac 1-48,50-57
+  s_97d138eaf84b50::t_c49a99ae8056fc 49
+mystock2/replay/__init__.py
+  s_97d138eaf84b50::t_402bd52e6a2bac 1
+mystock2/replay/cards.py
+  s_97d138eaf84b50::t_402bd52e6a2bac 1-10,12-66,68-155
+  s_97d138eaf84b50::t_c49a99ae8056fc 11,67
+mystock2/replay/rounds.py
+  s_97d138eaf84b50::t_402bd52e6a2bac 1-67
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_132636d2129de1 56
+docs/records/m7-replay_claude_20261005.md
+  s_97d138eaf84b50::t_8cfdf56f7d20ed 1-29
+mystock2/cli/ops.py
+  s_97d138eaf84b50::t_c9408d92df4a20 430-450,505-510
+tests/integration/test_daily_flow.py
+  s_97d138eaf84b50::t_00fe2428b31f2a 143-156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "7ef48777a5be0d3d71e0e6a1b870fc7e6d0c1282",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
