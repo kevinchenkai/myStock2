@@ -1,0 +1,165 @@
+tests/unit/test_web_series.py
+  s_97d138eaf84b50::t_5f6163c5f3522b 57
+  s_97d138eaf84b50::t_c16b46db43498a 1-56,58-136
+tests/unit/test_web_fixtures.py
+  s_97d138eaf84b50::t_dbde2eca778542 4,80-86,88-92,132,135
+  s_97d138eaf84b50::t_41b9cbc54485bf 1-3,5-6,8-10,22-25,27-46,66-79,87,93-105,108-114,117-131,133-134,136-162
+  s_97d138eaf84b50::t_685b017e4d270a 26,49-54,56-57,59-65,115-116
+  s_97d138eaf84b50::t_69c832a30795ed 47-48,55,58,106-107
+  s_97d138eaf84b50::t_97bcac9147b87e 7,11-21
+tests/unit/test_web_common.py
+  s_97d138eaf84b50::t_fcad24657e48d2 1-6,8-59,61-116
+  s_97d138eaf84b50::t_5f6163c5f3522b 7,60
+config/views.yaml
+  s_97d138eaf84b50::t_955d3ede6f6981 1-21
+mystock2/web/static/theme.js
+  s_97d138eaf84b50::t_c6a51935a8676e 1-23
+mystock2/cli/__init__.py
+  s_97d138eaf84b50::t_955d3ede6f6981 62-73,83
+tests/unit/test_web_framework.py
+  s_97d138eaf84b50::t_97bcac9147b87e 9,13
+  s_97d138eaf84b50::t_5f1d49ea22c552 1-8,10-12,14-215
+mystock2/forecast/run.py
+  s_97d138eaf84b50::t_364e9d812aefa0 9,18,23-31,41,45-46
+mystock2/web/views/trades/view.yaml
+  s_97d138eaf84b50::t_e582d358046eb2 1-20
+mystock2/forecast/versions.py
+  s_97d138eaf84b50::t_364e9d812aefa0 16,25-27,42,53
+mystock2/web/static/app.js
+  s_97d138eaf84b50::t_c14cc26294c3a1 1-152
+mystock2/web/registry.py
+  s_97d138eaf84b50::t_c5532c746e1fc2 1-271
+mystock2/web/views/trades/query.py
+  s_97d138eaf84b50::t_e582d358046eb2 1-68
+tests/integration/test_web_readonly.py
+  s_97d138eaf84b50::t_f1d93e1ca9224f 1-2,4-230,232-255
+  s_97d138eaf84b50::t_84af4d872b149f 3,231
+mystock2/web/views/equity_trend/view.yaml
+  s_97d138eaf84b50::t_02f3d18cbeb6a2 1-16
+mystock2/web/views/fx/panel.js
+  s_97d138eaf84b50::t_955d3ede6f6981 1-21
+mystock2/web/common.py
+  s_97d138eaf84b50::t_d0e684ccb0b42b 107-110,212
+  s_97d138eaf84b50::t_f7ead507a93dcb 214,216-217
+  s_97d138eaf84b50::t_a36ae5241b5a2b 1-53,55-106,111-211,213,215,218-260
+  s_97d138eaf84b50::t_7da0533574d563 54
+mystock2/ledger/pnl.py
+  s_97d138eaf84b50::t_e29eb52ac8e4dc 1-33,35-148,153-241,248-280,282,284-299
+  s_97d138eaf84b50::t_256ba113821fb1 242-247
+  s_97d138eaf84b50::t_dbde2eca778542 149-152,281,283
+  s_97d138eaf84b50::t_cef86613e22575 34
+mystock2/web/views/equity_trend/query.py
+  s_97d138eaf84b50::t_02f3d18cbeb6a2 1-85,87-91,93-120
+  s_97d138eaf84b50::t_69c832a30795ed 86,92
+mystock2/web/views/account_overview/query.py
+  s_97d138eaf84b50::t_c523394c11afec 71
+  s_97d138eaf84b50::t_333732efcb29c1 1-70,72-142
+docs/records/m3-web-views_claude_20261005.md
+  s_97d138eaf84b50::t_38761ea4a57c84 1-5,7-84
+  s_97d138eaf84b50::t_4470377c3ff278 6
+mystock2/web/fxpath.py
+  s_97d138eaf84b50::t_7da0533574d563 1-43,45-46,50-58
+  s_97d138eaf84b50::t_edcde4e0e88cd5 44
+  s_97d138eaf84b50::t_333732efcb29c1 47-49
+mystock2/web/views/pnl/view.yaml
+  s_97d138eaf84b50::t_cef86613e22575 1-14
+tests/unit/test_web_frontend.py
+  s_97d138eaf84b50::t_f8d24fab3a447c 1-34,36-83,86-148
+  s_97d138eaf84b50::t_bac9ea827e08e2 35,84-85
+mystock2/forecast/lgbm_cqr.py
+  s_97d138eaf84b50::t_364e9d812aefa0 1-162
+mystock2/web/valuation.py
+  s_97d138eaf84b50::t_19c6cc1f6e1b52 1-61
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_52de92cbc6e2c5 59-62
+mystock2/web/views/holdings/view.yaml
+  s_97d138eaf84b50::t_0836545eff50cf 1-10
+docs/records/m8-lgbm-cqr_claude_20261005.md
+  s_97d138eaf84b50::t_52de92cbc6e2c5 1-44
+environment.yml
+  s_97d138eaf84b50::t_52de92cbc6e2c5 16-17
+mystock2/web/static/ui.js
+  s_97d138eaf84b50::t_955d3ede6f6981 169-170
+  s_97d138eaf84b50::t_c14cc26294c3a1 158-159,192-195
+  s_97d138eaf84b50::t_bac9ea827e08e2 3
+  s_97d138eaf84b50::t_8e26bf17f01fbd 76
+  s_97d138eaf84b50::t_6521233697cda2 1-2,4-75,77-157,160-168,171-191,196-205
+pyproject.toml
+  s_97d138eaf84b50::t_52de92cbc6e2c5 11,14,21
+mystock2/forecast/evaluate.py
+  s_97d138eaf84b50::t_842cc25ffaec31 1-75
+mystock2/web/static/app.css
+  s_97d138eaf84b50::t_b4d1167702a9e7 26
+  s_97d138eaf84b50::t_8e26bf17f01fbd 71,75-82
+  s_97d138eaf84b50::t_c6a51935a8676e 1-7,9-14,16-21,23-25,27-70,72-74,83-105
+  s_97d138eaf84b50::t_bac9ea827e08e2 8,15,22
+tests/unit/test_web_views.py
+  s_97d138eaf84b50::t_9dbb86e8c095f3 1-10,12-40,43-67,69-89,91-104,106-124,127-132,145-316,320-343,345-411,413-415
+  s_97d138eaf84b50::t_56de4e71b9a447 11,41-42,344,412
+  s_97d138eaf84b50::t_78a2a870e441d5 125-126,133-144
+  s_97d138eaf84b50::t_388f838403df80 68,90,105,317-319
+mystock2/web/series.py
+  s_97d138eaf84b50::t_1f04df4ac1b85e 1-58,60-106,110,112-132
+  s_97d138eaf84b50::t_5f6163c5f3522b 59,111
+  s_97d138eaf84b50::t_69c832a30795ed 107-109,133
+mystock2/web/views/account_overview/view.yaml
+  s_97d138eaf84b50::t_333732efcb29c1 1-21
+mystock2/web/views/fx/query.py
+  s_97d138eaf84b50::t_9b165f0baabf72 1-52,54-70
+  s_97d138eaf84b50::t_5f6163c5f3522b 53
+mystock2/web/views/pnl/query.py
+  s_97d138eaf84b50::t_cef86613e22575 1-90
+mystock2/web/views/holdings/query.py
+  s_97d138eaf84b50::t_0836545eff50cf 1-123
+tests/unit/test_ledger_pnl.py
+  s_97d138eaf84b50::t_2dd74efaf77083 22,24,26-27
+  s_97d138eaf84b50::t_be96021f2c4527 1-21,23,25,28-168
+mystock2/web/static/index.html
+  s_97d138eaf84b50::t_78f4f1067a4b97 8
+  s_97d138eaf84b50::t_6521233697cda2 16
+  s_97d138eaf84b50::t_c6a51935a8676e 1-7,9-15,17-28
+mystock2/web/__init__.py
+  s_97d138eaf84b50::t_2dd9e666a6915f 1-4
+mystock2/forecast/baseline.py
+  s_97d138eaf84b50::t_842cc25ffaec31 53,69
+tests/unit/test_lgbm_cqr.py
+  s_97d138eaf84b50::t_d6647735e41cdc 26,96-97
+  s_97d138eaf84b50::t_842cc25ffaec31 1-25,27-95,98-100
+scripts/explore_lgbm_vs_baseline.py
+  s_97d138eaf84b50::t_52de92cbc6e2c5 1,5,7,9-10,12-33
+  s_97d138eaf84b50::t_7ea2c872a6717b 2-4,6,8,11
+  s_97d138eaf84b50::t_a0d6437889e412 34-35
+mystock2/web/views/fx/view.yaml
+  s_97d138eaf84b50::t_9b165f0baabf72 1-23
+mystock2/web/app.py
+  s_97d138eaf84b50::t_9cffbc331e1998 89,132-135
+  s_97d138eaf84b50::t_2dd9e666a6915f 1-88,90-131,136-203
+mystock2/web/ledgerdata.py
+  s_97d138eaf84b50::t_dcb740b0aa2a40 1-93
+mystock2/web/views/account_overview/panel.js
+  s_97d138eaf84b50::t_07b9ab7fbed831 1-65
+mystock2/web/views/equity_trend/panel.js
+  s_97d138eaf84b50::t_8ba1ce00ea056b 1-46
+mystock2/web/views/holdings/panel.js
+  s_97d138eaf84b50::t_fd0319853a8818 1-24
+mystock2/web/views/pnl/panel.js
+  s_97d138eaf84b50::t_a3edc53d8070d8 1-35
+mystock2/web/views/trades/panel.js
+  s_97d138eaf84b50::t_8daeb0efa52b88 1-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "f99bd237ebf288dbac12c86c0b3c4255442926cf",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "unknown"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
