@@ -1,0 +1,27 @@
+docs/plans/mystock-v2-implementation-plan_claude_20261005.md
+  s_97d138eaf84b50::t_8072703f9ac1cf 5,8,96,100,102,104,163-180,203,226,243,365,367-375,617,633,709,741
+AGENTS.md
+  s_97d138eaf84b50::t_360793126dab83 22-23
+README.md
+  s_97d138eaf84b50::t_2feac95cd48aea 20
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_ba4cafcb24521c 5,20,36
+docs/PROJECT.md
+  s_97d138eaf84b50::t_7afab94c9db6e0 9,42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "003b842c8a1bff8e058738b6c0f49df18a650e4f",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
