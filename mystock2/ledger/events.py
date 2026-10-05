@@ -195,8 +195,15 @@ def _validate(d: EventDraft) -> dict:
     return fields
 
 
+# 内容哈希只覆盖「经济身份」字段：不同来源渠道对同一业务事件常带不同的辅助元数据（订单号、备注…），
+# 不应因此误报冲突；经济字段不同才是真冲突。首次写入者的辅助元数据保留（重复到达不覆盖）。
+ECON_FIELDS = ("business_key", "account_id", "event_type", "event_at", "market", "code", "currency", "price", "qty_delta", "cash_delta",
+               "recv_delta", "attrib_amount", "group_id", "leg_id", "adjust_class")
+
+
 def content_hash(fields: dict) -> str:
-    return hashlib.sha256(json.dumps(fields, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+    econ = {k: fields.get(k) for k in ECON_FIELDS}
+    return hashlib.sha256(json.dumps(econ, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
 # ------------------------------------------------------------------ 来源证据

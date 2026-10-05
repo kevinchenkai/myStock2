@@ -499,6 +499,18 @@ def cmd_veto_import(args) -> int:
     return 0 if res.status == "applied" else 1
 
 
+def cmd_v1_import(args) -> int:
+    """V1 历史数据一次性只读导入（需负责人授权访问 V1 运行库；先 --dry-run 看报告）。"""
+    from mystock2.collectors.v1_import import run_import
+
+    cfg = load_config(args.config)
+    with _opener(cfg, "ledger") as w:
+        rep = run_import(args.v1_db, w, account_id=args.account_id, dry_run=args.dry_run)
+    print(json.dumps({**rep.__dict__, "max_price_rounding": str(rep.max_price_rounding), "total_notional_rounding": str(rep.total_notional_rounding),
+                      "dry_run": args.dry_run}, ensure_ascii=False, indent=2, default=str))
+    return 0 if not rep.conflicts else 1
+
+
 def cmd_replay(args) -> int:
     from mystock2.replay.behavior import behavior_metrics
     from mystock2.replay.cards import build_cards, fills_and_fees, render_card_text
@@ -574,6 +586,12 @@ def register(sub) -> None:
     fh.add_argument("--now")
     fh.add_argument("--local-dir", **ld)
     fh.set_defaults(fn=cmd_human_plan_freeze)
+    v1 = sub.add_parser("v1", help="V1 数据").add_subparsers(dest="v1cmd", required=True)
+    vi1 = v1.add_parser("import", help="只读导入 V1 成交与日快照")
+    vi1.add_argument("--v1-db", required=True)
+    vi1.add_argument("--account-id", required=True, help="遗留账户占位（须与将来 Futu 采集同一 account_id）")
+    vi1.add_argument("--dry-run", action="store_true")
+    vi1.set_defaults(fn=cmd_v1_import)
     rp = sub.add_parser("replay", help="复盘（事后诊断）").add_subparsers(dest="rcmd", required=True)
     for name, h in (("cards", "逐笔复盘卡"), ("behavior", "行为指标（含样本量）")):
         x = rp.add_parser(name, help=h)

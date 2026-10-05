@@ -55,3 +55,4 @@
 | M6 | 教练：核心/密封/暴露/冻结/选择规则与记分牌接入完成（合成端到端），回执 [m6-coach](records/m6-coach_claude_20261005.md)；**合格前向计时待 D1–D6/D12–D15 与真实账户授权** | 核心完成，待启动 |
 | M7 | 复盘：卡片/回合/行为指标完成，回执 [m7-replay](records/m7-replay_claude_20261005.md)；「不操作」反事实待真实数据 | ✅ 已完成（合成数据） |
 | M9 | LLM 否决（人工通道）：回执 [m9-llm-veto](records/m9-llm-veto_claude_20261005.md)；API 通道（D7）未做 | ✅ 已完成（合成数据） |
+| M2b | V1 历史导入器：回执 [m2b-v1-import](records/m2b-v1-import_claude_20261005.md)；**真实导入待 M0b 授权** | 代码完成，待授权 |

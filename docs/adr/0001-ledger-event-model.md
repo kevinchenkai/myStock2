@@ -8,7 +8,7 @@
 
 1. **两层结构**：`source_record`（来源证据，不可变）与 `ledger_event`（规范业务事件，只追加），经 `source_link` 多对多。规范键 `business_key`＝`类型:账户:成交/流水身份`，**不含来源渠道**，故 V1/Futu/CSV 三路到达同一成交自然归并为一个事件（T-17）。身份不足（缺 deal_id 等）抛 `IdentityInsufficient`，由调用方 `queue_pending`，不入账。
 2. **追加语义由库层保证**：账本与证据类表有 `BEFORE UPDATE/DELETE` 触发器；写入权限由 `TABLE_OWNERS` 授权器限定（仅 `ledger` 写账本表）。
-3. **三种身份**：`business_key`（跨版本稳定）、`event_version`（事件版本，`event_id=key#version`）、`correction_request_id`（更正的幂等键）。同键同版本同内容的重复到达＝`duplicate`；同键同版本内容不同＝`LedgerConflict`。
+3. **三种身份**（内容哈希只覆盖「经济字段」，辅助元数据差异不算冲突；2026-10-05 M2b 补充）：`business_key`（跨版本稳定）、`event_version`（事件版本，`event_id=key#version`）、`correction_request_id`（更正的幂等键）。同键同版本同内容的重复到达＝`duplicate`；同键同版本内容不同＝`LedgerConflict`。
 4. **更正**＝同一事务内追加 `REVERSAL`（取反**当前有效版本**，`note` 记录 `reverses TYPE#version`）＋新版本事件；取消＝只追加 REVERSAL。同一旧版本不得被冲销两次（部分唯一索引 `uq_reversal_once`）。有效版本＝最后版本且非 REVERSAL；有效排序＝`(event_at, business_key, event_version)`。
 5. **开账**：`account_opening.opening_at=t0`；期初以显式 `OPENING_POSITION/OPENING_CASH` 事件进入和式；`event_at ≤ t0` 的其他事件为 `pre_opening`，只计数不参与和式。开账点一经写入不可改，相同内容重复调用幂等。
 6. **拆股**不是数量增量：`corporate_action` 保存比例与生效时点；持仓＝Σ（原始数量 × Π 生效时点在该事件之后的拆股因子）。同一时刻先应用公司行动：因子只作用于 `effective_at > event_at` 的事件。合股产生的非整数持仓在投影中以 `fractional_position:<code>` 告警，**不静默取整**。

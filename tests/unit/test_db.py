@@ -91,7 +91,7 @@ def test_writer_can_write_only_owned_tables(db):
 
 def test_unregistered_owner_and_migrator_owner_rejected(db):
     with pytest.raises(dbmod.DbError):
-        dbmod.connect_writer(db, "assistant")          # 未登记写入者（如尚未落地的模块）一律拒绝
+        dbmod.connect_writer(db, "replay")             # 未登记写入者（如尚未落地的模块）一律拒绝
     with pytest.raises(dbmod.DbError):
         dbmod.connect_writer(db, dbmod.OWNER_MIGRATOR)
 

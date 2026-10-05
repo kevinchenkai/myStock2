@@ -109,6 +109,17 @@ def test_t17_identity_insufficient_goes_pending_not_ledger(conn):
         resolve_pending(conn, pid, "duplicate")
 
 
+def test_differing_metadata_across_channels_is_not_a_conflict_but_differing_economics_is(conn):
+    from dataclasses import replace
+    d = EventDraft(fill_key(ACCT, "D-7"), ACCT, "FILL", D1, "USD", code="US.NVDA", price="10", qty_delta="5", cash_delta="-50", ref_deal_id="D-7", ref_order_id="O-1", note="futu")
+    assert post_event(conn, d).status == "inserted"
+    other_channel = replace(d, ref_order_id=None, note="csv")          # 辅助元数据不同（订单号、备注）
+    assert post_event(conn, other_channel).status == "duplicate"
+    assert conn.execute("SELECT note FROM ledger_event WHERE business_key=?", (fill_key(ACCT, "D-7"),)).fetchone()["note"] == "futu"   # 首次写入者的元数据保留
+    with pytest.raises(LedgerConflict):
+        post_event(conn, replace(d, price="11", cash_delta="-55"))        # 经济字段不同才是真冲突
+
+
 def test_conflicting_duplicate_is_an_error_not_silently_merged(conn):
     buy(conn, "D-1", "US.NVDA", 5, "10", D1)
     with pytest.raises(LedgerConflict):
