@@ -1,0 +1,37 @@
+migrations/0009_v1_archive_and_reference.sql
+  s_97d138eaf84b50::t_afac2622d5ad87 1-99
+scripts/rebuild_real_db.sh
+  s_97d138eaf84b50::t_0989bd82e241f0 3,17-18
+  s_97d138eaf84b50::t_bb998bd9e67344 1-2,4-16,19-26
+mystock2/core/db.py
+  s_97d138eaf84b50::t_afac2622d5ad87 42-47
+mystock2/collectors/v1_archive.py
+  s_97d138eaf84b50::t_029d1a619e8c21 1-21,23-205,207-227
+  s_97d138eaf84b50::t_623aa570c28197 22,206
+mystock2/collectors/futu.py
+  s_97d138eaf84b50::t_e69df3ca3bc5be 22,177-178,180-181
+  s_97d138eaf84b50::t_ad24d0e66d5ea4 23
+  s_97d138eaf84b50::t_8af0ddf59a2c02 21,70,148-176,179,182-212,219,224-225,236,454-466,474
+tests/integration/test_v1_archive.py
+  s_97d138eaf84b50::t_6f56a3aade5e45 1-78,80-126
+  s_97d138eaf84b50::t_e69df3ca3bc5be 79
+mystock2/cli/ops.py
+  s_97d138eaf84b50::t_8af0ddf59a2c02 639-642
+  s_97d138eaf84b50::t_623aa570c28197 674-689,890-891
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "9ff366d9debc2f163f85f89acf0ace5beb6d871f",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
