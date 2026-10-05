@@ -1,0 +1,42 @@
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_4f259dace1d410 81
+  s_97d138eaf84b50::t_562b8b23e62912 80
+tests/unit/test_update_command.py
+  s_97d138eaf84b50::t_51abdb8d5ba2c1 10-11,23,36,105-137
+tests/integration/test_v1_archive.py
+  s_97d138eaf84b50::t_65c7d51ab3a593 61,85
+mystock2/collectors/v1_archive.py
+  s_97d138eaf84b50::t_65c7d51ab3a593 50-53
+tests/integration/test_futu_collector.py
+  s_97d138eaf84b50::t_070416203fc152 231-244
+mystock2/collectors/futu.py
+  s_97d138eaf84b50::t_46413dc2756962 365-366
+tests/integration/test_web_readonly.py
+  s_97d138eaf84b50::t_2e5b5d9fc29f52 22,35-44,71,83,279,281,286
+scripts/install_launchd.sh
+  s_97d138eaf84b50::t_a15a01b58878fa 6-8,15,21,23-56,63-64,70
+  s_97d138eaf84b50::t_d8612d51b13b9d 59,66
+docs/records/real-data-phase-changelog_claude_20261005.md
+  s_97d138eaf84b50::t_4f259dace1d410 40,54,56,58,60
+  s_97d138eaf84b50::t_b88745148a03f7 23
+docs/guides/daily-update_claude_20261005.md
+  s_97d138eaf84b50::t_b88745148a03f7 32,34-38
+mystock2/cli/update.py
+  s_97d138eaf84b50::t_51abdb8d5ba2c1 27,86-120,133,148-154,192-193,209
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "d520eb2eb4d327cad57d334f54d2823b7f3fa85c",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
