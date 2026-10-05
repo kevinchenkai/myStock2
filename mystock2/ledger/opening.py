@@ -6,7 +6,7 @@ import json
 import sqlite3
 
 from mystock2.core.db import atomic
-from mystock2.core.money import to_db
+from mystock2.core.money import dec, to_db
 from mystock2.core.timeutil import iso_utc, utc_now
 from mystock2.instruments.code_map import currency_of, market_of
 from mystock2.ledger.events import EventDraft, LedgerError, SourceDraft, post_event
@@ -68,6 +68,39 @@ def record_opening(conn: sqlite3.Connection, account_id: str, opening_at, positi
             conn.execute("INSERT INTO account_opening(account_id, opening_at, snapshot_id, created_at) VALUES (?,?,?,?)",
                          (account_id, t0, snapshot_id, iso_utc(utc_now())))
         return ids
+
+
+def derive_opening(conn: sqlite3.Connection, account_id: str, snapshot_id: str, opening_at) -> tuple[dict[str, str], dict[str, str], list[str]]:
+    """由「某份券商快照」倒推更早时点 t0 的期初状态：t0 状态 = 快照 − t0 之后（含到快照时刻）所有有效事件的增量。
+
+    用于「有完整成交历史、但历史开头没有快照」的账户（V1 成交自 2025-01 起）。期初股数因此**精确**（只要成交完整、期间没有拆股/过户等
+    非成交的数量变化——有则在 warnings 里报告）；期初现金是**倒推的残差**：任何没有入账的外部流水（出入金、换汇、利息）都被吸进去，
+    不能当作真实的期初现金。返回 (positions, cash, warnings)。
+    """
+    from mystock2.ledger.projection import effective_events
+
+    snap = conn.execute("SELECT * FROM account_snapshot WHERE snapshot_id=? AND account_id=?", (snapshot_id, account_id)).fetchone()
+    if snap is None:
+        raise LedgerError(f"快照不存在：{snapshot_id}")
+    if snap["source"] == "v1-date-only":
+        raise LedgerError("V1 日快照没有采集时刻，不能用于倒推期初")
+    t0, t1 = iso_utc(opening_at), iso_utc(snap["captured_at"])
+    pos = {r["code"]: dec(r["qty"]) for r in conn.execute("SELECT code, qty FROM snapshot_position WHERE snapshot_id=?", (snapshot_id,))}
+    cash = {r["currency"]: dec(r["cash"]) for r in conn.execute("SELECT currency, cash FROM snapshot_cash WHERE snapshot_id=?", (snapshot_id,))}
+    warnings: list[str] = []
+    for e in effective_events(conn, account_id):
+        if e["event_type"] in ("OPENING_POSITION", "OPENING_CASH") or not (t0 < iso_utc(e["event_at"]) <= t1):
+            continue
+        if e["qty_delta"] and dec(e["qty_delta"]) != 0:
+            pos[e["code"]] = pos.get(e["code"], dec(0)) - dec(e["qty_delta"])
+        if e["cash_delta"] and dec(e["cash_delta"]) != 0:
+            cash[e["currency"]] = cash.get(e["currency"], dec(0)) - dec(e["cash_delta"])
+    if conn.execute("SELECT 1 FROM corporate_action WHERE effective_at>? AND effective_at<=? LIMIT 1", (t0, t1)).fetchone():
+        warnings.append("期间有拆股/并股登记：倒推的期初数量未按拆股因子还原，请人工核对")
+    for code, q in sorted(pos.items()):
+        if q < 0:
+            warnings.append(f"倒推期初数量为负：{code} {q}（成交不完整，或有非成交的数量变化——转入/转出/红股）")
+    return ({c: to_db(q) for c, q in pos.items() if q != 0}, {c: to_db(v) for c, v in cash.items() if v != 0}, warnings)
 
 
 def add_split(conn: sqlite3.Connection, code: str, effective_at, ratio_num: int, ratio_den: int, *, source: str | None = None) -> str:

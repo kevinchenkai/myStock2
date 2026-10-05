@@ -40,7 +40,13 @@ def normalize_hk_number(num: str) -> str:
     return stripped.zfill(4) if len(stripped) < 4 else stripped
 
 
+# 代码变更的别名（富途历史成交里的旧代码 → yfinance 现行代码）。YY（欢聚）已更名 JOYY，V1 也把历史行情存在 JOYY 名下。
+YF_ALIASES = {"US.YY": "JOYY"}
+
+
 def futu_to_yf(futu_code: str) -> str:
+    if futu_code in YF_ALIASES:
+        return YF_ALIASES[futu_code]
     m = market_of(futu_code)
     symbol = futu_code.split(".", 1)[1]
     if m == "HK":

@@ -645,7 +645,12 @@ def cmd_collect_futu(args) -> int:
                 tmap = yaml.safe_load(Path(args.cashflow_map).read_text(encoding="utf-8")) if args.cashflow_map else {}
                 d0, d1 = date.fromisoformat(args.start), date.fromisoformat(args.end)
                 days = [d0 + timedelta(days=i) for i in range((d1 - d0).days + 1)]
-                out["cashflow"] = collect_cash_flows(w, api, account_id=args.account_id, acc_id=args.acc_id, days=days, type_map=tmap or {}, min_interval=interval)
+                if args.cashflow_file:                                    # 离线重放（不连 OpenD、不等限频）
+                    from mystock2.collectors.futu import FileCashflowApi
+                    out["cashflow"] = collect_cash_flows(w, FileCashflowApi(args.cashflow_file), account_id=args.account_id, acc_id=args.acc_id, days=days, type_map=tmap or {},
+                                                         sleep=lambda _s: None, min_interval=0)
+                else:
+                    out["cashflow"] = collect_cash_flows(w, api, account_id=args.account_id, acc_id=args.acc_id, days=days, type_map=tmap or {}, min_interval=interval)
             if any(not r.ok for r in out.values()):
                 run.partial("; ".join(sc for r in out.values() for sc in r.failed_scopes))
             run.note(**{k: {"rows": v.rows, "inserted": v.inserted, "duplicate": v.duplicate, "pending": v.pending, "ok": v.ok} for k, v in out.items()})
@@ -688,6 +693,18 @@ def cmd_ledger(args) -> int:
         if sn is None:
             print("找不到快照（先 collect futu --what snapshot）", file=sys.stderr)
             return 2
+        if getattr(args, "at", None):                      # 倒推开账：由该快照倒推更早的 t0（成交/流水必须已先采集）
+            from mystock2.ledger.opening import derive_opening
+            positions, cash, warns = derive_opening(ro, args.account_id, sn["snapshot_id"], args.at)
+            for w_ in warns:
+                print("警告：" + w_, file=sys.stderr)
+            if warns and not args.accept_warnings:
+                print("存在警告：核对后加 --accept-warnings 才开账", file=sys.stderr)
+                return 2
+            with _opener(cfg, "ledger") as w:
+                ids = record_opening(w, args.account_id, args.at, positions, cash, snapshot_id=None)
+            print(f"opening_at={args.at}（由快照倒推）positions={len(positions)} cash_ccys={sorted(cash)} events={len(ids)}（期初现金是倒推残差，不是真实期初现金）")
+            return 0
         positions = {r["code"]: r["qty"] for r in ro.execute("SELECT code, qty FROM snapshot_position WHERE snapshot_id=?", (sn["snapshot_id"],))}
         cash = {r["currency"]: r["cash"] for r in ro.execute("SELECT currency, cash FROM snapshot_cash WHERE snapshot_id=?", (sn["snapshot_id"],))}
         with _opener(cfg, "ledger") as w:
@@ -843,6 +860,7 @@ def register(sub) -> None:
     cf = cl.add_parser("futu", help="富途只读采集（需授权；未经真实验证）")
     for k, kw in (("--account-id", {"required": True}), ("--acc-id", {"required": True, "type": int}), ("--start", {"required": True}), ("--end", {"required": True}),
                   ("--what", {"default": "deals,fees,snapshot"}), ("--assume-market-currency", {"action": "store_true", "help": "订单费用接口无币种字段：按成交市场币种入账（2026-10-05 首跑核实：港股印花税 0.1%、美股佣金 0.99 与市场币种一致）"}),
+                  ("--cashflow-file", {"help": "JSONL：离线重放原始资金流水（不连 OpenD）"}),
                   ("--cashflow-map", {"help": "YAML：资金流水类型→入账方式（DEPOSIT/WITHDRAW/INTEREST/TAX/RECON_ONLY/DIVIDEND/DIVIDEND_WHT）"})):
         cf.add_argument(k, **kw)
     cf.set_defaults(fn=cmd_collect_futu)
@@ -858,6 +876,9 @@ def register(sub) -> None:
         x.add_argument("--account-id", required=True)
         if name != "status":
             x.add_argument("--snapshot", help="快照 id（默认最新）")
+        if name == "open":
+            x.add_argument("--at", help="倒推开账：t0（带时区 ISO，如 2025-01-02T00:00:00Z）；期初股数由快照减去 t0 之后的成交得出，期初现金是倒推残差")
+            x.add_argument("--accept-warnings", action="store_true", help="倒推有警告（如期初数量为负）时，核对后仍要开账")
         x.set_defaults(fn=cmd_ledger)
     rp = sub.add_parser("replay", help="复盘（事后诊断）").add_subparsers(dest="rcmd", required=True)
     for name, h in (("cards", "逐笔复盘卡"), ("behavior", "行为指标（含样本量）")):

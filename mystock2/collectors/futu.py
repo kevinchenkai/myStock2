@@ -41,7 +41,21 @@ PRICE_Q, QTY_Q = Decimal("0.0001"), Decimal("0.000001")
 
 # 资金流水的入账方式（必须显式映射；值：DEPOSIT / WITHDRAW / INTEREST / TAX / RECON_ONLY / DIVIDEND / DIVIDEND_WHT）。未映射的类型进待匹配队列。
 # DIVIDEND＝股息总额、DIVIDEND_WHT＝同日同标的预扣税（成对入账为 post_dividend 情形①；接口无除息日：应收与支付同日，是已声明的局限）。
-_DIV_CODE = re.compile(r"\(([A-Z0-9.]+)\)\s*dividend", re.I)
+_DIV_CODE = re.compile(r"\(([A-Z0-9.]+)\)\s*dividend", re.I)                       # 美股新格式：「… COM(MSFT) dividend, USD 0.91 per share」
+_DIV_CODE_OLD = re.compile(r"^([A-Z][A-Z0-9.]*)\s+[\d.]+\s+SHARES\b")                  # 美股旧格式：「TSM 1.00000000 SHARES DIVIDENDS …」
+_DIV_CODE_HK = re.compile(r"<SEHK\s+(\d+)\b")                                         # 港股：「… <SEHK 700 TENCENT> 11807 shares」
+
+
+def dividend_code(remark: str, ccy: str) -> str | None:
+    """从资金流水备注解析股息标的；认不出返回 None（进待匹配，不猜）。"""
+    if ccy == "USD":
+        for rx in (_DIV_CODE, _DIV_CODE_OLD):
+            m = rx.search(remark)
+            if m:
+                return f"US.{m.group(1).upper()}"
+        return None
+    m = _DIV_CODE_HK.search(remark)
+    return f"HK.{int(m.group(1)):05d}" if m else None
 CashflowMap = dict[str, str]
 
 
@@ -238,21 +252,36 @@ def collect_cash_flows(ledger, api: TradeApi, *, account_id: str, acc_id: int, d
             rep.ok = False
             rep.failed_scopes.append(f"cash_flow {d}: {type(exc).__name__}: {exc}")
             continue
-        divs: dict[tuple[str, str], dict] = {}                      # (标的, 币种) → {"gross": f, "wht": f}
+        divs: dict[tuple[str, str], dict] = {}                      # (标的, 币种) → {"gross": [f…], "wht": [f…]}
         for f in flows:
             rep.rows += 1
             ctype = str(f.get("cashflow_type"))
             rule = type_map.get(ctype)
             if rule in ("DIVIDEND", "DIVIDEND_WHT"):
-                m = _DIV_CODE.search(str(f.get("cashflow_remark", "")))
                 ccy = str(f.get("currency", "")).upper()
-                code = f"US.{m.group(1).upper()}" if (m and ccy == "USD") else None      # 港股备注格式未核实：不猜
+                code = dividend_code(str(f.get("cashflow_remark", "")), ccy)
                 if code is None:
                     queue_pending(ledger, SourceDraft("futu", f"cashflow:{f.get('cashflow_id')}", {k: str(v) for k, v in f.items()}),
                                   f"{ctype}：无法从备注确定标的/币种（未核实格式，不猜）")
                     rep.pending += 1
                 else:
-                    divs.setdefault((code, ccy), {})["gross" if rule == "DIVIDEND" else "wht"] = f
+                    divs.setdefault((code, ccy), {"gross": [], "wht": []})["gross" if rule == "DIVIDEND" else "wht"].append(f)
+                continue
+            if rule == "ACCOUNT_FEE":                                   # ADR/公司行动/过户等账户级费用：无对应成交 → ADJUST(INVESTMENT)，计入业绩（不是外部流水）
+                ccy = str(f.get("currency", "")).upper()
+                amount = dec(str(f["cashflow_amount"]))
+                src = SourceDraft("futu", f"cashflow:{f.get('cashflow_id')}", {k: str(v) for k, v in f.items()})
+                try:
+                    res = post_event(ledger, EventDraft(flow_key(account_id, str(f.get("cashflow_id")) if f.get("cashflow_id") else None, "acctfee"), account_id, "ADJUST",
+                                                        f"{f.get('clearing_date', d)}T00:00:00Z", ccy, cash_delta=str(amount), adjust_class="INVESTMENT",
+                                                        note=f"futu {ctype} {str(f.get('cashflow_remark', ''))[:80]}".strip()), source=src)
+                    rep.inserted += res.status == "inserted"
+                    rep.duplicate += res.status == "duplicate"
+                except IdentityInsufficient:
+                    queue_pending(ledger, src, "资金流水缺少流水号")
+                    rep.pending += 1
+                except LedgerError as exc:
+                    rep.conflicts.append(f"{f.get('cashflow_id')}: {exc}")
                 continue
             ccy = str(f.get("currency", "")).upper()
             amount = dec(str(f["cashflow_amount"]))          # 官方：正＝流入，负＝流出
@@ -284,25 +313,49 @@ def collect_cash_flows(ledger, api: TradeApi, *, account_id: str, acc_id: int, d
             except LedgerError as exc:
                 rep.conflicts.append(f"{f.get('cashflow_id')}: {exc}")
         for (code, ccy), g in divs.items():
-            gross, wht = g.get("gross"), g.get("wht")
-            if gross is None:                                        # 只有预扣税、没有股息：不入账，进待匹配
-                queue_pending(ledger, SourceDraft("futu", f"cashflow:{wht.get('cashflow_id')}", {k: str(v) for k, v in wht.items()}),
-                              "预扣税没有同日同标的股息总额")
-                rep.pending += 1
+            grosses, whts = g["gross"], g["wht"]
+            if not grosses:                                          # 只有预扣税、没有股息：不入账，进待匹配
+                for w_ in whts:
+                    queue_pending(ledger, SourceDraft("futu", f"cashflow:{w_.get('cashflow_id')}", {k: str(v) for k, v in w_.items()}), "预扣税没有同日同标的股息总额")
+                    rep.pending += 1
                 continue
-            at = f"{gross.get('clearing_date', d)}T00:00:00Z"
-            src = SourceDraft("futu", f"cashflow:{gross.get('cashflow_id')}", {k: str(v) for k, v in gross.items()})
-            try:
-                res = post_dividend(ledger, account_id, f"{gross.get('clearing_date', d)}:{code}", code, ccy, accrual_at=at, gross=str(dec(str(gross["cashflow_amount"]))),
-                                    payment_at=at, withholding_tax=str(abs(dec(str(wht["cashflow_amount"])))) if wht else None, source=src)
-                rep.inserted += sum(r.status == "inserted" for r in res)
-                rep.duplicate += sum(r.status == "duplicate" for r in res)
-            except LedgerError as exc:
-                rep.conflicts.append(f"dividend {code} {at}: {exc}")
+            if len(whts) > 1 or (whts and len(grosses) > 1):         # 无法唯一配对：不猜，全部进待匹配
+                for f_ in grosses + whts:
+                    queue_pending(ledger, SourceDraft("futu", f"cashflow:{f_.get('cashflow_id')}", {k: str(v) for k, v in f_.items()}), "同日同标的多笔股息/预扣税，无法唯一配对")
+                    rep.pending += 1
+                continue
+            wht = whts[0] if whts else None
+            for gross in grosses:                                    # 同日同标的两笔股息（如港股 F/D 与 S/D）各自成组
+                at = f"{gross.get('clearing_date', d)}T00:00:00Z"
+                src = SourceDraft("futu", f"cashflow:{gross.get('cashflow_id')}", {k: str(v) for k, v in gross.items()})
+                try:
+                    res = post_dividend(ledger, account_id, f"{gross.get('clearing_date', d)}:{code}:{gross.get('cashflow_id')}", code, ccy, accrual_at=at,
+                                        gross=str(dec(str(gross["cashflow_amount"]))), payment_at=at,
+                                        withholding_tax=str(abs(dec(str(wht["cashflow_amount"])))) if wht else None, source=src)
+                    rep.inserted += sum(r.status == "inserted" for r in res)
+                    rep.duplicate += sum(r.status == "duplicate" for r in res)
+                except LedgerError as exc:
+                    rep.conflicts.append(f"dividend {code} {at}: {exc}")
     return rep
 
 
-# ---------------------------------------------------------------- 真实实现（未经验证）
+class FileCashflowApi:
+    """从 JSONL（每行一条原始资金流水，含 clearing_date）离线重放资金流水：重建数据库时不必重新逐日请求 OpenD（逐日 3 秒，约 35 分钟）。"""
+
+    def __init__(self, path):
+        import json
+        from pathlib import Path
+        self.by_day: dict[str, list[dict]] = {}
+        for line in Path(path).read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                r = json.loads(line)
+                self.by_day.setdefault(str(r["clearing_date"]), []).append(r)
+
+    def cash_flow(self, acc_id: int, clearing_date: date) -> list[dict]:
+        return list(self.by_day.get(clearing_date.isoformat(), []))
+
+
+# ---------------------------------------------------------------- 真实实现（已于 2026-10-05 首跑核实：见 docs/records/first-real-run）
 class FutuTradeApi:
     """富途 OpenAPI 的只读封装。**未经真实验证**；方法与字段名按官方文档/V1 经验编写，首跑须在负责人授权下核对。"""
 

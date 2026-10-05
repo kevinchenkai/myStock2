@@ -203,3 +203,28 @@ def test_pending_item_is_auto_resolved_when_a_later_run_posts_it(led):
     assert r1.pending == 1 and len(open_pending(led)) == 1
     r2 = collect_order_fees(led, api, account_id=ACCT, acc_id=1, assume_market_currency=True, **NOSLEEP)
     assert r2.inserted == 1 and open_pending(led) == []                                            # 入账后陈旧待匹配项自动结清
+
+
+def test_dividend_code_formats_hk_two_payments_same_day_and_account_fees(led):
+    from mystock2.collectors.futu import dividend_code
+
+    assert dividend_code("SYNTH CORP COM(SYN) dividend, USD 0.91 per share", "USD") == "US.SYN"
+    assert dividend_code("TSM 1.00000000 SHARES DIVIDENDS 0.608106 USD PER SHARE", "USD") == "US.TSM"
+    assert dividend_code("24 F/D-HKD4.5/SH <SEHK 700 TENCENT> 11807 shares", "HKD") == "HK.00700"
+    assert dividend_code("Handling Charge <SEHK 9988 X>", "USD") is None and dividend_code("乱七八糟", "HKD") is None          # 认不出就不猜
+    api = FakeApi()
+    d = date(2026, 5, 30)
+    api.flows[d] = [      # 合成测试值
+        {"cashflow_id": "H1", "clearing_date": "2026-05-30", "currency": "HKD", "cashflow_type": "现金股息", "cashflow_amount": 1000, "cashflow_remark": "F/D-HKD1/SH <SEHK 700 TENCENT> 1000 shares"},
+        {"cashflow_id": "H2", "clearing_date": "2026-05-30", "currency": "HKD", "cashflow_type": "现金股息", "cashflow_amount": 500, "cashflow_remark": "S/D-HKD0.5/SH <SEHK 700 TENCENT> 1000 shares"},
+        {"cashflow_id": "F1", "clearing_date": "2026-05-30", "currency": "HKD", "cashflow_type": "公司行动服务费", "cashflow_amount": -30, "cashflow_remark": "Handling Charge 1000 shares <SEHK 700 TENCENT>"},
+        {"cashflow_id": "F2", "clearing_date": "2026-05-30", "currency": "HKD", "cashflow_type": "公司行动服务费", "cashflow_amount": -30, "cashflow_remark": "Handling Charge 1000 shares <SEHK 700 TENCENT>"},
+    ]
+    tmap = {"现金股息": "DIVIDEND", "公司行动服务费": "ACCOUNT_FEE"}
+    rep = collect_cash_flows(led, api, account_id=ACCT, acc_id=1, days=[d], type_map=tmap, **NOSLEEP)
+    assert rep.pending == 0 and not rep.conflicts and rep.inserted == 2 * 2 + 2     # 两笔股息各（应收+到账）＋两笔账户费用
+    p = project(led, ACCT)
+    assert p.cash == {"HKD": D("1440")} and not p.receivable                          # 1500−60；同日两笔股息各自成组，互不覆盖
+    adj = led.execute("SELECT adjust_class FROM ledger_event WHERE event_type='ADJUST'").fetchall()
+    assert {r["adjust_class"] for r in adj} == {"INVESTMENT"}                         # 计入业绩，不是外部流水
+    assert collect_cash_flows(led, api, account_id=ACCT, acc_id=1, days=[d], type_map=tmap, **NOSLEEP).inserted == 0    # 幂等

@@ -144,3 +144,26 @@ def test_date_only_v1_snapshot_cannot_be_reconciled(tmp_path):
     sid = opening.create_snapshot(conn, ACCT, D2, "v1-date-only", {"US.NVDA": {"qty": "10"}}, {"USD": {"cash": "1000"}})
     with pytest.raises(ValueError, match="没有采集时刻"):
         reconcile(conn, ACCT, sid)                                                  # 当日 23:59:59Z 占位时刻会让盘中成交造成虚假差异
+
+
+def test_derive_opening_from_a_later_snapshot_gives_exact_positions_and_residual_cash(tmp_path):
+    from mystock2.ledger.opening import derive_opening
+
+    conn = make_db(tmp_path)
+    buy(conn, "D-1", "US.NVDA", 5, "20", D1)
+    sell(conn, "D-2", "US.TSLA", 2, "100", D2)
+    fee(conn, "D-1", "1.00", D1)
+    snap_id = snap(conn, D3, {"US.NVDA": "15", "US.TSLA": "8"}, {"USD": "899"})
+    pos, cash, warns = derive_opening(conn, ACCT, snap_id, T0)
+    assert pos == {"US.NVDA": "10", "US.TSLA": "10"} and not warns            # 15−5、8+2
+    assert cash == {"USD": "800"}                                              # 899 −(−100−1+200)＝800：倒推残差
+    opening.record_opening(conn, ACCT, T0, pos, cash)
+    assert reconcile(conn, ACCT, snap_id).ok                                   # 倒推开账后，到该快照时刻必然对得上（这是构造，不是独立证据）
+    with pytest.raises(Exception, match="快照不存在"):
+        derive_opening(conn, ACCT, "nope", T0)
+    # 成交不完整（快照持仓小于成交累计）→ 期初为负，必须报警
+    conn2 = make_db(tmp_path / "x") if (tmp_path / "x").mkdir() is None else None
+    buy(conn2, "D-9", "US.NVDA", 50, "20", D1)
+    s2 = snap(conn2, D3, {"US.NVDA": "10"}, {"USD": "0"})
+    _, _, w2 = derive_opening(conn2, ACCT, s2, T0)
+    assert any("为负" in w for w in w2)

@@ -208,3 +208,10 @@ def test_vendor_row_with_inconsistent_ohlc_is_rejected_alone_and_leaves_a_gap(mk
     res = collect_daily(mk, [FakeSource("v", [bar("2026-03-03"), bad, bar("2026-03-05")])], CODE, date(2026, 3, 2), date(2026, 3, 5), run_id="r1", now=now)
     assert res["status"] == "partial" and res["rejected_invalid_ohlc"] == ["2026-03-04"]
     assert [r["session_date"] for r in get_daily(mk, CODE, date(2026, 3, 1), date(2026, 3, 31))] == ["2026-03-03", "2026-03-05"]   # 好行入库，坏行是缺口
+
+
+def test_nan_rows_from_vendor_are_dropped_not_fatal(mk):
+    now = after_close(date(2026, 3, 5))
+    nan_bar = DailyBar(CODE, date(2026, 3, 4), "nan", "nan", "nan", "nan", "nan", "0")
+    res = collect_daily(mk, [FakeSource("v", [bar("2026-03-03"), nan_bar, bar("2026-03-05")])], CODE, date(2026, 3, 2), date(2026, 3, 5), run_id="r1", now=now)
+    assert res["status"] == "partial" and res["rejected_invalid_ohlc"] == ["2026-03-04"]

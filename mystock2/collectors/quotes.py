@@ -13,6 +13,7 @@ from typing import Protocol
 
 from mystock2.core import calendars as cal
 from mystock2.core.db import atomic
+from mystock2.core.money import MoneyError
 from mystock2.core.timeutil import MARKET_TZ, iso_utc, utc_now
 from mystock2.instruments.code_map import futu_to_yf, market_of
 from mystock2.market.bars import BarError, DailyBar, HourlyBar, _check_ohlc, put_daily, put_hourly
@@ -57,7 +58,7 @@ def collect_daily(conn: sqlite3.Connection, sources: list[QuoteSource], code: st
                 continue
             try:                                              # 供应商偶有 OHLC 自相矛盾的行：只丢这一行（留作缺口，不修补不记零），不拖垮整个标的
                 _check_ohlc(b.open, b.high, b.low, b.close)
-            except BarError:
+            except (BarError, MoneyError):                  # 含 NaN/非数值（退市或停牌标的常见）
                 invalid.append(b.session_date.isoformat())
                 continue
             keep.append(b)
@@ -101,7 +102,7 @@ def collect_hourly(conn, sources: list[QuoteSource], code: str, start: date, end
             try:
                 _check_ohlc(b.open, b.high, b.low, b.close)
                 good.append(b)
-            except BarError:
+            except (BarError, MoneyError):
                 pass                                          # 同日线：坏行不入库（留作缺口）
         bars = good
         if not bars:

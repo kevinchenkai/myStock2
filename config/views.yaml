@@ -11,11 +11,11 @@ views:
   - id: holdings
   - id: trades
     params:
-      limit: 200
+      limit: 2000          # 历史成交全部显示（最多 2000 笔，最新在前）
   - id: pnl
   - id: equity_trend
     params:
-      max_points: 250
+      max_points: 700
   - id: fx
     params:
       pair: USDCNY            # 负责人只关注美元—人民币
