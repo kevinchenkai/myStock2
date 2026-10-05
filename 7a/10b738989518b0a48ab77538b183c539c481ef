@@ -1,0 +1,64 @@
+mystock2/ledger/events.py
+  s_97d138eaf84b50::t_1cb49890fd49fb 1-16,18-21,23-127,135-425
+  s_97d138eaf84b50::t_504906bb1879f4 17
+  s_97d138eaf84b50::t_c7d9d41dfcf21a 22,128-134
+mystock2/ledger/fees.py
+  s_97d138eaf84b50::t_9effe17be7bbf1 1-63,67-68,70-83
+  s_97d138eaf84b50::t_72ac28189aada6 64-66,69
+tests/integration/test_cli.py
+  s_97d138eaf84b50::t_da6f2e20425c0e 6,34-35,38
+tests/unit/test_ledger_events.py
+  s_97d138eaf84b50::t_096600b500cfae 1-8,21-22,24-245,249-286
+  s_97d138eaf84b50::t_3ec1ad52861e07 246-248
+  s_97d138eaf84b50::t_504906bb1879f4 9-20,23
+mystock2/ledger/projection.py
+  s_97d138eaf84b50::t_72ac28189aada6 84-86,91,93
+  s_97d138eaf84b50::t_504906bb1879f4 16
+  s_97d138eaf84b50::t_9effe17be7bbf1 1-15,17-83,87-90,92,94-140
+mystock2/ledger/settlement.py
+  s_97d138eaf84b50::t_9effe17be7bbf1 1-41,43-57
+  s_97d138eaf84b50::t_72ac28189aada6 42
+tests/unit/test_ledger_properties.py
+  s_97d138eaf84b50::t_504906bb1879f4 1-53
+tests/unit/test_ledger_fees_settlement_reconcile.py
+  s_97d138eaf84b50::t_504906bb1879f4 1-138
+tests/unit/ledger_helpers.py
+  s_97d138eaf84b50::t_096600b500cfae 1-43
+mystock2/core/db.py
+  s_97d138eaf84b50::t_8d492321da9b27 26-38
+tests/unit/test_db.py
+  s_97d138eaf84b50::t_da6f2e20425c0e 18,20,22
+mystock2/ledger/__init__.py
+  s_97d138eaf84b50::t_1cb49890fd49fb 1
+mystock2/ledger/opening.py
+  s_97d138eaf84b50::t_9effe17be7bbf1 1-7,9-59
+  s_97d138eaf84b50::t_504906bb1879f4 8
+  s_97d138eaf84b50::t_72ac28189aada6 60-74
+migrations/0002_ledger.sql
+  s_97d138eaf84b50::t_1cb49890fd49fb 66-67
+  s_97d138eaf84b50::t_8d492321da9b27 1-65,68-164
+mystock2/ledger/reconcile.py
+  s_97d138eaf84b50::t_9effe17be7bbf1 1-54
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_dba9778761d085 52
+docs/adr/0001-ledger-event-model.md
+  s_97d138eaf84b50::t_47f6a950c37d5d 1-36
+docs/records/m2a-ledger-core_claude_20261005.md
+  s_97d138eaf84b50::t_9350d1bd3cf128 1-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "7a10b738989518b0a48ab77538b183c539c481ef",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
