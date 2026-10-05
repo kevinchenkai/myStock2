@@ -2,7 +2,7 @@
 
 > **跨轮次的唯一待办来源。** 开新一轮前先读这里；一轮结束时把没做完的登记进来。约定见 [COLLABORATION.md](COLLABORATION.md) §4。
 > 关闭一项时标记完成并写明关闭它的提交／文档，**不要删行**。
-> 最后更新：2026-10-05（方案 v0.4；gpt-6.1 三轮评审已处置）。
+> 最后更新：2026-10-05（方案 v0.5；gpt-6.1 四轮评审已处置）。
 
 | 状态 | 含义 |
 | --- | --- |
@@ -38,5 +38,5 @@
 
 | 编号 | 事项 | 状态 |
 | --- | --- | --- |
-| RV-01 | gpt-6.1 评审：第一轮（[原文](plans/plan-review_gpt_20261005.md)）、第二轮（[原文](plans/plan-review_gpt_r2_20261005.md)）、第三轮（[原文](plans/plan-review_gpt_r3_20261005.md)）均「不通过」但 must-fix 逐轮收敛 16→11→1，v0.2–v0.4 已逐条处置（[评审记录](plans/plan-review-log_claude_20261005.md)）；确认性复核 v0.4 待执行 | 进行中 |
+| RV-01 | gpt-6.1 评审：第一轮（[原文](plans/plan-review_gpt_20261005.md)）、第二轮（[原文](plans/plan-review_gpt_r2_20261005.md)）、第三轮（[原文](plans/plan-review_gpt_r3_20261005.md)）、第四轮（[原文](plans/plan-review_gpt_r4_20261005.md)）均「不通过」但 must-fix 逐轮收敛 16→11→1→1，v0.2–v0.4 已逐条处置（[评审记录](plans/plan-review-log_claude_20261005.md)）；第四轮确认性复核仍余 1 项（股息净额分支），v0.5 已修，待确认 | 进行中 |
 | RV-02 | grok-4.7 评审（见方案 §12）：本机 `grok` 命令行需负责人先登录 | 待办 |
