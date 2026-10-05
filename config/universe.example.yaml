@@ -1,0 +1,13 @@
+# 标的名单模板（合成示例，非投资建议）。真实名单放 config/local/universe.yaml（被 .gitignore 忽略）。
+# - code 必须是完整富途代码；裸代码（如 NV、0700）会被校验器拒绝并给出候选。
+# - tier: core 核心仓（只看不动） | trade 交易仓（出操作单） | watch 观察
+# - trade 仓缺 max_weight / max_lots 时不会生成可执行数量。
+instruments:
+  - code: US.NVDA
+    tier: trade
+    thesis: "（可选）关注理由"
+    max_weight: "0.15"      # 合成示例值，占交易仓权益上限
+    max_lots: 20
+    pending_confirmation: true   # 例：NV 是否指 NVDA 待确认（D1）；确认前不出可执行操作单
+  - code: HK.00700
+    tier: core

@@ -1,0 +1,25 @@
+# 协议预注册包模板（实施方案 §7；M6 冻结）。全部为占位——真实冻结版放 config/local/protocol.yaml（忽略）。
+# 冻结后修改 = 新协议版本 = 新比较批次。
+protocol_version: "TEMPLATE"
+comparison:
+  d0: null                 # 开账日（D3）
+  budget_B: {}             # 每币种预算，如 {HKD: ..., USD: ...}（D3，私有）
+  decision_time_local: {HK: "08:30", US: "09:00"}   # 项目截止（本地时间）
+  selection_rule: "last_frozen_visible_before_deadline"
+human_plan:
+  constraint_handling: null   # truncate | reject（预注册二选一）
+  missing_plan_rule: "no_order"
+strategy:
+  q_buy: null
+  q_sell: null
+  k: null
+  min_gain: null
+  max_hold_days: null        # D6；缺失则不生成可执行数量
+  exit_order: {type: null, limit_rule: null, unfilled: null}
+evaluation:
+  primary: "daily_paired_diff_vs_E0"
+  alpha: null
+  multiplicity: null
+  first_review_trading_days: 120   # D14，非功效保证
+risk:
+  execution_gate: null       # D15：数值，或明确 "none"（未答复不视为同意）

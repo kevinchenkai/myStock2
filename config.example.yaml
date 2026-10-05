@@ -1,0 +1,24 @@
+# myStock2 配置模板
+# 复制为 config.yaml 并填入真实值；config.yaml 已加入 .gitignore，请勿提交。
+# 真实的 universe / 协议 / 费用档案放 config/local/（同样被忽略）；本仓库只含模板与合成值。
+
+# 富途 OpenD 本地网关（M2a 起使用）
+futu:
+  host: 127.0.0.1
+  port: 11111
+  # 交易密码只通过环境变量 MYSTOCK2_FUTU_TRADE_PWD 注入；此处出现非空 trade_pwd 会被拒绝。
+  # 交易环境：REAL（实盘）/ SIMULATE（模拟）。历史成交仅支持 REAL。
+  trd_env: REAL
+
+collect:
+  markets:
+    - HK
+    - US
+
+db:
+  path: "data/mystock2.db"
+
+# Web：只允许监听回环地址。开发期用 8889（V1 占用 8888）；切换日后改 8888（实施方案 §3.7）。
+web:
+  host: 127.0.0.1
+  port: 8889

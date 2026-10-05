@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mystock2"
+version = "0.1.0"
+description = "myStock2：港美股「账本·透视·教练·记分牌」系统"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+dependencies = ["PyYAML>=6.0", "Flask>=3.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "hypothesis>=6", "ruff>=0.5"]
+
+[tool.setuptools.packages.find]
+include = ["mystock2*"]
+
+[tool.setuptools.package-data]
+"mystock2.core" = ["data/calendars/*.csv", "data/calendars/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B"]
+ignore = ["E501"]

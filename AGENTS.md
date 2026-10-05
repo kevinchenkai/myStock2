@@ -2,7 +2,7 @@
 
 Codex 与 Claude 共用此文件；只保留长期有效的规则。运行与命令见 [README](README.md)，文档入口见 [docs/README.md](docs/README.md)，现行实施方案见 [docs/plans](docs/plans/)。
 
-> 阶段：实施中（方案 v1.0 已定稿，2026-10-05）。按 [实施方案](docs/plans/mystock-v2-implementation-plan_claude_20261005.md) §4 的里程碑推进；验证命令在 M1 落地后补入本文件。遇到实际问题再修订方案（升版本号并登记）。
+> 阶段：实施中（方案 v1.0 已定稿，2026-10-05）。按 [实施方案](docs/plans/mystock-v2-implementation-plan_claude_20261005.md) §4 的里程碑推进；M1（地基）已落地。遇到实际问题再修订方案（升版本号并登记）。
 
 ## 目标与边界
 
@@ -22,7 +22,7 @@ Codex 与 Claude 共用此文件；只保留长期有效的规则。运行与命
 - **V2 将替代 V1**；**V1（`kevinchenkai/myStock`）代码已由负责人锁定只读**，开发期间继续在 8888 运行：agent 不得修改 V1 代码、不写 V1 数据库、不重启 V1。V1 数据库只读导入；V1 代码可借用（拷贝＋重写测试，不跨仓库 import）也可全新生成，逐模块择优，须守账本不变量。
 - **端口**：开发期 V2 Web 用 **8889**（回环）；V2 完成并满足切换条件后，由负责人在切换日明确授权，V1 → 8887、V2 → 8888（见实施方案 §3.7）。切换的任何动作（改 V1 端口、重启 V1、启动 V2 于 8888、停用 V1）均须当日明确授权。
 - 密钥、真实账户数据、`config.yaml`、`config.*.local.yaml`、`data/`、`*.db*` 不得提交或公开；文档里需要举例时用合成值并标注「合成测试值」。发往外部模型的内容只含脱敏摘要。
-- 验证与改动匹配（命令待 M1 确定）；文档改动提交前运行文档检查（M1 引入）与 `git diff --check`。
+- 验证与改动匹配：Python 用 conda 环境 `mk2`（Python 3.11；`conda env create -f environment.yml && pip install -e .`），测试 `python -m pytest -q`，静态检查 `python -m ruff check .`；文档改动运行 `python scripts/check_docs.py`；提交前运行 `git diff --check`。新增表须在 `mystock2/core/db.py` 的 `TABLE_OWNERS` 登记写入者（测试强制）；新增子包须在 `tests/test_import_boundaries.py` 声明依赖。
 - 交付说明改了什么、验证结果和未解决事项；后续问题登记到 `docs/OPEN_ITEMS.md`。不虚报执行、测试或收益；声明「未做某项高风险动作」前须确认属实——错误的声明比不声明更糟。
 
 ## 协作与维护

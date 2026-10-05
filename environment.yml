@@ -1,0 +1,15 @@
+name: mk2
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - PyYAML>=6.0
+      - Flask>=3.0
+      # dev
+      - pytest>=8
+      - hypothesis>=6
+      - ruff>=0.5
+      # 后续里程碑按需加入：futu-api（M2a）、yfinance（M4）、scikit-learn/lightgbm（M8），加入时锁定版本并说明理由
