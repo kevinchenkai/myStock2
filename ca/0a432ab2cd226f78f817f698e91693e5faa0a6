@@ -1,0 +1,37 @@
+config.example.yaml
+  s_97d138eaf84b50::t_f288a3826035b2 25-30
+mystock2/cli/__init__.py
+  s_97d138eaf84b50::t_f288a3826035b2 92-94
+mystock2/cli/update.py
+  s_97d138eaf84b50::t_f288a3826035b2 1-111,113-115,117-118,120-123,126-130,132,134-135,137-165
+  s_97d138eaf84b50::t_8d359d1029aabe 112,116,119,124-125,131,133,136
+tests/integration/test_v1_archive.py
+  s_97d138eaf84b50::t_8d359d1029aabe 85-86
+tests/unit/test_update_command.py
+  s_97d138eaf84b50::t_19ac92030640e5 1-14,16-101
+  s_97d138eaf84b50::t_bc74a5b2b5f472 15
+scripts/install_launchd.sh
+  s_97d138eaf84b50::t_f3d9463bc442eb 1-58
+docs/guides/daily-update_claude_20261005.md
+  s_97d138eaf84b50::t_4fb4d8212b1d26 1-65
+docs/records/real-data-phase-changelog_claude_20261005.md
+  s_97d138eaf84b50::t_4c2e142af6626b 1-86
+docs/README.md
+  s_97d138eaf84b50::t_cab6bba6e4b880 3,9,15-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "ca0a432ab2cd226f78f817f698e91693e5faa0a6",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "unknown"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
