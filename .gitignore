@@ -224,6 +224,7 @@ __marimo__/
 # 私有配置与真实数据，绝不提交（公开仓库）
 config.yaml
 config.*.local.yaml
+config/local/
 data/
 *.db
 *.db-*
