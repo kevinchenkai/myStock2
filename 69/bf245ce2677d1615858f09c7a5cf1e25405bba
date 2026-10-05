@@ -1,0 +1,59 @@
+mystock2/coach/decide.py
+  s_97d138eaf84b50::t_5b1fbd1fa65fb1 151
+  s_97d138eaf84b50::t_9ac481aa1a6fac 1-145,157,159-192
+  s_97d138eaf84b50::t_98d3f73285f38a 146-150,152-156,158
+mystock2/coach/intents.py
+  s_97d138eaf84b50::t_d0d0f09e65a532 1-174
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_33a94a4abda9d2 55
+mystock2/core/db.py
+  s_97d138eaf84b50::t_39cb373848cce7 58-62
+tests/unit/test_db.py
+  s_97d138eaf84b50::t_33a94a4abda9d2 94
+tests/unit/test_coach_decide.py
+  s_97d138eaf84b50::t_98d3f73285f38a 1-43,45-74,76,78-163
+  s_97d138eaf84b50::t_6b4db523f2d8d1 44,75,77
+mystock2/scoreboard/lines.py
+  s_97d138eaf84b50::t_6349ffcb1ab272 25,29
+mystock2/cli/__init__.py
+  s_97d138eaf84b50::t_6349ffcb1ab272 76-78
+mystock2/coach/tickets.py
+  s_97d138eaf84b50::t_d0d0f09e65a532 69-72
+  s_97d138eaf84b50::t_5c9146d16d1ed5 1-68,73-143
+mystock2/cli/ops.py
+  s_97d138eaf84b50::t_6349ffcb1ab272 1-242,244-319,322-403,407-458,460-489
+  s_97d138eaf84b50::t_b3df25f0e3ea91 243,404-406
+  s_97d138eaf84b50::t_7d0a3e9dc0c7eb 320-321,459
+mystock2/coach/__init__.py
+  s_97d138eaf84b50::t_39cb373848cce7 1
+mystock2/scoreboard/marketdata.py
+  s_97d138eaf84b50::t_abfa89b2cef8f6 1-55
+tests/integration/test_daily_flow.py
+  s_97d138eaf84b50::t_7d0a3e9dc0c7eb 92
+  s_97d138eaf84b50::t_b3df25f0e3ea91 1-91,93-142
+docs/records/m6-coach_claude_20261005.md
+  s_97d138eaf84b50::t_33a94a4abda9d2 1-40
+tests/unit/test_coach_tickets_intents.py
+  s_97d138eaf84b50::t_c1d85d163c26ab 1-6,8,16-185,187-211,213-293
+  s_97d138eaf84b50::t_b86e980ec301c9 7,9-15,186,212
+mystock2/scoreboard/providers.py
+  s_97d138eaf84b50::t_abfa89b2cef8f6 1-51
+migrations/0005_coach.sql
+  s_97d138eaf84b50::t_39cb373848cce7 1-88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "69bf245ce2677d1615858f09c7a5cf1e25405bba",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
