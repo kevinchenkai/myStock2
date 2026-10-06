@@ -20,10 +20,15 @@ def mut(**over):
     return d
 
 
-def test_example_config_loads_and_uses_dev_port():
-    cfg = load_config(root=REPO_ROOT)
+def test_example_config_loads_and_uses_dev_port(tmp_path, monkeypatch):
+    """读的是仓库里的 config.example.yaml（不受本机私有 config.yaml 与 MYSTOCK2_CONFIG 影响）。"""
+    import shutil
+    monkeypatch.delenv("MYSTOCK2_CONFIG", raising=False)
+    shutil.copy(REPO_ROOT / "config.example.yaml", tmp_path / "config.example.yaml")
+    cfg = load_config(root=tmp_path)
+    assert cfg.is_example and cfg.source == tmp_path / "config.example.yaml"
     assert cfg.web.port == 8889 and cfg.web.host == "127.0.0.1"
-    assert cfg.db_path == REPO_ROOT / "data" / "mystock2.db"
+    assert cfg.db_path == tmp_path / "data" / "mystock2.db"
 
 
 def test_non_loopback_web_host_rejected():

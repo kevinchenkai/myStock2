@@ -299,3 +299,43 @@ def test_other_writers_cannot_touch_ledger(tmp_path):
     ro = dbmod.connect_ro(path)
     with pytest.raises(sqlite3.OperationalError):
         ro.execute("DELETE FROM ledger_event")
+
+
+# ---------------------------------------------------------------- 审核补测（变异 M1、M3–M6）
+def test_fee_rules_fail_for_the_rule_under_test(conn):
+    """变异 M3/M4：费用不能是收入、必须归属——用不带 code 的费用草稿，确保报错来自被测规则本身。"""
+    base = dict(business_key="f", account_id=ACCT, event_type="FEE", event_at=D1, currency="USD", ref_deal_id="D-1")
+    with pytest.raises(LedgerError, match="cash_delta ≤ 0"):
+        post_event(conn, EventDraft(**{**base, "cash_delta": "5"}))
+    with pytest.raises(LedgerError, match="必须归属"):
+        post_event(conn, EventDraft(**{**base, "cash_delta": "-5", "ref_deal_id": None}))
+    assert post_event(conn, EventDraft(**{**base, "cash_delta": "-5"})).status == "inserted"
+
+
+def test_fill_exactly_at_t0_is_pre_opening(conn):
+    """变异 M1：开账边界是 `event_at ≤ t0`——恰在 t0 的成交属于开账前（只作描述），不进前向和式。"""
+    opening.record_opening(conn, ACCT, T0, {"US.NVDA": "10"}, {"USD": "1000"})
+    buy(conn, "D-0", "US.NVDA", 5, "10", T0)
+    p = project(conn, ACCT)
+    assert p.positions == {"US.NVDA": Decimal(10)} and p.cash == {"USD": Decimal(1000)} and p.pre_opening_events == 1
+
+
+def test_cancelled_event_can_be_reinstated_by_a_new_correction(conn):
+    """变异 M6：取消后再更正（重新生效）须追加更高版本，不得与已有版本主键冲突。"""
+    opening.record_opening(conn, ACCT, T0, {}, {"USD": "1000"})
+    key = fill_key(ACCT, "D-1")
+    buy(conn, "D-1", "US.NVDA", 10, "10", D1)
+    correct_event(conn, key, None, "req-cancel")
+    ids = correct_event(conn, key, EventDraft(key, ACCT, "FILL", D1, "USD", code="US.NVDA", price="10", qty_delta="4", cash_delta="-40", ref_deal_id="D-1"), "req-back")
+    assert ids == [f"{key}#3"]
+    p = project(conn, ACCT)
+    assert p.positions == {"US.NVDA": Decimal(4)} and p.cash == {"USD": Decimal(960)}
+
+
+def test_fx_group_with_two_legs_of_the_same_sign_has_no_effect(conn):
+    """变异 M5：两腿币种不同但同为支出（不是换汇）：整组不生效，并在对账中列出。"""
+    opening.record_opening(conn, ACCT, T0, {}, {"USD": "1000", "HKD": "1000"})
+    for leg, ccy in (("a", "USD"), ("b", "HKD")):
+        post_event(conn, EventDraft(f"fx:{ACCT}:g:{leg}", ACCT, "FX", D1, ccy, cash_delta="-10", group_id="g", leg_id=leg), _internal_fx=True)
+    assert incomplete_fx_groups(conn, ACCT) == ["g"]
+    assert project(conn, ACCT).cash == {"USD": Decimal(1000), "HKD": Decimal(1000)}

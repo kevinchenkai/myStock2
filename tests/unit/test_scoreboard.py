@@ -62,7 +62,7 @@ def test_gap_through_limit_still_fills_at_limit_not_better_open():
     m = match_order(SimOrder("L", CODE, BUY, 100, D("10")), bars, PROTO)
     assert m.fills[0].price == D("10")
     sell_bars = hb(md, d2, [(12, 13, 11.5, 12.5, 100000)])               # 卖出同理：开盘 12 高于限价 10，仍按 10 成交
-    assert match_order(SimOrder("L", CODE, SELL, 100, D("10")), sell_bars, PROTO).fills[0].price == D("10") if False else True
+    assert match_order(SimOrder("L", CODE, SELL, 100, D("10")), sell_bars, PROTO).fills[0].price == D("10")
     assert match_order(SimOrder("L", CODE, SELL, 100, D("11")), sell_bars, PROTO).fills[0].price == D("11")
 
 

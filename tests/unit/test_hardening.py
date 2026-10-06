@@ -43,7 +43,6 @@ def test_f05_opening_correction_nets_out_and_package_is_frozen(tmp_path):
     correct_event(conn, key, EventDraft(key, ACCT, "OPENING_CASH", T0, "USD", cash_delta="900"), "fix-1")
     p = project(conn, ACCT)
     assert p.cash == {"USD": D(900)}                                           # 不是 1,900：冲销按「被冲销事件类型」参与开账边界
-    assert opening.record_opening  # noqa: B018
     with pytest.raises(LedgerError, match="开账包已冻结"):
         opening.record_opening(conn, ACCT, T0, {"US.NVDA": "10", "US.TSLA": "5"}, {"USD": "1000"})        # 同 t0 追加新项目
     with pytest.raises(LedgerError, match="开账包已冻结"):

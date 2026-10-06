@@ -279,11 +279,14 @@ def test_traversal_covers_the_ops_views_and_sealed_content_stays_sealed(env):
     for vid in ("tickets", "scoreboard", "replay", "data_status", "stock"):
         assert any(u == f"/api/v/{vid}" for u, _ in urls), vid
     assert any(u == "/api/v/stock" and q.get("code") == "US.NVDA" for u, q in urls)
-    revealed = bool(dbmod.connect_ro(db).execute("SELECT 1 FROM intent_exposure").fetchone())
+    if dbmod.connect_ro(db).execute("SELECT 1 FROM intent_exposure").fetchone():           # 已揭示的变体：只检查路由覆盖
+        return
     client = app.test_client()
-    if not revealed:
-        for url, q in urls:
-            if url.startswith("/api/v/") and url.split("/")[-1] in ("tickets", "holdings", "replay", "data_status", "scoreboard", "stock"):
-                text = client.get(url, query_string=q).get_data(as_text=True)
-                for v in LEAK_VALUES:
-                    assert v not in text, (url, q, v)
+    scanned = 0
+    for url, q in urls:                                          # 审核 T-06：扫描全部 /api 路由，而不是挑几个视图
+        if url.startswith("/api/"):
+            text = client.get(url, query_string=q).get_data(as_text=True)
+            scanned += 1
+            for v in LEAK_VALUES:
+                assert v not in text, (url, q, v)
+    assert scanned >= 14

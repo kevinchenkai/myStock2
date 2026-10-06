@@ -390,6 +390,7 @@ def test_table_pagination_with_sort_filter_and_row_click():
     assert o["sortedFirst"] == "US.00119" and o["clicked"] == ["US.00119"]
 
 
+@pytest.mark.skipif(node is None, reason="需要 node")
 def test_table_column_filters_intersect_reset_page_and_work_with_market_filter():
     script = r"""
     const vm = require('vm'), fs = require('fs');

@@ -331,3 +331,16 @@ def test_partial_refresh_and_identical_rerun_follow_the_explicit_group(db):
     early = select_ticket(dbmod.connect_ro(db), Cell(B, L, "line_sim", "US", TARGET.isoformat(), "US.NVDA"), deadline_at=BEFORE + timedelta(minutes=1),
                           current_state_ref="s0").ticket
     assert early["action"] == BUY
+
+
+def test_veto_reduction_must_stay_on_whole_lots(db):
+    """变异 M2：每手 100 股的买单，否决只能减到整手（150 股被拒，100 股可以）；测试里每手都是 1 股时这条规则从未被触发。"""
+    _a, c, ro = conns(db)
+    d = TicketDraft("US.NVDA", BUY, __import__("decimal").Decimal("97"), 300, 100, None, ("edge_ok",), uncertainty={"n_train": 250}, model_ref="p1")
+    freeze_tickets(c, batch_id=B, line_id=L, kind="line_sim", market="US", target_session=TARGET, stage="close", drafts=[d], state_ref_type="line_state",
+                   state_ref="s0", strategy_version="v", protocol_version="p", generated_at=BEFORE - timedelta(minutes=1), now=BEFORE, deadline_at=DEADLINE)
+    pack = make_pack(ro)
+    _, errors = check(ro, pack, adjustments=[{"code": "US.NVDA", "type": "reduce_buy_qty", "qty": 150}])
+    assert errors == ["qty_not_lot:US.NVDA"]
+    ok, errors = check(ro, pack, adjustments=[{"code": "US.NVDA", "type": "reduce_buy_qty", "qty": 100}])
+    assert ok is not None and errors == []

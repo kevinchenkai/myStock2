@@ -167,7 +167,7 @@ def test_f18_allow_add_respects_total_weight_and_total_lot_caps():
     add = StrategyParams(k=D("0.5"), q_buy=D("0.2"), q_sell=D("0.8"), min_gain=D("0.01"), max_hold_days=5, exit_q=D("0.3"), budget_slice=D("0.5"), allow_add=True)
     full = holding(50, 110, TARGET - timedelta(days=2), cash=100000)           # 50 股×中间价 100 = 5000 = 50% 权益上限；卖出目标不可达（地板 111.1 > 105）
     (t,) = run(full, ["US.NVDA"], {"US.NVDA": pred(95, 105)}, params=add, equity=10000, w="0.5")
-    assert t.action == SKIP and "budget_too_small" in t.reason_codes or t.qty in (None, 0)         # 已到总权重上限：不得再买
+    assert t.action == SKIP and t.reason_codes == ("budget_too_small",) and t.qty is None         # 已到总权重上限：不得再买
     part = holding(10, 110, TARGET - timedelta(days=2), cash=100000)
     (t,) = run(part, ["US.NVDA"], {"US.NVDA": pred(95, 105)}, params=add, equity=10000, w="0.5")
     assert t.action == BUY and (10 + t.qty) * 100 <= 5000 + 100                                     # 总持仓价值不超过 max_weight×权益

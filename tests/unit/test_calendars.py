@@ -27,8 +27,7 @@ def test_us_dst_open_time_shifts():
 def test_hk_lunch_break_and_new_year_closure():
     assert not cal.is_session("HK", "2025-01-29")      # 农历新年
     s = cal.session("HK", "2025-03-10")
-    assert s.break_start_utc is not None and s.break_end_utc is not None
-    assert s.break_start_utc < s.break_end_utc
+    assert (s.break_start_utc.hour, s.break_start_utc.minute) == (4, 0) and (s.break_end_utc.hour, s.break_end_utc.minute) == (5, 0)   # 本地 12:00–13:00
     assert not s.is_half_day
 
 
