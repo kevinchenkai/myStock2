@@ -96,7 +96,6 @@ MS.registerPanel("forecast", function (root, d, ctx) {
   // ---- 最新预测
   function rangeCell(role) {
     return function (r) {
-      if (r.sealed) return { text: "已密封", na: true };
       var m = r.models[role], lo = m.low, hi = m.high;
       if (lo.na || hi.na) return lo.na ? lo : hi;
       var ccy = lo.text.slice(lo.text.lastIndexOf(" ") + 1);
@@ -105,15 +104,15 @@ MS.registerPanel("forecast", function (root, d, ctx) {
   }
   var lcols = [
     { key: "code", label: "标的", render: function (r) { return { text: r.code, tag: (r.kind === "latest" ? "最新预测" : "最近已结算") + " · " + r.sources.join("、") }; } },
-    { key: "status", label: "状态", render: function (r) { return { text: r.status, title: r.status_title || null, tag: r.sealed ? "密封" : null }; } },
+    { key: "status", label: "状态", render: function (r) { return { text: r.status, title: r.status_title || null, tag: null }; } },
     { key: "as_of", label: "as_of → 目标日", render: function (r) { var t = r.as_of + " → " + r.target.slice(5); return r.pred_lag ? { text: t, tag: "预测落后于行情" } : r.lag ? { text: t, tag: "行情落后" } : t; } },
     { key: "base", label: "基准收盘价", num: true, render: function (r) { return r.base_close.na ? r.base_close : { text: r.base_close.text, v: r.base_close.v, subs: r.base_date ? [{ text: r.base_date }] : null }; } },
     { key: "b", label: "基线 预测低–高", hint: "相对基准价", num: true, render: rangeCell("baseline") },
     { key: "l", label: "LGBM 预测低–高", hint: "相对基准价", num: true, render: rangeCell("lgbm") },
-    { key: "act", label: "目标日实际低／高", num: true, render: function (r) { return r.actual ? { text: r.actual.low.text.replace(/ [A-Z]+$/, "") + " ／ " + r.actual.high.text, v: r.actual.low.v } : { text: r.sealed ? "未发生" : "不可用", na: true }; } }
+    { key: "act", label: "目标日实际低／高", num: true, render: function (r) { return r.actual ? { text: r.actual.low.text.replace(/ [A-Z]+$/, "") + " ／ " + r.actual.high.text, v: r.actual.low.v } : { text: r.status === "已结算" ? "不可用" : "未发生", na: true }; } }
   ];
   root.appendChild(MS.card("各标的最新预测", [
-    h("p", { class: "muted small", text: "每个标的取最新 as_of 的预测。目标日尚无终值日线、且没有揭示记录时，价位与区间一律不显示（已密封，见实施方案 §6A.2）；其下另列最近一次目标日已结束的预测供对照。基准收盘价：最新预测用最新行情日收盘价，最近已结算用当时（as_of）收盘价；缺失显示「不可用」。" }),
+    h("p", { class: "muted small", text: "每个标的取最新 as_of 的预测。预测区间一律显示（含目标日未结束的前向预测，不再密封；AI 操作单仍密封）；最新预测的目标日未结束时，其下另列最近一次目标日已结束的预测供对照。同一 as_of 有多条时取最新生成的（可能是事后重建的修订值）。基准收盘价：最新预测用最新行情日收盘价，最近已结算用当时（as_of）收盘价；缺失显示「不可用」。" }),
     MS.table(lcols, d.latest, { empty: "没有预测：不可用" })
   ]));
 });

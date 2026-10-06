@@ -42,8 +42,8 @@ OLD_LIMIT, OLD_QTY = "88.88", "4242"
 HUMAN_LIMIT, HUMAN_QTY = "55.55", "31337"
 SENT_PRED_LOW, SENT_PRED_HIGH = "98.7654", "112.3456"
 SENT_Y_LOW, SENT_Y_HIGH = "-0.098765", "0.054321"
-LEAK_VALUES = [SENT_LIMIT, SENT_QTY, SENT_RESERVED, *SENT_REASONS, *SENT_UNC.values(), HUMAN_LIMIT, HUMAN_QTY, OLD_LIMIT, OLD_QTY,
-               SENT_PRED_LOW, SENT_PRED_HIGH, SENT_Y_LOW, SENT_Y_HIGH]
+# 预测区间（SENT_PRED_*、SENT_Y_*）自 2026-10-06 起不再密封（负责人决定，方案 §6A.2 修订）；这里只列仍须密封的 AI 操作单内容。
+LEAK_VALUES = [SENT_LIMIT, SENT_QTY, SENT_RESERVED, *SENT_REASONS, *SENT_UNC.values(), HUMAN_LIMIT, HUMAN_QTY, OLD_LIMIT, OLD_QTY]
 LEAK_KEYS = ['"action"', '"limit_price"', '"qty"', '"reasons"', '"reason_json"', '"uncertainty"', '"frozen_hash"', '"state_ref"', '"reserved_cash"']
 LEAK_WORDS = ["BUY", "SELL", "HOLD", "SKIP", "买入", "卖出", "持有", "不操作", "edge_ok", "no_edge", "buy_target"]
 

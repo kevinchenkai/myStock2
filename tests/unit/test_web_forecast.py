@@ -363,71 +363,45 @@ def latest(body, code, kind="latest"):
     return next(r for r in body["data"]["latest"] if r["code"] == code and r["kind"] == kind)
 
 
-def test_unsettled_target_is_sealed_and_leaks_nothing(tmp_path):
+def test_unsettled_forward_target_shows_levels_and_is_not_sealed(tmp_path):
+    """负责人 2026-10-06 决定：预测区间不再密封——目标日未结束的前向预测也显示价位，供人类对照（AI 操作单仍密封，见 tickets 视图）。"""
     db = build_db(tmp_path, codes=("US.NVDA",))
-    pending_pred(db)
-    c = make_app(tmp_path, db).test_client()
-    text = c.get("/api/v/forecast").get_data(as_text=True)
-    for val in SENT.values():
-        assert val not in text, val
-    body = c.get("/api/v/forecast").get_json()
+    pending_pred(db)                                                                                    # 前向，目标日尚无行情
+    body = make_app(tmp_path, db).test_client().get("/api/v/forecast").get_json()
     r = latest(body, "US.NVDA")
-    assert r["sealed"] and r["status"] == "已密封" and r["target"] == NEXT.isoformat() and r["as_of"] == SESS[-1].isoformat()
-    assert r["models"] == {"baseline": None, "lgbm": None} and r["actual"] is None
-    s = latest(body, "US.NVDA", "last_settled")                                                       # 另列最近一次目标日已结束的预测
-    assert not s["sealed"] and s["status"] == "已结算" and s["as_of"] == SESS[39].isoformat()
-    assert s["models"]["baseline"]["low"]["text"].startswith("99.00") or s["models"]["baseline"]["low"]["text"].startswith("97.00")
+    assert "sealed" not in r and r["status"] == "前向（目标日未结束）" and r["target"] == NEXT.isoformat() and r["as_of"] == SESS[-1].isoformat()
+    low = r["models"]["baseline"]["low"]
+    assert low["text"] == "77.12 USD" and v(low) == D("77.1234")                                         # 价位带币种
+    assert low["rel"]["text"] == "-22.88%" and low["rel"]["dir"] == "down"                              # 相对最新收盘价 100：红涨绿跌（跌＝down）
+    assert r["models"]["lgbm"]["high"]["rel"]["dir"] == "up" and r["models"]["lgbm"]["high"]["rel"]["text"] == "+23.43%"
+    assert r["actual"] is None                                                                          # 目标日尚无实际值
+    s = latest(body, "US.NVDA", "last_settled")                                                         # 另列最近一次目标日已结束的预测
+    assert s["status"] == "已结算" and s["as_of"] == SESS[39].isoformat()
     assert s["actual"]["low"]["text"] == "98.00 USD" and s["actual"]["high"]["text"] == "103.00 USD"
-    assert set(body["data"]["latest"][0]) >= {"code", "kind", "as_of", "target", "sealed"}
 
 
-def test_sealed_state_holds_for_every_parameter_combination(tmp_path):
+def test_levels_are_shown_for_every_parameter_combination(tmp_path):
     db = build_db(tmp_path, codes=("US.NVDA", "US.TSLA"))
     pending_pred(db)
     c = make_app(tmp_path, db).test_client()
     for q in ("", "?source=rebuilt", "?source=forward", "?window=60", "?window=250&symbol=US.NVDA", "?symbol=US.TSLA&window=60"):
         text = c.get("/api/v/forecast" + q).get_data(as_text=True)
-        for val in SENT.values():
-            assert val not in text, (q, val)
+        assert SENT["low_price"] in text and "已密封" not in text, q
 
 
-def test_revealed_target_shows_levels_with_relative_position(tmp_path):
+def test_reveal_records_no_longer_matter_for_forecast_levels(tmp_path):
     db = build_db(tmp_path, codes=("US.NVDA",))
     pending_pred(db)
-    add_reveal(db, target=NEXT.isoformat(), at="2026-03-11T05:45:00.000000Z")                          # 该市场该目标日已揭示
-    r = latest(view(tmp_path, db), "US.NVDA")
-    assert not r["sealed"] and r["status"] == "已揭示" and "last_settled" not in {x["kind"] for x in view(tmp_path, db)["data"]["latest"]}
-    low = r["models"]["baseline"]["low"]
-    assert low["text"] == "77.12 USD" and v(low) == D("77.1234")                                       # 价位带币种
-    assert low["rel"]["text"] == "-22.88%" and low["rel"]["dir"] == "down"                              # 相对最新收盘价 100：红涨绿跌（跌＝down）
-    assert r["models"]["lgbm"]["high"]["rel"]["dir"] == "up" and r["models"]["lgbm"]["high"]["rel"]["text"] == "+23.43%"
-    assert r["actual"] is None                                                                          # 目标日尚无实际值
-
-
-def test_reveal_for_another_market_does_not_unseal(tmp_path):
-    db = build_db(tmp_path, codes=("US.NVDA",))
-    pending_pred(db)
-    w = dbmod.connect_writer(db, "coach")
-    from mystock2.coach.intents import reveal
-    reveal(w, batch_id="B1", market="HK", target_session=NEXT, channel="coach_show", version_hashes=["h"], at="2026-03-11T05:45:00.000000Z")
-    reveal(w, batch_id="B1", market="US", target_session=NEXT + timedelta(days=7), channel="coach_show", version_hashes=["h"], at="2026-03-11T05:45:00.000000Z")
-    w.close()
-    text = make_app(tmp_path, db).test_client().get("/api/v/forecast").get_data(as_text=True)
-    assert all(val not in text for val in SENT.values())
-
-
-def test_future_dated_reveal_does_not_unseal(tmp_path):
-    db = build_db(tmp_path, codes=("US.NVDA",))
-    pending_pred(db)
-    add_reveal(db, target=NEXT.isoformat(), at="2026-03-12T05:45:00.000000Z")                          # 晚于当前时间：保守视为未揭示
-    assert latest(view(tmp_path, db), "US.NVDA")["sealed"]
+    r0 = latest(view(tmp_path, db), "US.NVDA")
+    add_reveal(db, target=NEXT.isoformat(), at="2026-03-11T05:45:00.000000Z")
+    assert latest(view(tmp_path, db), "US.NVDA") == r0                                                  # 有无揭示记录，展示相同
 
 
 def test_settled_latest_prediction_shows_levels_and_actual(tmp_path):
     db = build_db(tmp_path, codes=("US.NVDA",))                                                         # 最新 as_of=SESS[39]，目标日 SESS[40] 已有行情
     body = view(tmp_path, db)
     r = latest(body, "US.NVDA")
-    assert not r["sealed"] and r["status"] == "已结算" and r["target"] == SESS[40].isoformat() and r["base_date"] == SESS[40].isoformat()
+    assert r["status"] == "已结算" and r["target"] == SESS[40].isoformat() and r["base_date"] == SESS[40].isoformat()
     assert r["models"]["baseline"]["low"]["rel"]["text"] and r["actual"]["high"]["text"] == "103.00 USD"
     assert not any(x["kind"] == "last_settled" for x in body["data"]["latest"])                         # 最新即已结算：不重复列
 
@@ -497,7 +471,7 @@ def test_panel_wording_and_no_client_side_math():
     assert 'MS.registerPanel("forecast"' in js
     for bad in ("innerHTML", "Number(", "parseFloat", "toFixed", "打败", "win_rate"):
         assert bad not in js, bad
-    assert "已密封" in js and "不足" in js and "不可用" in js
+    assert "已密封" not in js and "不足" in js and "不可用" in js
 
 
 def test_predictions_outside_the_current_universe_are_not_shown(tmp_path):
@@ -511,19 +485,20 @@ def test_predictions_outside_the_current_universe_are_not_shown(tmp_path):
     assert codes == {"US.NVDA", "US.TSLA"}                                              # 留档里仍有 PDD，但不再展示
 
 
-def test_rebuilt_predictions_are_not_sealed_but_forward_ones_are(tmp_path):
+def test_rebuilt_and_forward_unsettled_targets_are_both_shown_with_their_source_status(tmp_path):
     db = build_db(tmp_path, codes=("US.NVDA",))
     pending_pred(db, tag="rebuilt")
     row = latest(view(tmp_path, db), "US.NVDA")
-    assert not row["sealed"] and row["status"] == "事后重建（未密封）"            # 负责人决定：事后重建的预测不属于前向样本，可看
-    db2 = build_db(tmp_path / "b", codes=("US.NVDA",)) if (tmp_path / "b").mkdir() is None else None
+    assert row["status"] == "事后重建（目标日未结束）" and row["sources"] == ["rebuilt"]
+    (tmp_path / "b").mkdir()
+    db2 = build_db(tmp_path / "b", codes=("US.NVDA",))
     pending_pred(db2)                                                           # 前向（默认）
-    assert latest(view(tmp_path / "b", db2), "US.NVDA")["sealed"]
+    row2 = latest(view(tmp_path / "b", db2), "US.NVDA")
+    assert row2["status"] == "前向（目标日未结束）" and row2["sources"] == ["forward"]
 
 
-def test_forward_prediction_of_an_older_version_still_seals_a_newer_rebuilt_one(tmp_path):
-    """审核 P0-2：前向用 v1、之后又用 v2 事后重建同一 as_of。只展示最近版本的过滤不得先于密封判断，
-    否则前向行被滤掉，未结束目标日的 v2 价位以「事后重建（未密封）」放出；前向样本数也不能报成 0。"""
+def test_newer_rebuilt_revision_of_a_forward_target_is_shown_and_forward_count_stays(tmp_path):
+    """前向用 v1、之后又用 v2 事后重建同一 as_of：最新预测表取最新生成的（v2 修订值）；前向样本数不能因版本过滤报成 0（审核 P0-2）。"""
     db = build_db(tmp_path, codes=("US.NVDA",))
     pending_pred(db)                                                            # 前向 v1（价位是哨兵）
     fw = dbmod.connect_writer(db, "forecast")
@@ -535,9 +510,7 @@ def test_forward_prediction_of_an_older_version_still_seals_a_newer_rebuilt_one(
     for params in ({}, {"source": "forward"}):
         body = view(tmp_path, db, **params)
         row = latest(body, "US.NVDA")
-        assert row["sealed"] and all(v is None for v in row["models"].values()), row
-        text = json.dumps(body, ensure_ascii=False)
-        for s in list(SENT.values()) + list(v2.values()):
-            assert s not in text, s
+        assert row["status"] == "前向（目标日未结束）" and row["sources"] == ["rebuilt"]
+        assert row["models"]["baseline"]["low"]["text"] == "88.44 USD"
         assert body["data"]["forward_count_all_versions"] == 2
         assert not any("样本数为 0" in w for w in body["data"]["warnings"])

@@ -396,20 +396,20 @@ def test_forecast_shows_only_the_latest_rebuilt_row_per_model_and_is_labelled(tm
     assert b["total_rebuilt"] == 3 and [r["model"] for r in b["rows"]] == ["基线", "LightGBM+CQR"]
     base = b["rows"][0]
     assert base["as_of"] == "2026-03-06" and base["target"] == "2026-03-10" and base["low"]["text"] == "95.50 USD" and base["high"]["text"] == "108.25 USD"
-    assert base["tag"] == "事后重建、非前向证据" and base["sealed"] is False
+    assert base["tag"] == "事后重建、非前向证据"
     assert base["actual"]["low"]["text"] == "105.00 USD" and base["actual"]["high"]["text"] == "107.00 USD"      # 目标日已结算：给出实际
     assert base["rel_low"]["dir"] == "down" and base["rel_high"]["dir"] == "up"
 
 
-def test_forecast_never_includes_forward_predictions_and_seals_when_forward_exists_for_an_open_target(tmp_path):
+def test_forecast_never_includes_forward_predictions_and_shows_rebuilt_levels_even_for_an_open_target(tmp_path):
     db = build_stock_db(tmp_path)
     seed_rebuilt(db, "HK.00700", with_forward_target="2026-03-11")
     c = make_app(tmp_path, db).test_client()
     text = c.get("/api/v/stock", query_string={"code": "HK.00700"}).get_data(as_text=True)
     assert SENT_PRED_LOW not in text and SENT_PRED_HIGH not in text and "-0.098765" not in text            # 前向预测的数值根本不读取
     rows = json.loads(text)["data"]["forecast"]["rows"]
-    assert rows and all(r["sealed"] is False for r in rows)                                               # 重建行的目标日是 03-10（已结算），不受前向影响
-    # 重建预测与前向预测同一个未结束的目标日：该行只显示「已密封」，不含任何价位
+    assert rows and all("sealed" not in r and r["low"]["text"] for r in rows)                                               # 重建行的目标日是 03-10（已结算），不受前向影响
+    # 重建预测与前向预测同一个未结束的目标日：不再密封（负责人 2026-10-06 决定），显示重建预测的价位；前向预测的数值仍不读取
     w = dbmod.connect_writer(db, "forecast")
     gen = "2026-03-10T10:30:00.000000Z"
     w.execute("INSERT INTO prediction_version(prediction_id, code, as_of_session, target_session, model_version, feature_version, params_json, y_low, y_high, low_price, "
@@ -419,7 +419,8 @@ def test_forecast_never_includes_forward_predictions_and_seals_when_forward_exis
     w.close()
     text = c.get("/api/v/stock", query_string={"code": "HK.00700"}).get_data(as_text=True)
     lg = next(r for r in json.loads(text)["data"]["forecast"]["rows"] if r["model"] == "LightGBM+CQR")
-    assert lg["sealed"] is True and "low" not in lg and "271.1234" not in text and "301.5678" not in text
+    assert "sealed" not in lg and lg["low"]["text"] == "271.12 HKD" and lg["high"]["text"] == "301.57 HKD"
+    assert SENT_PRED_LOW not in text and SENT_PRED_HIGH not in text
 
 
 def test_stock_view_has_no_tickets_or_ai_order_fields_at_all(tmp_path):

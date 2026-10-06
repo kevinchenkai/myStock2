@@ -5,8 +5,7 @@
 - 持仓/成本/成交/盈亏一律复用既有口径：`ledger.pnl`（移动平均成本）、`web/ledgerdata.py`、`web/valuation.py`、`web/rowcells.py`
   （与 holdings/trades/pnl 视图共用）；这里不另写一套。
 - 订单（`broker_order`）是意图，不是成交：不进入持仓与盈亏；只用来看「下过什么单、是否撤单/失败」。
-- 预测：**只读 `source_tag='rebuilt'`（事后重建，非前向证据）**；前向（forward）预测的数值根本不读取，只用「是否存在同一目标日的前向预测」
-  这一个布尔信息做密封判断（该目标日尚无终值日线且无揭示记录 → 该行显示「已密封」，不含任何价位）。**不读取、不显示任何 AI 操作单（ticket）。**
+- 预测：**只读 `source_tag='rebuilt'`（事后重建，非前向证据）**；前向（forward）预测的数值不读取。**不再密封**（负责人 2026-10-06 决定）：目标日未结束的预测也显示价位。**不读取、不显示任何 AI 操作单（ticket）。**
 - 52 周高低：近 250 个交易日日线（未复权，仅 quality='ok'）的最高/最低，并列档案里的来源值与 as_of；两者口径不同，不互相覆盖。
 - 全程 Decimal，金额注明币种；缺失显示「不可用」，不记 0。时间只经 `common.now_of(params)`。
 """
@@ -25,7 +24,6 @@ from mystock2.ledger.pnl import QUALITY_TEXT, compute_realized_pnl
 from mystock2.ledger.projection import effective_events, project
 from mystock2.market.bars import get_daily
 from mystock2.web import common as C
-from mystock2.web import sealing
 from mystock2.web.ledgerdata import load_trades
 from mystock2.web.registry import ViewError
 from mystock2.web.rowcells import concentration, cost_cells, fill_row, sell_pnl_cell, weight_cell
@@ -449,18 +447,12 @@ def _target_settled(ctx: Ctx, target: str) -> dict | None:
     return r if r is not None and ensure_utc(r["received_at"]) <= ensure_utc(ctx.now) else None
 
 
-def _target_revealed(ctx: Ctx, target: str) -> bool:
-    batches = [r["batch_id"] for r in ctx.conn.execute("SELECT DISTINCT batch_id FROM intent_exposure WHERE market=? AND target_session=?", (ctx.market, target))]
-    return any(sealing.reveal_info(ctx.conn, b, ctx.market, target, ctx.now) is not None for b in batches)
-
-
 def _forecast(ctx: Ctx) -> dict:
     conn, ccy = ctx.conn, ctx.ccy
     rows = conn.execute("SELECT as_of_session, target_session, model_version, y_low, y_high, low_price, high_price, generated_at, input_cutoff_at "
                         "FROM prediction_version WHERE code=? AND source_tag='rebuilt' ORDER BY as_of_session, generated_at, rowid", (ctx.code,)).fetchall()
     if not rows:
         raise C.ViewUnavailable("no_prediction", "没有该标的的事后重建预测")
-    fwd_targets = {r[0] for r in conn.execute("SELECT DISTINCT target_session FROM prediction_version WHERE code=? AND source_tag='forward'", (ctx.code,))}
     best: dict[str, sqlite3.Row] = {}
     for r in rows:                                                  # 已按 as_of、generated_at 升序：后者覆盖前者＝每个模型取最新一条
         best[_family(r["model_version"]) or r["model_version"]] = r
@@ -470,14 +462,11 @@ def _forecast(ctx: Ctx) -> dict:
         item = {"model": FAMILY_LABEL.get(fam, fam), "model_version": r["model_version"], "as_of": r["as_of_session"], "target": r["target_session"],
                 "generated_at": r["generated_at"], "tag": "事后重建、非前向证据"}
         settled = _target_settled(ctx, r["target_session"])
-        if r["target_session"] in fwd_targets and settled is None and not _target_revealed(ctx, r["target_session"]):
-            item.update({"sealed": True, "note": f"目标日 {r['target_session']} 尚无终值日线、没有揭示记录，且存在前向预测：按 §6A.2 只显示「已密封」，不含价位。"})
-        else:
-            item.update({"sealed": False,
-                         "low": dict(C.price_cell(dec(r["low_price"]), ccy), text=f"{C.fmt_decimal(dec(r['low_price']), 2)} {ccy}"),
-                         "high": dict(C.price_cell(dec(r["high_price"]), ccy), text=f"{C.fmt_decimal(dec(r['high_price']), 2)} {ccy}"),
-                         "rel_low": C.pct_cell(dec(r["y_low"]), colored=True), "rel_high": C.pct_cell(dec(r["y_high"]), colored=True),
-                         "actual": ({"low": C.price_cell(dec(settled["low"]), ccy), "high": C.price_cell(dec(settled["high"]), ccy)} if settled is not None else None)})
+        # 不再密封（负责人 2026-10-06 决定）：目标日未结束的预测也显示
+        item.update({"low": dict(C.price_cell(dec(r["low_price"]), ccy), text=f"{C.fmt_decimal(dec(r['low_price']), 2)} {ccy}"),
+                     "high": dict(C.price_cell(dec(r["high_price"]), ccy), text=f"{C.fmt_decimal(dec(r['high_price']), 2)} {ccy}"),
+                     "rel_low": C.pct_cell(dec(r["y_low"]), colored=True), "rel_high": C.pct_cell(dec(r["y_high"]), colored=True),
+                     "actual": ({"low": C.price_cell(dec(settled["low"]), ccy), "high": C.price_cell(dec(settled["high"]), ccy)} if settled is not None else None)})
         out.append(item)
     return {"rows": out, "total_rebuilt": len(rows)}
 

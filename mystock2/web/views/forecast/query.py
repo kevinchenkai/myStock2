@@ -10,7 +10,7 @@
 约定：
 - `source_tag`：rebuilt＝事后重建（不是前向、不是当时可得，不能当作晋级证据）；forward＝当时生成并冻结。二者不混算，由参数 `source` 选择。
 - 模型对比只在「两个模型都有预测、且目标日已有终值日线（quality='ok' 的最高 version）」的样本上做；样本 < 30 显示「不足」，不显示 0。
-- **密封（§6A.2）**：目标日尚无终值日线、且该市场该目标日没有揭示记录的预测，价位与区间一律不返回，只显示「已密封」；目标日已结束的预测才展示数值。
+- **不再密封（负责人 2026-10-06 决定，方案 §6A.2 已修订）**：预测区间（含前向、目标日未结束的）一律显示，供人类对照；AI 操作单（`tickets` 视图）仍按 §6A.2 密封。
 - 不得导入 forecast/collectors/assistant；不得调用 utc_now()（时间经 common.now_of(params)）。
 """
 from __future__ import annotations
@@ -22,7 +22,6 @@ from mystock2.core.money import dec, to_db
 from mystock2.core.timeutil import ensure_utc
 from mystock2.instruments.code_map import CodeError, currency_of, market_of
 from mystock2.web import common as C
-from mystock2.web import sealing
 from mystock2.web.valuation import expected_session
 
 MIN_N = 30                                   # 样本不足阈值：低于它不给覆盖率/损失/改善
@@ -306,16 +305,7 @@ def _ccy(code: str) -> str:
         return ""
 
 
-# ------------------------------------------------------------------ 最新预测（密封）
-def _is_revealed(conn, code: str, target: str, now) -> bool:
-    try:
-        market = market_of(code)
-    except CodeError:
-        return False
-    batches = [r["batch_id"] for r in conn.execute("SELECT DISTINCT batch_id FROM intent_exposure WHERE market=? AND target_session=?", (market, target))]
-    return any(sealing.reveal_info(conn, b, market, target, now) is not None for b in batches)
-
-
+# ------------------------------------------------------------------ 最新预测
 def _settled(quotes: dict, code: str, target: str, now) -> bool:
     r = quotes.get(code, {}).get(target)
     return r is not None and ensure_utc(r["received_at"]) <= ensure_utc(now)
@@ -352,21 +342,12 @@ def _latest_row(conn, code: str, ps: list[dict], q: dict, quotes: dict, now, *, 
         why = "该模型没有此 as_of 的预测" + (f"（最近为 {own_latest}）" if own_latest else "")
         chosen[f] = (cand[-1] if cand else None, why)
     settled = _settled(quotes, code, target, now)
-    # 密封只针对「前向」预测（它们进入记分牌/人类计划对照）；事后重建（rebuilt）的预测不属于任何前向样本，不密封（负责人 2026-10-05 决定）。
-    # 一旦该目标日有 forward 预测（任何版本，不受「只展示最近版本」的过滤影响），仍按 §6A.2 密封。
-    rebuilt_only = all(p["tag"] == "rebuilt" for p in at) and (code, target) not in forward_targets
-    sealed = not (settled or rebuilt_only or _is_revealed(conn, code, target, now))
-    out = {"code": code, "kind": kind, "as_of": as_of, "target": target, "currency": ccy, "sealed": sealed,
+    # 预测区间一律显示（负责人 2026-10-06 决定；此前目标日未结束且有前向预测时「已密封」）。未结算的按来源标注状态。
+    out = {"code": code, "kind": kind, "as_of": as_of, "target": target, "currency": ccy,
            "sources": sorted({p["tag"] for p in at}), "base_date": base_day,
            "base_close": C.price_cell(base_close, ccy) if base_close is not None else C.na_cell("缺少收盘价"), "lag": lag and kind == "latest",
            "pred_lag": kind == "latest" and base_day is not None and as_of < base_day}
-    if sealed:
-        out["status"] = "已密封"
-        out["status_title"] = f"目标日 {target} 尚无终值日线且没有揭示记录：区间与价位在目标日结束前不显示（实施方案 §6A.2）"
-        out["models"] = {f: None for f in FAMILIES}
-        out["actual"] = None
-        return out
-    out["status"] = "已结算" if settled else ("事后重建（未密封）" if rebuilt_only and not _is_revealed(conn, code, target, now) else "已揭示")
+    out["status"] = "已结算" if settled else ("前向（目标日未结束）" if (code, target) in forward_targets else "事后重建（目标日未结束）")
     out["status_title"] = ""
     out["models"] = {f: _level_cells(chosen[f][0], base_close, ccy, chosen[f][1]) for f in FAMILIES}
     tq = q.get(target) if settled else None
@@ -393,7 +374,7 @@ def _latest_rows(conn, preds: list[dict], quotes: dict, now, forward_targets: se
         latest = _latest_row(conn, code, ps, q, quotes, now, as_of=max(p["as_of"] for p in ps), kind="latest", base_day=last_day,
                              base_close=last_close, lag=bool(lag), forward_targets=forward_targets)
         rows.append(latest)
-        if latest["sealed"]:
+        if latest["actual"] is None:                         # 最新预测的目标日还没结束：另列最近一次已结算的预测供对照
             done = sorted({p["as_of"] for p in ps if _settled(quotes, code, p["target"], now)})
             if done:                                         # 最近一个目标日已结束的预测（相对「当时」的收盘价）
                 a = done[-1]

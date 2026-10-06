@@ -68,3 +68,5 @@
 | 修改许可范围外的文件 | **否**。改动限于 `mystock2/web/**`（含共用静态文件）、`config/views.yaml`、`tests/unit/test_web_*.py` 与本回执；未改 `core/db.py`、迁移、`forecast/`、其他业务模块、`pyproject.toml`、`tests/test_import_boundaries.py` |
 | 新增表/迁移 | **否** |
 | 监听地址 | 仅回环（既有配置强制）|
+
+> **2026-10-06 更新**：负责人决定预测区间不再密封（方案 v1.3 §16），上文「密封」一节的行为已作废：目标日未结束的预测也显示价位；AI 操作单仍密封。

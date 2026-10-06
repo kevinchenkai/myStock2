@@ -173,10 +173,9 @@ MS.registerPanel("stock", function (root, d, ctx) {
       { key: "model", label: "模型", render: function (x) { return { text: x.model, title: x.model_version }; } },
       { key: "as_of", label: "数据截至" }, { key: "target", label: "目标日" },
       { key: "range", label: "预测区间", num: true, render: function (x) {
-        if (x.sealed) return { text: "已密封", title: x.note, tag: "密封" };
         return { text: x.low.text + " – " + x.high.text, subs: [{ text: "相对 T 日收盘 " + x.rel_low.text, dir: x.rel_low.dir }, { text: x.rel_high.text, dir: x.rel_high.dir }] };
       } },
-      { key: "actual", label: "目标日实际", num: true, render: function (x) { return x.actual ? x.actual.low.text + " – " + x.actual.high.text : { text: x.sealed ? "已密封" : "未结算", na: true }; } },
+      { key: "actual", label: "目标日实际", num: true, render: function (x) { return x.actual ? x.actual.low.text + " – " + x.actual.high.text : { text: "未结算", na: true }; } },
       { key: "generated_at", label: "重建时刻", render: function (x) { return MS.fmtTime(x.generated_at); } },
       { key: "tag", label: "来源标签" }
     ], b.rows, { sortable: false }));
