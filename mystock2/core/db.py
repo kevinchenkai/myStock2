@@ -132,6 +132,7 @@ def connect_writer(path: str | Path, owner: str) -> sqlite3.Connection:
         raise DbError(f"数据库不存在（请先 `db migrate`）：{path}")
     conn = _base_connect(path)
     conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA recursive_triggers = ON")       # 让 INSERT OR REPLACE 的隐式删除也触发「禁止删除」触发器（只追加的纵深防御，审核 L-01）
     conn.set_authorizer(_authorizer_for(owners))
     return conn
 

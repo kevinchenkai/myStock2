@@ -281,6 +281,11 @@ def post_event(conn: sqlite3.Connection, draft: EventDraft, *, source: SourceDra
         existing = conn.execute("SELECT content_hash FROM ledger_event WHERE event_id=?", (event_id,)).fetchone()
         if existing:
             if existing["content_hash"] != h:
+                cur = conn.execute("SELECT event_id, event_type, content_hash FROM ledger_event WHERE business_key=? ORDER BY event_version DESC LIMIT 1",
+                                   (draft.business_key,)).fetchone()
+                if cur["event_type"] != "REVERSAL" and cur["content_hash"] == h:       # 已更正过：与当前有效版本相同的再次到达是重复，不是冲突（审核 L-02）
+                    _link(conn, sid, cur["event_id"])
+                    return PostResult(cur["event_id"], "duplicate")
                 raise LedgerConflict(f"规范键 {draft.business_key} 已存在但内容不同；请转入待匹配/走更正流程")
             _link(conn, sid, event_id)
             return PostResult(event_id, "duplicate")
@@ -347,6 +352,11 @@ def correct_event(conn: sqlite3.Connection, business_key: str, new_draft: EventD
         if not rows:
             raise LedgerError(f"没有可更正的事件：{business_key}")
         last = rows[-1]
+        if new_fields is not None:                                       # 新版本也要守组级与账户约束（审核 L-04）
+            if new_fields["account_id"] != rows[0]["account_id"]:
+                raise LedgerError("更正不得改变事件所属账户")
+            if new_fields["event_type"] in ("FX", "DIVIDEND_ACCRUAL", "DIVIDEND_PAYMENT", "DIVIDEND_SHORTFALL"):
+                raise LedgerError("FX/股息属于成组事件，只能经组级入口写入，不能由单事件更正产生")
         if rows[0]["event_type"] == "FX" or (last["group_id"] and rows[0]["event_type"] in ("DIVIDEND_ACCRUAL", "DIVIDEND_PAYMENT", "DIVIDEND_SHORTFALL")):
             raise LedgerError("FX/股息属于成组事件，不得单事件更正：请用 cancel_fx / 组级处理")
         sid = record_source(conn, source, received_at) if source else None

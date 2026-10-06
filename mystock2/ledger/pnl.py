@@ -232,16 +232,21 @@ def compute_realized_pnl(events: Iterable[TradeEvent], opening_at: datetime | st
     return res
 
 
+# 股数的最小单位是 1e-6（采集量化）；按比例分摊的除法会留下 1e-39 级残差，低于这个阈值一律视为 0（审核 L-05：
+# 否则会误报「超出可追溯库存 0 股」、清仓后残留 1.4E-39 股）。
+_EPS = Decimal("1e-12")
+
+
 def _sell(st: _State, res: PnlResult, e: TradeEvent, at_text: str, qty: Decimal, px: Decimal, fee: Decimal) -> None:
     st.out.sells += 1
     total = st.total
-    take = min(qty, total)
+    take = qty if abs(qty - total) < _EPS else min(qty, total)
     excess = qty - take
     if excess > 0:
         res.warnings.append(f"oversold:{st.code}")
     if total <= 0:
         k_take = Decimal(0)
-    elif take == total:
+    elif take >= total - _EPS:
         k_take = st.k_qty
     else:
         k_take = take * st.k_qty / total
@@ -265,8 +270,12 @@ def _sell(st: _State, res: PnlResult, e: TradeEvent, at_text: str, qty: Decimal,
         if st.k_qty == 0:
             st.k_cost = Decimal(0)
             st.est_qty = Decimal(0)
+    if abs(st.k_qty) < _EPS:
+        st.k_qty, st.k_cost, st.est_qty = Decimal(0), Decimal(0), Decimal(0)
     if c_take > 0:
         st.c_qty -= c_take
+    if abs(st.c_qty) < _EPS:
+        st.c_qty = Decimal(0)
     if unavailable_qty > 0:
         st.out.unavailable_qty += unavailable_qty
         st.out.unavailable_net_proceeds += px * unavailable_qty - fee * unavailable_qty / qty

@@ -339,3 +339,46 @@ def test_fx_group_with_two_legs_of_the_same_sign_has_no_effect(conn):
         post_event(conn, EventDraft(f"fx:{ACCT}:g:{leg}", ACCT, "FX", D1, ccy, cash_delta="-10", group_id="g", leg_id=leg), _internal_fx=True)
     assert incomplete_fx_groups(conn, ACCT) == ["g"]
     assert project(conn, ACCT).cash == {"USD": Decimal(1000), "HKD": Decimal(1000)}
+
+
+def test_l01_replace_and_opening_or_pending_rewrites_are_refused(conn):
+    """审核 L-01：INSERT OR REPLACE 不能原地覆盖账本事件；开账点、待匹配队列不能改写或删除。"""
+    opening.record_opening(conn, ACCT, T0, {}, {"USD": "1000"})
+    buy(conn, "D-1", "US.NVDA", 1, "10", D1)
+    with pytest.raises(sqlite3.DatabaseError, match="只追加"):
+        conn.execute("INSERT OR REPLACE INTO ledger_event SELECT * FROM ledger_event WHERE business_key=?", (fill_key(ACCT, "D-1"),))
+    with pytest.raises(sqlite3.DatabaseError, match="不可改"):
+        conn.execute("UPDATE account_opening SET opening_at='2020-01-01T00:00:00.000000Z'")
+    queue_pending(conn, src("futu", "X"), "合成")
+    for sql in ("UPDATE pending_match SET reason='x'", "DELETE FROM pending_match"):
+        with pytest.raises(sqlite3.DatabaseError, match="只追加"):
+            conn.execute(sql)
+
+
+def test_l02_redelivery_equal_to_the_current_corrected_version_is_a_duplicate(conn):
+    """审核 L-02：事件已更正为 v3；采集器再送来与 v3 相同的内容是重复（不是永久冲突）；内容与各版本都不同才是冲突。"""
+    opening.record_opening(conn, ACCT, T0, {}, {"USD": "1000"})
+    key = fill_key(ACCT, "D-1")
+    buy(conn, "D-1", "US.NVDA", 10, "10", D1)
+    new = EventDraft(key, ACCT, "FILL", D1, "USD", code="US.NVDA", price="10", qty_delta="12", cash_delta="-120", ref_deal_id="D-1")
+    correct_event(conn, key, new, "req-A")
+    assert post_event(conn, new, source=src("futu", "D-1", v="again")).status == "duplicate"
+    with pytest.raises(LedgerConflict):
+        buy(conn, "D-1", "US.NVDA", 11, "10", D1)                     # 与任何版本都不同的内容：仍是冲突，需人工判断
+
+
+def test_l04_correction_cannot_move_accounts_or_forge_group_events(conn):
+    """审核 L-04：更正的新版本不能换账户，也不能凭空造出单腿 FX 或无计提的股息支付。"""
+    from mystock2.ledger.events import ensure_account
+
+    ensure_account(conn, "A2", "futu", "REAL", "USD")
+    opening.record_opening(conn, ACCT, T0, {}, {"USD": "1000"})
+    key = "deposit:A1:x"
+    post_event(conn, EventDraft(key, ACCT, "DEPOSIT", D1, "USD", cash_delta="100"))
+    with pytest.raises(LedgerError, match="账户"):
+        correct_event(conn, key, EventDraft(key, "A2", "DEPOSIT", D1, "USD", cash_delta="100"), "r1")
+    with pytest.raises(LedgerError, match="成组事件"):
+        correct_event(conn, key, EventDraft(key, ACCT, "FX", D1, "USD", cash_delta="100", group_id="g", leg_id="in"), "r2")
+    with pytest.raises(LedgerError, match="成组事件"):
+        correct_event(conn, key, EventDraft(key, ACCT, "DIVIDEND_PAYMENT", D1, "USD", code="US.NVDA", cash_delta="100", recv_delta="-100", group_id="g"), "r3")
+    assert project(conn, ACCT).cash == {"USD": Decimal(1100)}

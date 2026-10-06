@@ -741,7 +741,8 @@ def cmd_ledger(args) -> int:
                 ids = record_opening(w, args.account_id, args.at, positions, cash, snapshot_id=None)
             print(f"opening_at={args.at}（由快照倒推）positions={len(positions)} cash_ccys={sorted(cash)} events={len(ids)}（期初现金是倒推残差，不是真实期初现金）")
             return 0
-        positions = {r["code"]: r["qty"] for r in ro.execute("SELECT code, qty FROM snapshot_position WHERE snapshot_id=?", (sn["snapshot_id"],))}
+        positions = {r["code"]: r["qty"] for r in ro.execute("SELECT code, qty FROM snapshot_position WHERE snapshot_id=?", (sn["snapshot_id"],))
+                     if dec(r["qty"]) != 0}                                     # 已清仓的标的（qty=0 行）不是期初持仓（审核 P3）
         cash = {r["currency"]: r["cash"] for r in ro.execute("SELECT currency, cash FROM snapshot_cash WHERE snapshot_id=?", (sn["snapshot_id"],))}
         with _opener(cfg, "ledger") as w:
             ids = record_opening(w, args.account_id, sn["captured_at"], positions, cash, snapshot_id=sn["snapshot_id"])
@@ -752,7 +753,11 @@ def cmd_ledger(args) -> int:
         if sn is None:
             print("找不到快照", file=sys.stderr)
             return 2
-        known = {str(k): dec(v) for k, v in ((cfg.raw.get("reconcile") or {}).get("known_cash_diffs") or {}).items()}
+        known = {}
+        for k, v in ((cfg.raw.get("reconcile") or {}).get("known_cash_diffs") or {}).items():
+            if not isinstance(v, (str, int)) or isinstance(v, bool):           # YAML 不加引号的小数是 float：金额不经 float（审核 P3）
+                raise ConfigError(f"reconcile.known_cash_diffs.{k} 必须写成带引号的十进制字符串（如 \"-13.84\"），现为 {v!r}")
+            known[str(k).upper()] = dec(v)
         rep = reconcile(ro, args.account_id, sn["snapshot_id"], known_cash_diffs=known)
         print(json.dumps({"snapshot": sn["snapshot_id"], "ok": rep.ok, "position_diffs": rep.position_diffs, "cash_diffs": rep.cash_diffs,
                           "baseline_cash_diffs": rep.baseline_cash_diffs,

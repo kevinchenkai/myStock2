@@ -58,3 +58,26 @@ def test_forecast_run_forward_tag_is_refused_for_a_historical_range(tmp_path):
     run("db", "migrate", cfg=cfg)
     r = run("forecast", "run", "--start", "2025-03-03", "--end", "2025-03-07", "--codes", "US.NVDA", "--tag", "forward", cfg=cfg)
     assert r.returncode == 2 and "rebuilt" in r.stderr
+
+
+def test_ledger_open_skips_flat_snapshot_lines_and_reconcile_refuses_float_baseline(tmp_path):
+    """审核 P3：快照里 qty=0 的行（已清仓）不让开账失败；known_cash_diffs 写成不带引号的小数（float）给出明确错误，小写币种也生效。"""
+    from mystock2.ledger.events import ensure_account
+    from mystock2.ledger.opening import create_snapshot
+
+    cfg = make_cfg(tmp_path)
+    run("db", "migrate", cfg=cfg)
+    w = dbmod.connect_writer(tmp_path / "x.db", "ledger")
+    ensure_account(w, "main", "futu", "REAL", "USD")
+    create_snapshot(w, "main", "2026-03-02T00:00:00Z", "futu", {"US.NVDA": {"qty": "10"}, "US.TSLA": {"qty": "0"}}, {"USD": {"cash": "100"}})
+    w.close()
+    r = run("ledger", "open", "--account-id", "main", cfg=cfg)
+    assert r.returncode == 0 and "positions=1" in r.stdout, r.stderr
+    data = yaml.safe_load(cfg.read_text(encoding="utf-8"))
+    data["reconcile"] = {"known_cash_diffs": {"usd": -13.84}}
+    cfg.write_text(yaml.safe_dump(data), encoding="utf-8")
+    r = run("ledger", "reconcile", "--account-id", "main", cfg=cfg)
+    assert r.returncode == 1 and "带引号" in r.stderr
+    data["reconcile"] = {"known_cash_diffs": {"usd": "0"}}
+    cfg.write_text(yaml.safe_dump(data), encoding="utf-8")
+    assert run("ledger", "reconcile", "--account-id", "main", cfg=cfg).returncode == 0

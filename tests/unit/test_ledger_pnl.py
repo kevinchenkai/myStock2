@@ -166,3 +166,15 @@ def test_validation_rejects_bad_inputs():
         compute_realized_pnl([ev(BUY, "2026-03-03T15:00:00.000000Z", "1", "10", "-1")], T0)
     with pytest.raises(pnl.PnlError):
         compute_realized_pnl([TradeEvent("HOLD", "US.NVDA", "USD", T0)], T0)
+
+
+def test_l05_proportional_split_leaves_no_residual_shares_or_false_oversell():
+    """审核 L-05：开账 2 股无成本＋买 1 股，三次各卖 1 股清仓：不得误报超卖、不得残留 1e-39 级股数；之后再买卖口径为「精确」。"""
+    t = lambda h: f"2026-03-03T{h:02d}:00:00Z"  # noqa: E731
+    evs = [TradeEvent(OPENING, "US.X", "USD", "2026-03-02T00:00:00Z", D(2), None), TradeEvent(BUY, "US.X", "USD", t(14), D(1), D(10))]
+    evs += [TradeEvent(SELL, "US.X", "USD", t(15 + i), D(1), D(11)) for i in range(3)]
+    evs += [TradeEvent(BUY, "US.X", "USD", t(19), D(5), D(10)), TradeEvent(SELL, "US.X", "USD", t(20), D(5), D(12))]
+    r = compute_realized_pnl(evs, "2026-03-02T00:00:00Z")
+    c = r.by_code["US.X"]
+    assert not r.warnings and c.qty == 0 and c.known_qty == 0 and c.unknown_qty == 0
+    assert sum(s.unavailable_qty for s in r.sells[:3]) == D(2) and r.sells[-1].quality == "exact" and r.sells[-1].realized == D(10)
