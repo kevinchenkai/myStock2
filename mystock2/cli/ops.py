@@ -361,13 +361,16 @@ def cmd_coach_run(args) -> int:
                     rules[e.code] = rule_for(ro, e.code, target.isoformat())
                 except RuleUnknown:
                     rules[e.code] = None
+            t_close, t_open = iso_utc(cal.session(market, t).close_utc), iso_utc(cal.session(market, target).open_utc)
+            split_pending = {r["code"] for r in ro.execute("SELECT code FROM corporate_action WHERE kind='SPLIT' AND effective_at>? AND effective_at<=?",
+                                                         (t_close, t_open))}
             n_total = 0
             for kind in ("ai", "ai_veto"):                       # 每条线从自己的状态生成机械基础单（§6A.1）
                 if kind not in b.lines:
                     continue
                 state, equity = state_at_open(ro, loc, b, kind, target)
                 drafts = decide(state, market=market, target_session=target, universe=loc.universe.entries, predictions=preds, rules=rules,
-                                params=params, fee_rules=loc.fee_rules, trade_equity=equity)
+                                params=params, fee_rules=loc.fee_rules, trade_equity=equity, split_pending=split_pending)
                 ids = freeze_tickets(cw, batch_id=b.batch_id, line_id=b.lines[kind], kind="line_sim", market=market, target_session=target, stage=args.stage,
                                      drafts=drafts, state_ref_type="line_state", state_ref=state.hash(), strategy_version=params.version,
                                      protocol_version=loc.protocol.get("protocol_version", "pilot"), generated_at=now, now=_now(args), deadline_at=deadline)   # 冻结时间取提交时的真实时钟

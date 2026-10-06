@@ -184,3 +184,14 @@ def test_time_stop_sells_whole_lots_only_and_skips_odd_lot_remainder():
         (t,) = decide(st, market="HK", target_session=TARGET, universe=ents, predictions={"HK.00700": pred(400, 440)}, rules={"HK.00700": hk},
                       params=P, fee_rules=[FeeRule("syn", "HK", "ANY", "order", "HKD", pct_fee=D("0.0003"), min_fee=D("3"))], trade_equity=D(100000))
         assert (t.action, t.qty) == expect                       # 零股不出单；也不再生成会被整单拒绝的 250 股
+
+
+def test_p1_9_split_between_data_close_and_target_open_gives_no_executable_ticket():
+    """审核 P1-9：目标日开盘前生效的拆股：持仓已按拆股调整、预测价位仍按拆股前收盘价——不出可执行单（买卖都不出）。"""
+    st = LineState("USD", D("10000"))
+    st.lots["US.NVDA"] = [Lot(D(50), D("150"), TARGET - timedelta(days=2))]
+    out = decide(st, market="US", target_session=TARGET, universe=uni("US.NVDA", "US.TSLA"), predictions={"US.NVDA": pred(195, 205), "US.TSLA": pred(95, 105)},
+                 rules={"US.NVDA": RULE, "US.TSLA": RULE}, params=P, fee_rules=FEES, trade_equity=D(10000), split_pending={"US.NVDA"})
+    by = {t.code: t for t in out}
+    assert by["US.NVDA"].action == SKIP and by["US.NVDA"].reason_codes == ("split_pending",) and by["US.NVDA"].qty is None
+    assert by["US.TSLA"].action == BUY

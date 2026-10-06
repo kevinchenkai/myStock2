@@ -92,10 +92,12 @@ def _round_trip_ratio(rules: list[FeeRule], market: str, day: str, qty: int, px:
 
 def decide(state: StateView, *, market: str, target_session: date, universe: list[UniverseEntry], predictions: dict[str, Prediction | None],
            rules: dict[str, SecurityRule | None], params: StrategyParams, fee_rules: list[FeeRule], trade_equity: Decimal,
-           priority: list[str] | None = None) -> list[TicketDraft]:
+           priority: list[str] | None = None, split_pending: frozenset[str] | set[str] = frozenset()) -> list[TicketDraft]:
     """每个交易仓标的产出一张操作单草稿（BUY/SELL/HOLD/SKIP），按优先顺序依次预留共享预算。
 
     `target_session` 是被预测的交易日；持有天数按「目标日 − 最早持仓日」计。
+    `split_pending`：数据日收盘之后、目标日开盘之前生效拆股/并股的标的。开盘状态的持仓已按拆股调整，而预测价位仍按拆股前收盘价换算，
+    两者口径不一，**不出可执行单**（SKIP `split_pending`，审核 P1-9）；不在这里换算价位。
     """
     entries = {e.code: e for e in universe if e.market == market and e.tier == "trade"}
     order = [c for c in (priority or [e.code for e in universe]) if c in entries]
@@ -108,6 +110,9 @@ def decide(state: StateView, *, market: str, target_session: date, universe: lis
         pred, rule = predictions.get(code), rules.get(code)
         if pred is None:
             out.append(_skip(code, "prediction_unavailable"))
+            continue
+        if code in split_pending:
+            out.append(_skip(code, "split_pending", model_ref=pred.prediction_id))
             continue
         if rule is None:
             out.append(_skip(code, "rule_unknown", model_ref=pred.prediction_id))
