@@ -1,0 +1,31 @@
+migrations/0010_ticket_group.sql
+  s_4e5dbfa251c076::t_af97fb86ecf465 1-17
+mystock2/core/db.py
+  s_4e5dbfa251c076::t_af97fb86ecf465 69
+mystock2/cli/ops.py
+  s_4e5dbfa251c076::t_43b27cf224a3cd 24
+  s_4e5dbfa251c076::t_db27dd50134d40 388-391,526
+mystock2/coach/tickets.py
+  s_4e5dbfa251c076::t_6a15736052aa9e 6-8,114-115,119-169,184-191,204-207
+tests/unit/test_veto.py
+  s_4e5dbfa251c076::t_6a15736052aa9e 301-333
+mystock2/assistant/veto.py
+  s_4e5dbfa251c076::t_db27dd50134d40 269
+  s_4e5dbfa251c076::t_43b27cf224a3cd 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "bb965bcc0fb9379b971373255312d2bb9d159fc0",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
