@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta
 from mystock2.core import calendars as cal
 from mystock2.core.timeutil import ensure_utc, utc_now
 from mystock2.forecast.baseline import BaselineParams, ForecastUnavailable, bars_from_rows
-from mystock2.forecast.versions import record_prediction
+from mystock2.forecast.versions import existing_forward, record_prediction
 from mystock2.instruments.code_map import market_of
 from mystock2.market.bars import get_daily
 from mystock2.market.evidence import snapshot_daily_bars
@@ -32,6 +32,10 @@ def generate(conn_market: sqlite3.Connection, conn_forecast: sqlite3.Connection,
     market = market_of(code)
     if not cal.is_session(market, as_of_session):
         raise ForecastUnavailable(f"{as_of_session} 不是 {market} 交易日")
+    if source_tag == "forward":                                   # 已有同参数前向：直接返回，不再写证据快照与预测
+        first = existing_forward(conn_forecast, code, as_of_session, impl.MODEL_VERSION, impl.FEATURE_VERSION, params.as_dict())
+        if first:
+            return first
     cutoff = ensure_utc(input_cutoff_at)
     start = as_of_session - timedelta(days=history_calendar_days)
     rows = [r for r in get_daily(conn_market, code, start, as_of_session, received_by=cutoff) if r["quality"] == "ok"]

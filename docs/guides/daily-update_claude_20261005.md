@@ -11,7 +11,7 @@
 
 ```bash
 python -m mystock2 update --phase us      # 美股收盘后：富途（成交/订单/费用/快照/流水）+ 美股行情 + 小时线归档 + 预测 + 对账
-python -m mystock2 update --phase hk      # 港股收盘后：同上，港股
+python -m mystock2 update --phase hk      # 港股收盘后：同上，港股；另对最近收盘日写一次前向预测（forward，同参数同日只留第一条，开盘后补跑会被拒绝）
 python -m mystock2 update --phase pre     # 美股开盘前：富途订单/快照 + 美股行情与小时线归档（轻量）
 python -m mystock2 update --phase us --no-futu    # OpenD 没开：只更新公开行情
 python -m mystock2 update --phase us --lookback 30   # 回看更久（补漏）

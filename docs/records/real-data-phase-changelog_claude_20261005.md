@@ -121,3 +121,11 @@ CQR 修复后模型版本升为 `lgbm-cqr-v2`，预测页每个模型只取最�
 ## 13 后记：复盘卡 AI 评价（2026-10-06）
 
 复盘卡弹窗新增「AI 评价」：本机 Codex（gpt-6.1-sol，medium）对每笔成交做评价，缓存到 `trade_review`（迁移 0013），可刷新。设计、发送清单、提示词与回执见 [trade-review-ai](trade-review-ai_claude_20261006.md)。AGENTS.md 增加「唯一 POST 例外」，供 Opus 审核。
+
+## 14 后记：例行更新 hk 阶段写前向预测（2026-10-06）
+
+- **改动**：`update --phase hk` 在原有 rebuilt 回补之后，对名单内 HK 标的、最近一个已收盘交易日，各模型（baseline、lgbm）再跑一次 `forecast run --start D --end D --tag forward`。`us`、`pre` 阶段不写前向。
+- **不依赖「最后一次」**：hk 阶段每个交易日有 4 个时间点，但第一次「完整成功、且在收盘 1 小时后」的运行之后，其余被增量检查跳过；该次运行即写前向。Mac 当时离线则由下一个时间点补上。若到目标日开盘之后才补跑，时间规则（`forward_generated_after_target_open`）拒绝，该日只留 rebuilt；`forecast run` 对前向的拒绝只打印、不算失败。
+- **去重**：`record_prediction` 与 `generate` 对前向增加 `existing_forward`——同标的、同数据截至日、同 `model_version`/`feature_version`/参数的前向只留第一条，重复运行返回已有 id、不再写证据快照。参数不同（如教练协议参数的基线）视为另一条，不互相顶替；rebuilt 不受影响。
+- **已知**：教练流程（`coach run`）若与例行更新的基线参数相同，会拿到例行更新先写的那条（输入截止时间略早于教练运行时刻）。
+- 测试：`test_forward_is_written_once_per_code_day_model_params_and_late_runs_do_not_duplicate`、`test_hk_phase_also_writes_forward_forecast_for_last_closed_session_only`；全量测试与 ruff 通过。

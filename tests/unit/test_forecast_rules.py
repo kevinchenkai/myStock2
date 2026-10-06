@@ -231,3 +231,23 @@ def test_p1_1_forward_tag_requires_generation_before_target_open(tmp_path):
     early = datetime(2026, 3, 4, 15, 0, tzinfo=UTC)                                   # 美股 T 日还没收盘
     with pytest.raises(VersionError, match="forward_cutoff_before_as_of_close"):
         record_prediction(f, CODE, pred, P, [sid], input_cutoff_at=early, generated_at=recv, available_at=recv, source_tag="forward")
+
+
+def test_forward_is_written_once_per_code_day_model_params_and_late_runs_do_not_duplicate(tmp_path):
+    """同标的、同数据截至日、同模型与参数的前向只留第一条：重试/补跑/多次例行更新不产生重复；参数不同则是另一条。"""
+    m, f, i, path = writers(tmp_path)
+    dbars = synth_bars(CODE, 330, date(2026, 3, 4), seed=5)
+    recv = datetime(2026, 3, 4, 22, 0, tzinfo=UTC)
+    put_daily(m, dbars, source="s", received_at=recv, quality="ok")
+    first = generate(m, f, CODE, date(2026, 3, 4), input_cutoff_at=recv + timedelta(minutes=1), now=recv + timedelta(minutes=2), params=P, source_tag="forward")
+    n_snap = m.execute("SELECT count(*) FROM evidence_snapshot").fetchone()[0]
+    for k in (10, 60, 120):                                              # 之后每次重跑（输入截止与生成时间都不同）
+        assert generate(m, f, CODE, date(2026, 3, 4), input_cutoff_at=recv + timedelta(minutes=k), now=recv + timedelta(minutes=k + 1),
+                        params=P, source_tag="forward") == first
+    assert f.execute("SELECT count(*) FROM prediction_version WHERE source_tag='forward'").fetchone()[0] == 1
+    assert m.execute("SELECT count(*) FROM evidence_snapshot").fetchone()[0] == n_snap          # 重复调用不再写证据快照
+    other = BaselineParams(window=20, train_days=250, alpha_low=0.05, alpha_high=0.95, min_train=60)
+    second = generate(m, f, CODE, date(2026, 3, 4), input_cutoff_at=recv + timedelta(minutes=5), now=recv + timedelta(minutes=6), params=other, source_tag="forward")
+    assert second != first and f.execute("SELECT count(*) FROM prediction_version WHERE source_tag='forward'").fetchone()[0] == 2
+    rebuilt = generate(m, f, CODE, date(2026, 3, 4), input_cutoff_at=recv + timedelta(minutes=7), now=recv + timedelta(minutes=8), params=P, source_tag="rebuilt")
+    assert rebuilt not in (first, second)                                # rebuilt 不被 forward 去重

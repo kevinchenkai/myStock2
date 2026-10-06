@@ -806,6 +806,7 @@ def cmd_forecast_run(args) -> int:
     """
     from mystock2.forecast.baseline import ForecastUnavailable
     from mystock2.forecast.run import generate
+    from mystock2.forecast.versions import VersionError
     from mystock2.instruments.code_map import market_of
 
     cfg = load_config(args.config)
@@ -830,6 +831,11 @@ def cmd_forecast_run(args) -> int:
                             st["ok"] += 1
                         except ForecastUnavailable:
                             st["unavailable"] += 1
+                        except VersionError as exc:             # 前向被时间规则拒绝（如 Mac 离线到目标日开盘后才补跑）：不能标 forward，不算失败
+                            if args.tag != "forward":
+                                raise
+                            st["rejected"] = st.get("rejected", 0) + 1
+                            print(f"{code} {d} 前向预测被拒绝（该日只能是 rebuilt）：{exc}", file=sys.stderr)
                     d += timedelta(days=1)
             run.note(**{c: v for c, v in stats.items()})
             print(f"run_id={run.run_id}")

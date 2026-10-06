@@ -22,6 +22,16 @@ class VersionError(ValueError):
     pass
 
 
+def existing_forward(conn: sqlite3.Connection, code: str, as_of_session: date, model_version: str, feature_version: str, params: dict) -> str | None:
+    """同一标的、同一数据截至日、同一模型/特征版本/参数的前向预测只留第一条（重复运行、重试、补跑都不会再写）。
+    前向的意义是「当时」的预测，后来的重复只会稀释样本、让逐日对账出现多条；参数不同（如教练协议参数）视为另一条，不互相顶替。"""
+    row = conn.execute(
+        "SELECT prediction_id FROM prediction_version WHERE source_tag='forward' AND code=? AND as_of_session=? AND model_version=? "
+        "AND feature_version=? AND params_json=? ORDER BY generated_at LIMIT 1",
+        (code, as_of_session.isoformat(), model_version, feature_version, json.dumps(params, sort_keys=True))).fetchone()
+    return row[0] if row else None
+
+
 def record_prediction(conn: sqlite3.Connection, code: str, pred: Prediction, params, input_snapshot_ids: list[str],
                       *, input_cutoff_at, generated_at, available_at, source_tag: str, model_version: str = MODEL_VERSION,
                       feature_version: str = FEATURE_VERSION) -> str:
@@ -51,6 +61,10 @@ def record_prediction(conn: sqlite3.Connection, code: str, pred: Prediction, par
     with atomic(conn):
         if conn.execute("SELECT 1 FROM prediction_version WHERE prediction_id=?", (pid,)).fetchone():
             return pid
+        if source_tag == "forward":
+            first = existing_forward(conn, code, pred.as_of_session, model_version, feature_version, params.as_dict())
+            if first:
+                return first
         conn.execute(
             "INSERT INTO prediction_version(prediction_id, code, as_of_session, target_session, model_version, feature_version, params_json, y_low, y_high, "
             "low_price, high_price, scale, n_train, input_snapshot_ids, input_cutoff_at, generated_at, available_at, source_tag, content_hash, created_at) "

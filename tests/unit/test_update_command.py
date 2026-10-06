@@ -78,6 +78,19 @@ def test_pre_phase_is_light_and_hk_phase_uses_hk_codes(env):
     assert any("HK.00700" in a for c in calls for a in c) and not any("US.NVDA" in a for c in calls for a in c)
 
 
+def test_hk_phase_also_writes_forward_forecast_for_last_closed_session_only(env):
+    cfg, calls, _ = env
+    assert up.cmd_update(args(cfg, "hk")) == 0
+    fwd = [c for c in calls if "--tag" in c]
+    assert [c[c.index("--model") + 1] for c in fwd] == ["baseline", "lgbm"] and all(c[c.index("--tag") + 1] == "forward" for c in fwd)
+    assert all(c[c.index("--start") + 1] == c[c.index("--end") + 1] == "2026-10-05" and c[c.index("--codes") + 1] == "HK.00700" for c in fwd)   # 最近已收盘交易日，只对名单
+    rebuilt = [c for c in calls if "forecast" in c and "--tag" not in c]
+    assert len(rebuilt) == 2                                                                      # 原有 rebuilt 回补仍在
+    calls.clear()
+    assert up.cmd_update(args(cfg, "us")) == 0
+    assert not any("--tag" in c for c in calls)                                                   # 美股阶段不写前向
+
+
 def test_failures_do_not_stop_later_steps_exit_nonzero_and_notify(env, monkeypatch):
     cfg, calls, notes = env
     seen = []

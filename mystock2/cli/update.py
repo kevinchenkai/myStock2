@@ -28,7 +28,7 @@ from mystock2.instruments.universe import load_universe
 LOG_DIR = REPO_ROOT / "data" / "logs"
 SETTLE_AFTER_CLOSE = timedelta(hours=1)    # 收盘后至少过这么久的成功运行才算「已完成」（成交/费用在收盘后还会陆续入账）
 PHASES = {
-    "hk": {"market": "HK", "futu": ("deals,orders,fees,snapshot", True), "forecast": True, "reconcile": True},
+    "hk": {"market": "HK", "futu": ("deals,orders,fees,snapshot", True), "forecast": True, "forward": True, "reconcile": True},
     "us": {"market": "US", "futu": ("deals,orders,fees,snapshot", True), "forecast": True, "reconcile": True},
     "pre": {"market": "US", "futu": ("orders,snapshot", False), "forecast": False, "reconcile": False},
 }
@@ -256,6 +256,10 @@ def _update(args) -> int:
             f0 = (today - timedelta(days=4)).isoformat()
             for model in ("baseline", "lgbm"):
                 steps.append((f"forecast:{model}", py + ["forecast", "run", "--codes", ucodes, "--start", f0, "--end", end, "--model", model]))
+            if ph.get("forward"):                              # 前向预测：本阶段第一次「完整成功」的运行就写（之后被增量检查跳过；同参数同日不重复写；开盘后补跑会被拒绝，只留 rebuilt）
+                fwd = last_final_session(market, now).isoformat()
+                for model in ("baseline", "lgbm"):
+                    steps.append((f"forecast:{model}:forward", py + ["forecast", "run", "--codes", ucodes, "--start", fwd, "--end", fwd, "--model", model, "--tag", "forward"]))
     if ph["reconcile"] and account:
         steps.append(("ledger:reconcile", py + ["ledger", "reconcile", "--account-id", str(account)]))
 
