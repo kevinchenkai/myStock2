@@ -500,3 +500,19 @@ def test_p1_11_human_plans_share_one_budget_truncated_in_a_fixed_order(tmp_path)
         first, other = sorted((CODE, CODE2))
         assert got[first] == 900 and (0 < got.get(other, 0) < 900) == second
         assert prov.flags[(tgt, other)] == ["group_budget_truncated" if second else "group_budget_exceeded"]
+
+
+def test_p1_12_human_actual_books_cash_of_non_session_events_on_the_next_session(tmp_path):
+    """审核 P1-12：美东周日 20:30 夜盘买入 100@10：现金必须在下一个交易日扣减（与持仓同一切分），权益不得虚增 1000。"""
+    from tests.unit.ledger_helpers import make_db
+
+    conn = make_db(tmp_path)
+    opening.record_opening(conn, ACCT, "2026-02-27T00:00:00.000000Z", {}, {"USD": "100000"})
+    md = FakeMD()
+    md.flat(CODE, DAYS, 10)
+    post_event(conn, EventDraft(fill_key(ACCT, "N1"), ACCT, "FILL", "2026-03-09T00:30:00.000000Z", "USD", code=CODE, price="10", qty_delta="100",
+                                cash_delta="-1000", ref_deal_id="N1"))
+    res = human_actual_series(conn, md, account_id=ACCT, market="US", currency="USD", codes={CODE}, budget=D(1000), d0=DAYS[0], sessions=DAYS[1:7])
+    assert all(r.equity == D(1000) for r in res), [(r.date, r.cash, r.positions, r.equity) for r in res]
+    held = [r for r in res if r.positions]
+    assert held and held[0].cash == D(0) and held[0].fills

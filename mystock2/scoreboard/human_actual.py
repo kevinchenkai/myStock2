@@ -13,7 +13,7 @@ from decimal import Decimal
 
 from mystock2.core import calendars as cal
 from mystock2.core.money import dec
-from mystock2.core.timeutil import ensure_utc, to_market_time
+from mystock2.core.timeutil import ensure_utc
 from mystock2.ledger.projection import effective_events, project
 from mystock2.scoreboard.engine import MarketData
 from mystock2.scoreboard.types import DayResult, SimFill
@@ -25,10 +25,15 @@ def human_actual_series(conn_ledger: sqlite3.Connection, md: MarketData, *, acco
     cash = budget
     events = [e for e in effective_events(conn_ledger, account_id) if ensure_utc(e["event_at"]) > d0_end]
     fill_ids = {e["ref_deal_id"] for e in events if e["event_type"] == "FILL" and e["code"] in codes}
+    # 事件归到「收盘时刻不早于它」的第一个交易日——与下方持仓数量所用的 project(as_of=收盘) 同一切分：
+    # 夜盘/周末/假日的现金事件归下一个交易日，不会出现「持仓已计入、现金被丢」的权益虚增（审核 P1-12）
+    closes = [(cal.session(market, d).close_utc, d) for d in sessions]
     by_day: dict[date, list] = {}
     for e in events:
-        local = to_market_time(e["event_at"], market).date()
-        by_day.setdefault(max(local, sessions[0]) if sessions else local, []).append(e)    # D0 收盘后到首个交易日之间的事件并入首日
+        at = ensure_utc(e["event_at"])
+        day = next((d for c, d in closes if at <= c), None)
+        if day is not None:
+            by_day.setdefault(day, []).append(e)
     out: list[DayResult] = []
     for day in sessions:
         res = DayResult(day, "OK")
