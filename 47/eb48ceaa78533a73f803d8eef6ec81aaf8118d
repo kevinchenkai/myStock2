@@ -1,0 +1,28 @@
+mystock2/cli/update.py
+  s_97d138eaf84b50::t_943267492af812 32
+tests/unit/test_update_command.py
+  s_97d138eaf84b50::t_a99d000c923bfe 138,143,146,151,159,187,208,211,233
+  s_97d138eaf84b50::t_943267492af812 62,68,81,91-95,109
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_10e7500196627d 80
+docs/guides/daily-update_claude_20261005.md
+  s_97d138eaf84b50::t_40fb9a744b4076 13-14
+docs/records/real-data-phase-changelog_claude_20261005.md
+  s_97d138eaf84b50::t_7191e7f2f3d166 132-133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "47eb48ceaa78533a73f803d8eef6ec81aaf8118d",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
