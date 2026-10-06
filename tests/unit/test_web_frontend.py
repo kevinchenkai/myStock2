@@ -465,3 +465,23 @@ def test_side_and_status_text_render_as_pills_without_red_green_and_charts_unbin
     assert o["added"] == 1                                          # 没有 ResizeObserver 时退化为一个 resize 监听（元素移除后解绑）
     pills = CSS[CSS.index(".pill-buy"):CSS.index(".pill-ok")]
     assert "var(--up)" not in pills and "var(--down)" not in pills   # 买卖徽标不用红绿
+
+
+@pytest.mark.parametrize("scope", [":root {", ":root:not([data-theme=\"light\"]) {", ":root[data-theme=\"dark\"] {"])
+def test_text_and_direction_colors_meet_contrast_in_every_theme(scope):
+    """正文、辅助文字、涨跌色、汇率色、「不可用」、买卖徽标在两套主题的背景上对比度 ≥ 4.5:1（WCAG AA）。"""
+    b = block(scope)
+
+    def lum(rgb):
+        f = [c / 255 for c in rgb]
+        f = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in f]
+        return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2]
+
+    def ratio(a, c):
+        la, lc = lum(var_in(b, a)), lum(var_in(b, c))
+        return (max(la, lc) + 0.05) / (min(la, lc) + 0.05)
+    for fg in ("--fg", "--muted", "--subtle", "--up", "--down", "--fx", "--na", "--accent"):
+        for bg in ("--card", "--bg", "--zebra"):
+            assert ratio(fg, bg) >= 4.5, (scope, fg, bg, round(ratio(fg, bg), 2))
+    for fg, bg in (("--buy-fg", "--buy-bg"), ("--sell-fg", "--sell-bg"), ("--warn-fg", "--warn-bg"), ("--info-fg", "--info-bg"), ("--accent-fg", "--accent")):
+        assert ratio(fg, bg) >= 4.5, (scope, fg, bg)
