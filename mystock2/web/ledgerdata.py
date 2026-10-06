@@ -105,14 +105,18 @@ def load_trades(conn: sqlite3.Connection, account_id: str) -> LedgerTrades:
         elif t == "FILL":
             qty = dec(e["qty_delta"])
             fee_items = fees.get(e["ref_deal_id"], []) if e["ref_deal_id"] else []
-            fee_total = sum((i["amount"] for i in fee_items), Decimal(0))
+            # 费用只在成交币种内合计；币种不同的费用（异常数据）单列，不并入、不改标币种（审核 P1-7）
+            fee_total = sum((i["amount"] for i in fee_items if i["currency"] == e["currency"]), Decimal(0))
+            fee_other = [i for i in fee_items if i["currency"] != e["currency"]]
+            if fee_other:
+                out.warnings.append(f"fee_currency_mismatch:{e['ref_deal_id']}")
             pre = t0 is not None and ensure_utc(e["event_at"]) <= t0
             out.codes.add(e["code"])
             out.fills.append({
                 "event_id": e["event_id"], "business_key": e["business_key"], "deal_id": e["ref_deal_id"], "order_id": e["ref_order_id"],
                 "code": e["code"], "currency": e["currency"], "event_at": e["event_at"], "received_at": e["received_at"],
                 "side": "BUY" if qty > 0 else "SELL", "qty": abs(qty), "price": dec(e["price"]), "cash_delta": dec(e["cash_delta"]),
-                "fees": fee_items, "fee_total": fee_total, "sources": len(srcs.get(e["business_key"], ())),
+                "fees": fee_items, "fee_total": fee_total, "fee_other_ccy": fee_other, "sources": len(srcs.get(e["business_key"], ())),
                 "versions": versions.get(e["business_key"], 1), "pre_opening": pre,
             })
             out.trade_events.append(TradeEvent(BUY if qty > 0 else SELL, e["code"], e["currency"], e["event_at"], abs(qty),

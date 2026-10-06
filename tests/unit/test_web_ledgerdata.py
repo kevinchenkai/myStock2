@@ -20,3 +20,25 @@ def test_p1_2_opening_cost_evidence_is_converted_back_across_a_split(tmp_path):
     assert op.price == D(100)
     s = compute_realized_pnl(t.trade_events, t.opening_at).sells[0]
     assert s.avg_cost == D(50) and s.realized == D(200)
+
+
+def test_p1_7_fee_in_another_currency_is_not_added_to_the_fill_currency(tmp_path):
+    """给 USD 成交追加一笔 78 HKD 的平台费：不得并入 USD 合计、不得标成 USD；单列并加标签。"""
+    from mystock2.core import db as dbmod
+
+    from .test_web_fixtures import build_demo_db, fee, frozen_received, get_view, make_app
+
+    path = build_demo_db(tmp_path)
+    led = dbmod.connect_writer(path, "ledger")
+    with frozen_received():
+        fee(led, "d2", "78", "2026-03-04T15:00:00.000000Z", kind="platform", ccy="HKD")
+    led.close()
+    c = make_app(tmp_path, path).test_client()
+    _, tr = get_view(c, "trades")
+    row = next(r for r in tr["data"]["rows"] if r["deal_id"] == "d2")
+    assert row["fee"]["text"] == "1.00 USD" and row["fee"]["tag"] == "另有外币费用"
+    assert "78.00 HKD" in row["fee_detail"] and "78.00 USD" not in row["fee_detail"]
+    assert row["net_cashflow"]["text"] == "+2,199.00 USD"
+    _, pn = get_view(c, "pnl")
+    usd = next(s for s in pn["data"]["summary"] if s["currency"] == "USD")
+    assert "78" not in usd["fees_total"]["text"]

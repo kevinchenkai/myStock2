@@ -70,8 +70,9 @@ def fill_row(f: dict) -> dict:
     """成交行：没有费用事件入账＝「费用未入账」，不记为 0；成交净现金流是现金流水，不是盈亏，不着色。"""
     ccy = f["currency"]
     if f["fees"]:
-        fee_text = "；".join(f"{FEE_KIND_TEXT.get(i['kind'], i['kind'])} {C.fmt_money(i['amount'], ccy)}" for i in f["fees"])
-        fee = C.money_cell(f["fee_total"], ccy, title=fee_text, tag=None)
+        fee_text = "；".join(f"{FEE_KIND_TEXT.get(i['kind'], i['kind'])} {C.fmt_money(i['amount'], i['currency'])}" for i in f["fees"])
+        other = bool(f.get("fee_other_ccy"))
+        fee = C.money_cell(f["fee_total"], ccy, title=fee_text + ("（另有非成交币种的费用，未并入合计）" if other else ""), tag="另有外币费用" if other else None)
         fee_detail = fee_text
         net = f["cash_delta"] - f["fee_total"]
     else:
