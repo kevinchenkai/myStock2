@@ -1,0 +1,33 @@
+mystock2/web/common.py
+  s_97d138eaf84b50::t_e7cfc0f19c6270 197-198,205
+mystock2/web/static/app.css
+  s_97d138eaf84b50::t_46c2b25bb74599 276
+tests/unit/test_web_frontend.py
+  s_97d138eaf84b50::t_2311a0e0f218b5 375
+  s_97d138eaf84b50::t_c66481f9494a1d 370,372-373,376,378,389,391-393,437
+tests/unit/test_web_common.py
+  s_97d138eaf84b50::t_ae1137cf58c4ea 97-98,100
+tests/unit/test_web_views.py
+  s_97d138eaf84b50::t_ae6382ce56dee6 121
+  s_97d138eaf84b50::t_9e14b9e538e5f6 123
+mystock2/web/static/app.js
+  s_97d138eaf84b50::t_62a0adb22a117f 188-189,193,216-219,243-244
+mystock2/web/static/ui.js
+  s_97d138eaf84b50::t_af28c6f0f4edb7 149,151,161-162,193-194,199,225-226,239-240,291
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "c38c2c886092fc4907f29d260101f4e93d52185c",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
