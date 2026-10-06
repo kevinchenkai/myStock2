@@ -161,9 +161,10 @@ def rate_cell(value: Decimal | str | None, *, reason: str | None = None) -> dict
 
 
 # ------------------------------------------------------------------ 新鲜度
-def source(name: str, event_at: Any, collected_at: Any) -> dict:
-    """新鲜度来源条目：event_at＝数据反映的时刻；collected_at＝系统收到/采集的时刻；任一为 None 表示未知。"""
-    return {"name": name, "event_at": _iso_or_none(event_at), "collected_at": _iso_or_none(collected_at)}
+def source(name: str, event_at: Any, collected_at: Any, *, behind: str | None = None) -> dict:
+    """新鲜度来源条目：event_at＝数据反映的时刻；collected_at＝系统收到/采集的时刻；任一为 None 表示未知。
+    behind：事件时间落后于「应有的最近已收盘交易日」时的说明（只用于行情这类按交易日更新的来源；审核 W-05/Q5）。"""
+    return {"name": name, "event_at": _iso_or_none(event_at), "collected_at": _iso_or_none(collected_at), "behind": behind or None}
 
 
 def freshness(sources: Iterable[dict], notes: Iterable[str] = ()) -> dict:
@@ -193,7 +194,7 @@ def _age_text(seconds: float) -> str:
 
 def build_header(data_mode: str, fresh: dict | None, now: datetime, stale_after_hours: float, *, extra_notes: Iterable[str] = ()) -> dict:
     """把视图提供的来源时间折算成头部。规则：任一来源缺事件时间或采集时间 → 整体「未知」；
-    超过阈值 → 「陈旧」；全部已知且在阈值内 → 「新鲜」。无来源条目也是「未知」。"""
+    采集超过阈值，或事件时间落后于应有的最近已收盘交易日（来源带 behind）→ 「陈旧」；其余 → 「新鲜」。无来源条目也是「未知」。"""
     now = ensure_utc(now)
     fresh = fresh or {}
     notes = list(fresh.get("notes", [])) + list(extra_notes)
@@ -209,6 +210,8 @@ def build_header(data_mode: str, fresh: dict | None, now: datetime, stale_after_
             label, text = UNKNOWN, f"{UNKNOWN}（缺少{'事件时间' if ev is None else '采集时间'}）"
         elif seconds is not None and seconds < -300:
             label, text = UNKNOWN, f"{UNKNOWN}（采集时间晚于当前时间，时钟异常）"
+        elif s.get("behind"):
+            label, text = "陈旧", f"陈旧（{s['behind']}）"
         elif seconds is not None and seconds > stale_after_hours * 3600:
             label, text = "陈旧", f"陈旧（距采集已 {_age_text(seconds)}）"
         else:

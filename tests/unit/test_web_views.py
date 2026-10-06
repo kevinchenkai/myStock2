@@ -114,9 +114,14 @@ def test_overview_partial_and_stale_quotes_are_not_used_as_close(tmp_path):
     put_closes(mk, "US.NVDA", {"2026-03-10": "999"}, quality="partial")                       # 当日 partial：不当收盘价
     put_closes(mk, "HK.00700", {"2026-03-10": "316"})
     mk.close()
-    d = get_view(make_app(tmp_path, p).test_client(), "account_overview")[1]["data"]
+    c = make_app(tmp_path, p).test_client()
+    d = get_view(c, "account_overview")[1]["data"]
     px = by(d["positions"], "code", "US.NVDA")["price"]
     assert px["v"] == "100" and px["tag"] == "陈旧 2026-03-09"                                  # 回退到上一个 ok 收盘并标陈旧
+    for vid in ("account_overview", "holdings"):                                               # 审核 W-05/Q5：行情落后于应有收盘日 → 页头陈旧（哪怕刚采集）
+        h = get_view(c, vid)[1]["header"]
+        q = next(s for s in h["sources"] if s["name"].startswith("行情"))
+        assert h["staleness"]["label"] == "陈旧" and q["staleness"] == "陈旧" and "停在 2026-03-09" in q["text"] and "US.NVDA" in q["text"], vid
 
 
 def test_overview_reconciliation_ok_and_mismatch_items(tmp_path):

@@ -16,7 +16,7 @@ from mystock2.instruments.code_map import currency_of
 from mystock2.ledger.projection import incomplete_fx_groups, load_events
 from mystock2.web import common as C
 from mystock2.web.series import build_equity_series, replay_states
-from mystock2.web.valuation import closes_by_date, expected_session, latest_close
+from mystock2.web.valuation import behind_text, closes_by_date, expected_session, latest_close
 
 NAMES = {"market_value": "持仓市值", "equity": "账户权益", "profit": "剔除外部资金流的收益"}
 HOME_MARKET = {"HKD": "HK", "USD": "US"}
@@ -111,7 +111,7 @@ def run(conn, params):
 
     px = [latest_close(conn, c, now) for c in codes]
     quote_src = C.source("行情（未复权收盘）", min(p.event_at for p in px) if px and all(p.event_at for p in px) else None,
-                         min(p.received_at for p in px) if px and all(p.received_at for p in px) else None)
+                         min(p.received_at for p in px) if px and all(p.received_at for p in px) else None, behind=behind_text(px))
     srcs = [C.ledger_source(conn, aid)] + ([quote_src] if codes else [])
     notes += ["三条曲线是不同的量：持仓市值 ≠ 账户权益 ≠ 剔除外部资金流的收益",
               "缺行情的日子标缺口、不连线；入金/出金当天只改变权益，不改变「剔除外部资金流的收益」",

@@ -42,6 +42,16 @@ def expected_session(market: str, now: datetime) -> date | None:
     return done[-1] if done else None
 
 
+def behind_text(prices) -> str | None:
+    """若干最新收盘价里落后于应有收盘日的部分，折成一句话；全部跟上（或无价）返回 None（审核 W-05/Q5）。"""
+    late = [p for p in prices if p.stale and p.session_date]
+    if not late:
+        return None
+    oldest = min(late, key=lambda p: p.session_date)
+    who = oldest.code if len(late) == 1 else f"{len(late)} 个标的，最早 {oldest.code}"
+    return f"行情停在 {oldest.session_date}，应有 {oldest.expected_session}（{who}）"
+
+
 def latest_close(conn: sqlite3.Connection, code: str, now: datetime) -> Price:
     now = ensure_utc(now)
     market = market_of(code)

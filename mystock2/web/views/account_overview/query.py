@@ -14,7 +14,7 @@ from mystock2.ledger.reconcile import reconcile
 from mystock2.market.fx import FxUnavailable
 from mystock2.web import common as C
 from mystock2.web.fxpath import describe_legs, resolve
-from mystock2.web.valuation import latest_close
+from mystock2.web.valuation import behind_text, latest_close
 
 ZERO = Decimal(0)
 
@@ -129,7 +129,8 @@ def run(conn, params):
     srcs = [C.ledger_source(conn, aid), C.snapshot_source(snap)]
     if prices:
         srcs.append(C.source("行情（未复权收盘）", min((p.event_at for p in prices.values()), default=None) if all(p.event_at for p in prices.values()) else None,
-                             min((p.received_at for p in prices.values()), default=None) if all(p.received_at for p in prices.values()) else None))
+                             min((p.received_at for p in prices.values()), default=None) if all(p.received_at for p in prices.values()) else None,
+                             behind=behind_text(prices.values())))
     if fx_sources:
         srcs.append(C.source("汇率", min(s["event_at"] or "" for s in fx_sources) or None, min(s["collected_at"] or "" for s in fx_sources) or None))
     elif base and rows:

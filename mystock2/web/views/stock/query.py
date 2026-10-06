@@ -533,7 +533,9 @@ def run(conn, params):
     }
     srcs = []
     if blocks["quote"]["status"] == "ok":
-        srcs.append(C.source("日线行情（未复权收盘）", blocks["quote"]["event_at"], blocks["quote"]["received_at"]))
+        q = blocks["quote"]
+        srcs.append(C.source("日线行情（未复权收盘）", q["event_at"], q["received_at"],
+                             behind=f"行情停在 {q['session_date']}，应有 {q['expected_session']}" if q["stale"] else None))
     aid = None
     if blocks["position"]["status"] == "ok" or blocks["trades"]["status"] == "ok":
         aid = ctx.account[0]["account_id"]

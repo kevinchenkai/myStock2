@@ -19,7 +19,7 @@ from mystock2.web import common as C
 from mystock2.web import sealing
 from mystock2.web.ledgerdata import load_trades
 from mystock2.web.rowcells import concentration, cost_cells, weight_cell
-from mystock2.web.valuation import latest_close
+from mystock2.web.valuation import behind_text, latest_close
 
 ZERO = Decimal(0)
 ROLE_TEXT = {"core": "核心", "trade": "交易", "watch": "观察"}
@@ -95,7 +95,7 @@ def run(conn, params):
     if prices:
         ev = [p.event_at for p in prices.values()]
         rc = [p.received_at for p in prices.values()]
-        srcs.append(C.source("行情（未复权收盘）", min(ev) if all(ev) else None, min(rc) if all(rc) else None))
+        srcs.append(C.source("行情（未复权收盘）", min(ev) if all(ev) else None, min(rc) if all(rc) else None, behind=behind_text(prices.values())))
     notes = ["三类成本并列、互不覆盖：券商平均成本与摊薄成本来自快照（每股；摊薄成本可为负）；本地移动平均成本由账本成交算出"]
     if role_note:
         notes.append(role_note)

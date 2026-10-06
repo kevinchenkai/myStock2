@@ -94,6 +94,14 @@ def test_stale_when_past_threshold_and_unknown_dominates():
     assert hdr([ok, unk])["staleness"]["label"] == "未知"
 
 
+def test_recently_collected_but_behind_the_expected_session_is_stale():
+    """审核 W-05/Q5：刚采集不等于新：事件时间落后于应有的最近收盘日时标陈旧；未知仍优先。"""
+    h = hdr([C.source("行情", iso(NOW - timedelta(days=30)), iso(NOW - timedelta(minutes=5)), behind="行情停在 2026-02-09，应有 2026-03-10（US.NVDA）")])
+    assert h["staleness"]["label"] == "陈旧" and "停在 2026-02-09" in h["staleness"]["text"]
+    assert hdr([C.source("行情", None, iso(NOW), behind="x")])["staleness"]["label"] == "未知"
+    assert hdr([C.source("行情", iso(NOW), iso(NOW))])["staleness"]["label"] == "新鲜"
+
+
 def test_collected_in_the_future_is_clock_anomaly_not_fresh():
     h = hdr([C.source("账本", iso(NOW), iso(NOW + timedelta(days=1)))])
     assert h["staleness"]["label"] == "未知" and "时钟" in h["staleness"]["text"]

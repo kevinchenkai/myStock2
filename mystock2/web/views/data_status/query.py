@@ -226,7 +226,8 @@ def run(conn, params):
         srcs.append(C.source("采集回执", r["a"], r["a"]))
     r = conn.execute("SELECT MAX(event_at) AS e, MAX(received_at) AS r FROM quote_daily").fetchone()
     if r["e"]:
-        srcs.append(C.source("日线行情", r["e"], r["r"]))
+        late = [q["code"] for q in quotes if q.get("state") == "behind"]
+        srcs.append(C.source("日线行情", r["e"], r["r"], behind=f"{len(late)} 个标的落后于应有的最近收盘日（如 {late[0]}）" if late else None))
     r = conn.execute("SELECT MAX(started_at) AS s, MAX(COALESCE(finished_at, started_at)) AS f FROM run_log").fetchone()
     if r["s"]:
         srcs.append(C.source("运行回执", r["s"], r["f"]))
