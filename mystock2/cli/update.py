@@ -248,7 +248,7 @@ def _update(args) -> int:
     if codes:
         cs = ",".join(codes)
         hourly_days = min(max(lookback, 5), 58)               # 小时线供应商只给约 60 天：跟随回看天数补缺口（审核 U-07）
-        steps.append(("quotes:daily", py + ["collect", "quotes", "--codes", cs, "--start", start, "--end", end, "--fx", "USDHKD,USDCNY"]))
+        steps.append(("quotes:daily", py + ["collect", "quotes", "--codes", cs, "--start", start, "--end", end, "--fx", "USDHKD,USDCNY", "--futu-volume"]))
         steps.append(("quotes:hourly", py + ["collect", "quotes", "--codes", cs, "--start", (today - timedelta(days=hourly_days)).isoformat(), "--end", end, "--hourly"]))
     if ph["forecast"]:
         ucodes = ",".join(c for c in codes if c in _universe_codes())

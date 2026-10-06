@@ -65,6 +65,7 @@ def test_us_phase_runs_futu_quotes_hourly_forecast_reconcile_in_order(env):
     assert calls[1][calls[1].index("--what") + 1] == "cashflow"
     daily = calls[2]
     assert daily[daily.index("--codes") + 1] == "US.NVDA,US.TSLA" and "--fx" in daily and "--hourly" in calls[3]
+    assert "--futu-volume" in daily and "--futu-volume" not in calls[3]                                    # 日线步骤用富途补 0 成交量；小时线不用
     assert [c[c.index("--model") + 1] for c in calls[4:6]] == ["baseline", "lgbm"] and "--tag" in calls[6] and calls[4][calls[4].index("--codes") + 1] == "US.NVDA"   # 预测只对名单内标的
 
 

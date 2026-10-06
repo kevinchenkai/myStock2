@@ -261,3 +261,66 @@ def test_vendor_retroactive_split_rescale_is_flagged_not_silently_accepted(mk):
     assert r["status"] == "ok"
     log = mk.execute("SELECT status, detail FROM collection_log WHERE kind='daily' ORDER BY attempted_at DESC LIMIT 1").fetchone()
     assert log["status"] == "partial" and "回溯拆股调整" in log["detail"]
+
+
+# ------------------------------------------------------------ 成交量补源（FC-1：半日市 yfinance 成交量为 0）
+class FakeVolume:
+    name = "futu"
+
+    def __init__(self, vols=None, exc=None):
+        self.vols, self.exc, self.calls = vols or {}, exc, 0
+
+    def volumes(self, code, start, end):
+        self.calls += 1
+        if self.exc:
+            raise self.exc
+        return {d: v for d, v in self.vols.items() if start <= d <= end}
+
+
+def zero_bar(d):
+    return DailyBar(CODE, date.fromisoformat(d), "10", "11", "9", "10.5", "10.5", "0")
+
+
+def test_collect_daily_fills_zero_volume_from_volume_source_and_leaves_prices_alone(mk):
+    now = after_close(date(2026, 3, 5))
+    vs = FakeVolume({date(2026, 3, 3): "777"})
+    res = collect_daily(mk, [FakeSource("yf", [zero_bar("2026-03-03"), bar("2026-03-04")])], CODE, date(2026, 3, 3), date(2026, 3, 4), run_id="r1", now=now, volume_source=vs)
+    assert res["status"] == "ok"
+    got = {r["session_date"]: r for r in get_daily(mk, CODE, date(2026, 3, 1), date(2026, 3, 31))}
+    assert got["2026-03-03"]["volume"] == "777" and got["2026-03-03"]["close"] == "10.5" and got["2026-03-03"]["source"] == "yf"
+    assert got["2026-03-04"]["volume"] == "100"
+    assert "volume_filled_by_futu=['2026-03-03']" in mk.execute("SELECT detail FROM collection_log WHERE kind='daily'").fetchone()["detail"]
+    # 之后同样的采集（补源照常给值）：与已入库内容相同 → 不新增版本
+    collect_daily(mk, [FakeSource("yf", [zero_bar("2026-03-03"), bar("2026-03-04")])], CODE, date(2026, 3, 3), date(2026, 3, 4), run_id="r2", now=now, volume_source=vs)
+    assert mk.execute("SELECT count(*) FROM quote_daily").fetchone()[0] == 2
+
+
+def test_collect_daily_volume_source_failure_keeps_zero_and_does_not_break_prices(mk):
+    now = after_close(date(2026, 3, 5))
+    ok = FakeVolume()
+    collect_daily(mk, [FakeSource("yf", [bar("2026-03-04")])], CODE, date(2026, 3, 4), date(2026, 3, 4), now=now, volume_source=ok)
+    assert ok.calls == 0                                                      # 没有 0 成交量：根本不连补源
+    res = collect_daily(mk, [FakeSource("yf", [zero_bar("2026-03-03")])], CODE, date(2026, 3, 3), date(2026, 3, 3), run_id="r1", now=now,
+                        volume_source=FakeVolume(exc=ConnectionError("OpenD 未开")))
+    assert res["status"] == "ok"
+    r = get_daily(mk, CODE, date(2026, 3, 3), date(2026, 3, 3))[0]
+    assert r["volume"] == "0" and "volume_source_error=ConnectionError" in mk.execute("SELECT detail FROM collection_log WHERE kind='daily' ORDER BY rowid DESC").fetchone()["detail"]
+    res = collect_daily(mk, [FakeSource("yf", [zero_bar("2026-03-03")])], CODE, date(2026, 3, 3), date(2026, 3, 3), now=now, volume_source=FakeVolume())      # 补源没有该日
+    assert get_daily(mk, CODE, date(2026, 3, 3), date(2026, 3, 3))[0]["volume"] == "0"                        # 补不到：保持 0，不编造
+
+
+def test_repair_zero_volume_appends_new_versions_only_where_available(mk):
+    from mystock2.collectors.quotes import repair_zero_volume
+    t0 = after_close(date(2026, 3, 5))
+    put_daily(mk, [zero_bar("2026-03-03"), zero_bar("2026-03-04"), bar("2026-03-05")], source="yf", received_at=t0, quality="ok")
+    none = FakeVolume()
+    assert repair_zero_volume(mk, none, ["US.NVDA"], date(2026, 3, 1), date(2026, 3, 31), now=t0 + timedelta(hours=1))["US.NVDA"]["repaired"] == 0
+    res = repair_zero_volume(mk, FakeVolume({date(2026, 3, 3): "555"}), [CODE], date(2026, 3, 1), date(2026, 3, 31), run_id="r9", now=t0 + timedelta(hours=2))[CODE]
+    assert res["repaired"] == 1 and res["unavailable"] == ["2026-03-04"]
+    got = {r["session_date"]: r for r in get_daily(mk, CODE, date(2026, 3, 1), date(2026, 3, 31))}
+    assert got["2026-03-03"]["volume"] == "555" and got["2026-03-03"]["version"] == 2 and got["2026-03-04"]["volume"] == "0"
+    assert mk.execute("SELECT count(*) FROM quote_daily WHERE session_date='2026-03-03'").fetchone()[0] == 2        # 旧版本保留
+    again = repair_zero_volume(mk, FakeVolume({date(2026, 3, 3): "555"}), [CODE], date(2026, 3, 1), date(2026, 3, 31), now=t0 + timedelta(hours=3))[CODE]
+    assert again["need"] == 1 and mk.execute("SELECT count(*) FROM quote_daily WHERE session_date='2026-03-03'").fetchone()[0] == 2     # 幂等
+    broken = repair_zero_volume(mk, FakeVolume(exc=OSError("down")), [CODE], date(2026, 3, 1), date(2026, 3, 31), now=t0 + timedelta(hours=4))[CODE]
+    assert broken["status"] == "failed"

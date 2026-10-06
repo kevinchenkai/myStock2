@@ -113,3 +113,22 @@ def test_f02_conformal_score_takes_the_kth_smallest_not_one_more():
     assert conformal_score(s, 0.9) == 90.0
     assert conformal_score(np.arange(10, dtype=float), 0.99) == 9.0     # k 超过 n：取最大
     assert conformal_score(np.arange(99, dtype=float), 0.9) == 89.0     # ⌈100×0.9⌉＝90 → 第 90 小
+
+
+def test_zero_volume_days_are_skipped_in_volume_ratio_windows_not_poisoning_later_rows():
+    """FC-1：成交量为 0 的日子在量比窗口内跳过；只有该日自己的量比缺失，其后的日子照常有值；没有 0 时与完整窗口均值一致。"""
+    bars = to_bars(synth_bars(CODE, 120, date(2026, 3, 4), seed=1))
+    X, _ = build_features(bars)
+    z = 60
+    zb = [Bar(b.session_date, b.open, b.high, b.low, b.close, b.adj_close, Decimal(0)) if i == z else b for i, b in enumerate(bars)]
+    Xz, _ = build_features(zb)
+    j5, j20 = FEATURE_COLS.index("vol_ratio_5"), FEATURE_COLS.index("vol_ratio_20")
+    assert np.isnan(Xz[z, j5]) and np.isnan(Xz[z, j20])                              # 0 成交量当天：量比缺失
+    assert np.isfinite(Xz[z + 1:, j5]).all() and np.isfinite(Xz[z + 1:, j20]).all()  # 其后窗口跳过该日，仍有值（以前整整 20 天都缺失）
+    assert np.allclose(X[:z], Xz[:z], equal_nan=True)                                # 之前不受影响
+    other = [i for i in range(len(FEATURE_COLS)) if i not in (j5, j20)]
+    assert np.allclose(X[:, other], Xz[:, other], equal_nan=True)                    # 非成交量特征不变
+    w = [float(b.volume) for b in bars[z - 3:z + 2] if b is not bars[z]]            # z+2 的 5 日窗口含 z：跳过后取其余 4 日均值
+    ref = float(bars[z + 2].volume) / np.mean([float(bars[i].volume) for i in range(z - 2, z + 3) if i != z])
+    assert Xz[z + 2, j5] == pytest.approx(ref) and len(w) == 4
+    assert lgbm_cqr.MODEL_VERSION == "lgbm-cqr-v3"

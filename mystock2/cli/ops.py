@@ -612,18 +612,19 @@ def cmd_collect_quotes(args) -> int:
 
     小时线官方只承诺约 60 天回溯，必须**每天**运行以从首日起归档（WP4.3）。
     """
-    from mystock2.collectors.quotes import YFinanceSource, collect_daily, collect_fx, collect_hourly
+    from mystock2.collectors.quotes import FutuVolumeSource, YFinanceSource, collect_daily, collect_fx, collect_hourly
 
     cfg = load_config(args.config)
     loc = load_local(args.local_dir) if not args.codes else None
     codes = args.codes.split(",") if args.codes else [e.code for e in loc.universe.entries]
     start, end = date.fromisoformat(args.start), date.fromisoformat(args.end)
     sources = [YFinanceSource()]
+    vol_src = FutuVolumeSource(cfg.futu.host, cfg.futu.port) if args.futu_volume else None
     results = {}
     with _opener(cfg, "core") as rl, _opener(cfg, "market") as w:
         with run_log(rl, "collect quotes", {"codes": codes, "start": args.start, "end": args.end, "hourly": args.hourly}) as run:
             for code in codes:
-                results[code] = collect_daily(w, sources, code, start, end, run_id=run.run_id)
+                results[code] = collect_daily(w, sources, code, start, end, run_id=run.run_id, volume_source=vol_src)
                 if args.hourly:
                     results[f"{code}:hourly"] = collect_hourly(w, sources, code, start, end, run_id=run.run_id)
             for pair in (args.fx.split(",") if args.fx else []):
@@ -634,6 +635,21 @@ def cmd_collect_quotes(args) -> int:
             print(f"run_id={run.run_id}")
     print(json.dumps(results, ensure_ascii=False, indent=2, default=str))
     return 0 if not any(v["status"] == "failed" for v in results.values()) else 1
+
+
+def cmd_collect_volume(args) -> int:
+    """历史成交量修补：库里成交量为 0/缺失的终值日线，用富途日 K 的成交量追加新版本（只读行情查询；只追加）。"""
+    from mystock2.collectors.quotes import FutuVolumeSource, repair_zero_volume
+
+    cfg = load_config(args.config)
+    codes = args.codes.split(",") if args.codes else [e.code for e in load_universe(Path(args.local_dir or REPO_ROOT / "config" / "local") / "universe.yaml", ()).entries]
+    start, end = date.fromisoformat(args.start), date.fromisoformat(args.end)
+    with _opener(cfg, "core") as rl, _opener(cfg, "market") as w:
+        with run_log(rl, "collect volume", {"codes": codes, "start": args.start, "end": args.end}) as run:
+            res = repair_zero_volume(w, FutuVolumeSource(cfg.futu.host, cfg.futu.port), codes, start, end, run_id=run.run_id)
+            print(f"run_id={run.run_id}")
+    print(json.dumps(res, ensure_ascii=False, indent=2))
+    return 1 if any(v["status"] == "failed" for v in res.values()) else 0
 
 
 def cmd_collect_futu(args) -> int:
@@ -935,7 +951,13 @@ def register(sub) -> None:
         cq.add_argument(k, **kw)
     cq.add_argument("--hourly", action="store_true", help="同时采集小时线（须每天运行以从首日归档）")
     cq.add_argument("--local-dir", help="本地私有配置目录（默认 config/local/）")
+    cq.add_argument("--futu-volume", action="store_true", help="终值日线成交量为 0/缺失（如港股半日市）时，用富途补成交量（需 OpenD；补不到不影响行情入库）")
     cq.set_defaults(fn=cmd_collect_quotes)
+    cv = cl.add_parser("volume", help="历史成交量修补（富途日 K 成交量补库里为 0 的日线；只追加新版本）")
+    for k, kw in (("--start", {"required": True}), ("--end", {"required": True}), ("--codes", {"help": "逗号分隔的富途代码（默认取名单）"})):
+        cv.add_argument(k, **kw)
+    cv.add_argument("--local-dir", help="本地私有配置目录（默认 config/local/）")
+    cv.set_defaults(fn=cmd_collect_volume)
     cf = cl.add_parser("futu", help="富途只读采集（需授权；只读查询）")
     for k, kw in (("--account-id", {"required": True}), ("--acc-id", {"required": True, "type": int}), ("--start", {"required": True}), ("--end", {"required": True}),
                   ("--what", {"default": "deals,fees,snapshot"}), ("--assume-market-currency", {"action": "store_true", "help": "订单费用接口无币种字段：按成交市场币种入账（2026-10-05 首跑核实：港股印花税 0.1%、美股佣金 0.99 与市场币种一致）"}),

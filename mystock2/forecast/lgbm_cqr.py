@@ -19,7 +19,8 @@ import numpy as np
 
 from mystock2.forecast.baseline import Bar, ForecastUnavailable, Prediction
 
-MODEL_VERSION = "lgbm-cqr-v2"     # v2：校准分数取第 ⌈(n+1)·level⌉ 小（v1 经 np.quantile 多取一名，区间偏宽；审核 F-02/Q2）
+MODEL_VERSION = "lgbm-cqr-v3"     # v3：成交量为 0/缺失的日子在量比窗口内跳过（不再让其后约 60 个交易日整体拒绝预测；FC-1）
+# v2：校准分数取第 ⌈(n+1)·level⌉ 小（v1 经 np.quantile 多取一名，区间偏宽；审核 F-02/Q2）
 FEATURE_VERSION = "f-v1-16"
 FEATURE_COLS = ["ret_1d", "ret_5d", "ret_10d", "vol_5d", "vol_20d", "atr_14", "ma5_dev", "ma10_dev", "ma20_dev", "close_pos_in_range",
                 "day_range_rel", "gap", "dist_hi_20", "dist_lo_20", "vol_ratio_5", "vol_ratio_20"]
@@ -75,6 +76,12 @@ def build_features(bars: list[Bar]) -> tuple[np.ndarray, np.ndarray]:
     def mean(a, w):
         return _roll(a, w, lambda x: np.mean(x) if np.all(np.isfinite(x)) else np.nan)
 
+    def mean_skip_missing(a, w):                                   # 窗口内成交量缺失/为 0 的日子跳过，至少一半有效才给值（T 日本身缺失则量比缺失）
+        def f(x):
+            ok = x[np.isfinite(x)]
+            return np.mean(ok) if len(ok) * 2 >= w else np.nan
+        return _roll(a, w, f)
+
     prev = np.r_[np.nan, adj[:-1]]
     tr = np.nanmax(np.vstack([hi - lo, np.abs(hi - prev), np.abs(lo - prev)]), axis=0)
     rng = np.where(hi - lo == 0, np.nan, hi - lo)
@@ -83,7 +90,7 @@ def build_features(bars: list[Bar]) -> tuple[np.ndarray, np.ndarray]:
         "atr_14": mean(tr, 14) / adj, "ma5_dev": adj / mean(adj, 5) - 1, "ma10_dev": adj / mean(adj, 10) - 1, "ma20_dev": adj / mean(adj, 20) - 1,
         "close_pos_in_range": (adj - lo) / rng, "day_range_rel": rng / adj, "gap": op / prev - 1,
         "dist_hi_20": adj / _roll(hi, 20, np.max) - 1, "dist_lo_20": adj / _roll(lo, 20, np.min) - 1,
-        "vol_ratio_5": vol / mean(vol, 5), "vol_ratio_20": vol / mean(vol, 20),
+        "vol_ratio_5": vol / mean_skip_missing(vol, 5), "vol_ratio_20": vol / mean_skip_missing(vol, 20),
     }
     for j, name in enumerate(FEATURE_COLS):
         X[:, j] = cols[name]
@@ -143,7 +150,7 @@ def predict(bars: list[Bar], params: LGBMParams | None = None) -> Prediction:
     if len(idx) < p.min_train:
         raise ForecastUnavailable(f"训练样本不足：{len(idx)} < {p.min_train}")
     if not np.all(np.isfinite(X[T])):
-        raise ForecastUnavailable("T 日特征含缺失（窗口不足或成交量缺失），不外推")
+        raise ForecastUnavailable("T 日特征含缺失（窗口不足，或 T 日成交量缺失/为 0），不外推")
     n_cal = max(30, int(len(idx) * p.calib_frac))
     train_idx, cal_idx = idx[: len(idx) - n_cal - p.purge], idx[len(idx) - n_cal:]
     if len(train_idx) < p.min_train // 2:
