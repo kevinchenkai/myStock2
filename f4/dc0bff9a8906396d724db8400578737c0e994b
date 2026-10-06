@@ -1,0 +1,21 @@
+tests/integration/test_futu_collector.py
+  s_4e5dbfa251c076::t_142b92154c6f20 258-278
+mystock2/collectors/futu.py
+  s_4e5dbfa251c076::t_7849f908a69046 272-273,288-290,292-298,301-304,306-307,313-328,333,337
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "f4dc0bff9a8906396d724db8400578737c0e994b",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
