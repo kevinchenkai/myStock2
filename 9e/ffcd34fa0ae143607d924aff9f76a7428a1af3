@@ -1,0 +1,22 @@
+mystock2/web/views/forecast/panel.js
+  s_97d138eaf84b50::t_24e652cfa01ff7 119-122
+  s_97d138eaf84b50::t_42e0f4a14853ce 10,19,67,91-92,94,115
+docs/records/real-data-phase-changelog_claude_20261005.md
+  s_97d138eaf84b50::t_a354c74c189179 142-143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "9effcd34fa0ae143607d924aff9f76a7428a1af3",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
