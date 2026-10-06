@@ -55,8 +55,11 @@ def reveal(conn: sqlite3.Connection, *, batch_id: str, market: str, target_sessi
 
 
 def first_reveal_at(conn: sqlite3.Connection, batch_id: str, market: str, target_session: date) -> str | None:
-    r = conn.execute("SELECT MIN(revealed_at) m FROM intent_exposure WHERE batch_id=? AND market=? AND target_session=?",
-                     (batch_id, market, target_session.isoformat())).fetchone()
+    """该市场、该目标日的首次揭示时间。**不按批次过滤**（审核 P0-4）：§6A.2 的暴露是「该目标日任一 AI 版本或等价信息」，
+    在批次 B1 看过 AI 单后，为 B2 记录的计划同样不是「未看 AI 的独立想法」。`batch_id` 只为保持调用签名。"""
+    del batch_id
+    r = conn.execute("SELECT MIN(revealed_at) m FROM intent_exposure WHERE market=? AND target_session=?",
+                     (market, target_session.isoformat())).fetchone()
     return r["m"]
 
 

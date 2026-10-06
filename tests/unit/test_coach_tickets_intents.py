@@ -328,3 +328,15 @@ def test_db_market_data_close_uses_final_unadjusted_and_ignores_partial(tmp_path
 def test_reveal_without_any_record_still_flags_exposed_before_record(conn):
     reveal(conn, batch_id=B, market="US", target_session=TARGET, channel="veto_export", version_hashes=["h"], at=BEFORE)
     assert plan(conn)["US.NVDA"]["flags"] == ["plan_missing", "exposed_before_record"]     # 揭示后从未补录也要标记
+
+
+def test_p0_4_reveal_in_another_batch_counts_as_exposure(conn):
+    """审核 P0-4：暴露按（市场、目标日）判定，与批次无关——在 B1 看过 AI 单后为 B2 记录的计划是 seen_ai=1；
+    另一个市场或另一个目标日的揭示不算。"""
+    t_reveal = BEFORE + timedelta(hours=1)
+    reveal(conn, batch_id="B-other", market="US", target_session=TARGET, channel="coach_show", version_hashes=["h"], at=t_reveal)
+    reveal(conn, batch_id=B, market="HK", target_session=TARGET, channel="coach_show", version_hashes=["h"], at=BEFORE)
+    before = rec(conn, px="97", qty=10, at=BEFORE + timedelta(minutes=30))
+    after = rec(conn, px="96", qty=10, at=t_reveal + timedelta(minutes=5))
+    assert not before.seen_ai and after.seen_ai and after.late_record
+    assert plan(conn)["US.NVDA"]["intent_id"] == before.intent_id
