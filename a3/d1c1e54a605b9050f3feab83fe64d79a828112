@@ -1,0 +1,21 @@
+mystock2/web/views/equity_trend/panel.js
+  s_4e5dbfa251c076::t_2c35851dd8a436 22
+  s_4e5dbfa251c076::t_6a1b2f5ff931f4 3,12-15,19,21,23-26,29-30,32,35
+  s_4e5dbfa251c076::t_2efaf7e4227a37 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "a3d1c1e54a605b9050f3feab83fe64d79a828112",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "unknown"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
