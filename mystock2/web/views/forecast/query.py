@@ -335,7 +335,7 @@ def _level_cells(p: dict | None, base_close: Decimal | None, ccy: str, why_missi
 
 
 def _latest_row(conn, code: str, ps: list[dict], q: dict, quotes: dict, now, *, as_of: str, kind: str, base_day: str | None,
-                base_close: Decimal | None, lag: bool) -> dict:
+                base_close: Decimal | None, lag: bool, forward_targets: set[tuple[str, str]]) -> dict:
     ccy = _ccy(code)
     at = [p for p in ps if p["as_of"] == as_of]
     target = max(p["target"] for p in at)
@@ -347,8 +347,8 @@ def _latest_row(conn, code: str, ps: list[dict], q: dict, quotes: dict, now, *, 
         chosen[f] = (cand[-1] if cand else None, why)
     settled = _settled(quotes, code, target, now)
     # 密封只针对「前向」预测（它们进入记分牌/人类计划对照）；事后重建（rebuilt）的预测不属于任何前向样本，不密封（负责人 2026-10-05 决定）。
-    # 一旦该 as_of 有 forward 预测，仍按 §6A.2 密封。
-    rebuilt_only = all(p["tag"] == "rebuilt" for p in at)
+    # 一旦该目标日有 forward 预测（任何版本，不受「只展示最近版本」的过滤影响），仍按 §6A.2 密封。
+    rebuilt_only = all(p["tag"] == "rebuilt" for p in at) and (code, target) not in forward_targets
     sealed = not (settled or rebuilt_only or _is_revealed(conn, code, target, now))
     out = {"code": code, "kind": kind, "as_of": as_of, "target": target, "currency": ccy, "sealed": sealed,
            "sources": sorted({p["tag"] for p in at}), "base_date": base_day,
@@ -368,7 +368,7 @@ def _latest_row(conn, code: str, ps: list[dict], q: dict, quotes: dict, now, *, 
     return out
 
 
-def _latest_rows(conn, preds: list[dict], quotes: dict, now) -> list[dict]:
+def _latest_rows(conn, preds: list[dict], quotes: dict, now, forward_targets: set[tuple[str, str]]) -> list[dict]:
     by_code: dict[str, list[dict]] = {}
     for p in preds:
         if p["family"]:
@@ -385,7 +385,7 @@ def _latest_rows(conn, preds: list[dict], quotes: dict, now) -> list[dict]:
             exp = None
         lag = last_day is not None and exp is not None and last_day < exp.isoformat()
         latest = _latest_row(conn, code, ps, q, quotes, now, as_of=max(p["as_of"] for p in ps), kind="latest", base_day=last_day,
-                             base_close=last_close, lag=bool(lag))
+                             base_close=last_close, lag=bool(lag), forward_targets=forward_targets)
         rows.append(latest)
         if latest["sealed"]:
             done = sorted({p["as_of"] for p in ps if _settled(quotes, code, p["target"], now)})
@@ -393,7 +393,7 @@ def _latest_rows(conn, preds: list[dict], quotes: dict, now) -> list[dict]:
                 a = done[-1]
                 qa = q.get(a)
                 rows.append(_latest_row(conn, code, ps, q, quotes, now, as_of=a, kind="last_settled", base_day=a if qa else None,
-                                        base_close=dec(qa["close"]) if qa else None, lag=False))
+                                        base_close=dec(qa["close"]) if qa else None, lag=False, forward_targets=forward_targets))
     return rows
 
 
@@ -419,6 +419,8 @@ def run(conn, params):
         all_preds = [p for p in all_preds if p["code"] in in_universe]
     if not all_preds:
         raise C.ViewUnavailable("no_predictions", "还没有任何预测版本留档：预测由受控 CLI 生成（Web 只读，不训练、不预测）")
+    # 密封与来源计数必须看**全部**版本：只展示最近版本的过滤若先于它们，前向预测会被滤掉（审核 P0-2）
+    forward_targets = {(p["code"], p["target"]) for p in all_preds if p["tag"] == "forward"}
     chosen, version_notes = _pick_versions(all_preds)
     preds = [p for p in all_preds if p["family"] and chosen.get(p["family"]) == p["mv"]]
     codes_all = sorted({p["code"] for p in preds})
@@ -432,11 +434,14 @@ def run(conn, params):
         prov.append({"tag": t, "label": TAG_LABEL[t], "count": len(ps), "first_as_of": min((p["as_of"] for p in ps), default=None),
                      "last_as_of": max((p["as_of"] for p in ps), default=None), "codes": len({p["code"] for p in ps})})
     forward_n = next(x["count"] for x in prov if x["tag"] == "forward")
+    forward_all = sum(1 for p in all_preds if p["family"] and p["tag"] == "forward")
     rebuilt_n = next(x["count"] for x in prov if x["tag"] == "rebuilt")
     warnings = list(version_notes)
     if tag == "rebuilt" or rebuilt_n:
         warnings.append(REBUILT_WARNING)
-    if forward_n == 0:
+    if forward_all > forward_n:                          # 前向预测属于未展示的旧版本：照实说明，不能报成 0
+        warnings.append(f"另有 {forward_all - forward_n} 条前向（forward）预测属于未展示的模型版本（见上方版本说明）；它们仍按 §6A.2 密封。")
+    if forward_all == 0:
         warnings.append("前向（forward）预测样本数为 0：目前没有任何可作为晋级证据的前向样本。")
 
     # ---- 模型元数据
@@ -469,7 +474,7 @@ def run(conn, params):
     if chart is not None and not codes_tag:
         chart = None
 
-    latest = _latest_rows(conn, preds, quotes, now)
+    latest = _latest_rows(conn, preds, quotes, now, forward_targets)
 
     # ---- 新鲜度
     last_pred = max(preds, key=lambda p: (p["as_of"], p["generated_at"])) if preds else None
@@ -491,7 +496,7 @@ def run(conn, params):
              "latest_quote_date": q_latest[0] if q_latest else None, "latest_quote_received_at": q_latest[1]["received_at"] if q_latest else None}
 
     return {
-        "banner": BANNER, "source": tag, "source_label": TAG_LABEL[tag], "provenance": prov, "forward_count": forward_n, "rebuilt_count": rebuilt_n,
+        "banner": BANNER, "source": tag, "source_label": TAG_LABEL[tag], "provenance": prov, "forward_count": forward_n, "forward_count_all_versions": forward_all, "rebuilt_count": rebuilt_n,
         "models": models, "min_n": MIN_N, "compare": compare, "codes": codes_all, "symbol": sym, "window": window, "chart": chart, "latest": latest,
         "freshness": fresh, "warnings": warnings,
         "_freshness": C.freshness(srcs, notes=fresh_notes + ([REBUILT_WARNING] if tag == "rebuilt" else [])),

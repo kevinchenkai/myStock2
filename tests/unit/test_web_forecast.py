@@ -519,3 +519,25 @@ def test_rebuilt_predictions_are_not_sealed_but_forward_ones_are(tmp_path):
     db2 = build_db(tmp_path / "b", codes=("US.NVDA",)) if (tmp_path / "b").mkdir() is None else None
     pending_pred(db2)                                                           # 前向（默认）
     assert latest(view(tmp_path / "b", db2), "US.NVDA")["sealed"]
+
+
+def test_forward_prediction_of_an_older_version_still_seals_a_newer_rebuilt_one(tmp_path):
+    """审核 P0-2：前向用 v1、之后又用 v2 事后重建同一 as_of。只展示最近版本的过滤不得先于密封判断，
+    否则前向行被滤掉，未结束目标日的 v2 价位以「事后重建（未密封）」放出；前向样本数也不能报成 0。"""
+    db = build_db(tmp_path, codes=("US.NVDA",))
+    pending_pred(db)                                                            # 前向 v1（价位是哨兵）
+    fw = dbmod.connect_writer(db, "forecast")
+    v2 = {"y_low": "-0.066666", "y_high": "0.055555", "low_price": "88.4444", "high_price": "111.5555"}
+    for i, mv in enumerate(("naive-vol-v2", "lgbm-cqr-v2")):
+        insert_pred(fw, 8300 + i, "US.NVDA", SESS[-1], NEXT, mv, v2["y_low"], v2["y_high"], tag="rebuilt", gen="2026-03-10T23:00:00.000000Z",
+                    prices=(v2["low_price"], v2["high_price"]))
+    fw.close()
+    for params in ({}, {"source": "forward"}):
+        body = view(tmp_path, db, **params)
+        row = latest(body, "US.NVDA")
+        assert row["sealed"] and all(v is None for v in row["models"].values()), row
+        text = json.dumps(body, ensure_ascii=False)
+        for s in list(SENT.values()) + list(v2.values()):
+            assert s not in text, s
+        assert body["data"]["forward_count_all_versions"] == 2
+        assert not any("样本数为 0" in w for w in body["data"]["warnings"])
