@@ -1,0 +1,34 @@
+tests/unit/test_calendars.py
+  s_4e5dbfa251c076::t_a255e055220450 30
+tests/integration/test_web_readonly.py
+  s_4e5dbfa251c076::t_89273fe2494197 282-283,285-291
+  s_4e5dbfa251c076::t_9a2dd02da0b6d6 292
+tests/unit/test_coach_decide.py
+  s_4e5dbfa251c076::t_a255e055220450 170
+tests/unit/test_scoreboard.py
+  s_4e5dbfa251c076::t_a255e055220450 65
+tests/unit/test_web_frontend.py
+  s_4e5dbfa251c076::t_89273fe2494197 393
+tests/unit/test_ledger_events.py
+  s_4e5dbfa251c076::t_a255e055220450 302-341
+tests/unit/test_config.py
+  s_4e5dbfa251c076::t_89273fe2494197 23-29,31
+tests/unit/test_veto.py
+  s_4e5dbfa251c076::t_b4c63eefa2a163 334-346
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "185d66e8e178dc0c000a075723abb7c23fb0bea8",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
