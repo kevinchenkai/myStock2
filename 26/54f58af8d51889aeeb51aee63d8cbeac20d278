@@ -1,0 +1,44 @@
+tests/unit/test_web_opsdata.py
+  s_97d138eaf84b50::t_086b758cff613c 45-46
+tests/unit/test_web_forecast.py
+  s_97d138eaf84b50::t_3ca0dbd114b291 366-367,369-370,372-379,383,389,392,395-397,404,474,488,492-494,496-497,500-501,514
+  s_97d138eaf84b50::t_fe951101988a12 513
+mystock2/web/views/stock/panel.js
+  s_97d138eaf84b50::t_642ef6ef89ac8e 178
+tests/unit/test_web_stock.py
+  s_97d138eaf84b50::t_9c6aa9019a4470 404,412,423
+  s_97d138eaf84b50::t_642ef6ef89ac8e 411,422
+  s_97d138eaf84b50::t_c787246329f22f 399
+docs/plans/mystock-v2-implementation-plan_claude_20261005.md
+  s_97d138eaf84b50::t_b1643ca88688f3 5,456,759-771,803
+mystock2/web/views/forecast/panel.js
+  s_97d138eaf84b50::t_882b3fffa0fb49 107,112,115
+mystock2/web/views/forecast/query.py
+  s_97d138eaf84b50::t_882b3fffa0fb49 13,308,345-346,350,377
+mystock2/web/views/stock/query.py
+  s_97d138eaf84b50::t_16f626d7bbd4ff 465,467-469
+  s_97d138eaf84b50::t_ffd63522bdf648 8
+  s_97d138eaf84b50::t_642ef6ef89ac8e 466
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_820eee5b21bd24 82
+docs/records/m3c-forecast-view_claude_20261005.md
+  s_97d138eaf84b50::t_2d2d2b67bc2203 71-72
+docs/records/real-data-phase-changelog_claude_20261005.md
+  s_97d138eaf84b50::t_1ce0e07ae57274 138-141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "2654f58af8d51889aeeb51aee63d8cbeac20d278",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
