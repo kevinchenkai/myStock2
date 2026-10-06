@@ -1,0 +1,25 @@
+tests/integration/test_futu_collector.py
+  s_4e5dbfa251c076::t_c0c487cc2c1ed8 247-261
+docs/guides/daily-update_claude_20261005.md
+  s_4e5dbfa251c076::t_69ef2d0cd5443b 57
+mystock2/collectors/futu.py
+  s_4e5dbfa251c076::t_69ef2d0cd5443b 47-48,372,461-465
+mystock2/cli/ops.py
+  s_4e5dbfa251c076::t_69ef2d0cd5443b 918
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "155eefe5d03754ca4e7578de4b82e1d18009b0bf",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
