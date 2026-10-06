@@ -1,0 +1,19 @@
+docs/records/real-data-phase-changelog_claude_20261005.md
+  s_97d138eaf84b50::t_996bdbc99789a4 112-115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "e413d08426d1de1fa42544ad8eb03b71b6cf4100",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
