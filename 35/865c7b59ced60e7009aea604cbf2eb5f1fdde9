@@ -1,0 +1,21 @@
+mystock2/web/static/app.css
+  s_4e5dbfa251c076::t_c2d52473f8ac7c 7,9
+tests/unit/test_web_frontend.py
+  s_4e5dbfa251c076::t_ab4491d8e72578 468-487
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "35865c7b59ced60e7009aea604cbf2eb5f1fdde9",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
