@@ -1,0 +1,20 @@
+mystock2/web/views/tickets/panel.js
+  s_4e5dbfa251c076::t_2053f274fb7dc9 7,19
+  s_4e5dbfa251c076::t_2c35851dd8a436 39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "26f5a4432c0ff7d95263704e4901cb506a9298cd",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "unknown"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
