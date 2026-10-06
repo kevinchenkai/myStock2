@@ -79,6 +79,7 @@ def run(conn, params):
 
     bad_fx = incomplete_fx_groups(conn, aid)
     series, notes, adjust_other = [], [], 0
+    held: set[str] = set()                                           # 最后一个点仍持有的标的：只有它们的行情落后才让页头陈旧
     for ccy in ccys:
         axis = [(d, c) for d, c in _axis(ccy, start, now) if c >= start_dt]
         if not axis:
@@ -86,6 +87,7 @@ def run(conn, params):
         states = replay_states(rows, splits, opening_at, [c for _, c in axis], bad_fx)
         pts, base_date = build_equity_series(ccy, [d for d, _ in axis], states, code_ccy, prices)
         adjust_other = max(adjust_other, states[-1].adjust_other)
+        held |= {c for c, q in states[-1].positions.items() if q != 0}
         gaps = _runs(pts)
         shown = pts[-max_points:]
         last = next((p for p in reversed(pts) if p["status"] == "ok"), None)
@@ -111,7 +113,7 @@ def run(conn, params):
 
     px = [latest_close(conn, c, now) for c in codes]
     quote_src = C.source("行情（未复权收盘）", min(p.event_at for p in px) if px and all(p.event_at for p in px) else None,
-                         min(p.received_at for p in px) if px and all(p.received_at for p in px) else None, behind=behind_text(px))
+                         min(p.received_at for p in px) if px and all(p.received_at for p in px) else None, behind=behind_text(p for p in px if p.code in held))
     srcs = [C.ledger_source(conn, aid)] + ([quote_src] if codes else [])
     notes += ["三条曲线是不同的量：持仓市值 ≠ 账户权益 ≠ 剔除外部资金流的收益",
               "缺行情的日子标缺口、不连线；入金/出金当天只改变权益，不改变「剔除外部资金流的收益」",

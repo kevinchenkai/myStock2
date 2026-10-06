@@ -8,7 +8,7 @@ from mystock2.core import db as dbmod
 from mystock2.ledger.events import EventDraft, ensure_account, flow_key, post_event
 from mystock2.ledger.opening import record_opening
 
-from .test_web_fixtures import NOW, RECEIVED, build_demo_db, get_view, make_app, put_closes, put_fx
+from .test_web_fixtures import NOW, RECEIVED, build_demo_db, buy, get_view, make_app, put_closes, put_fx, sell
 
 pytestmark = pytest.mark.filterwarnings("ignore")
 
@@ -310,6 +310,21 @@ def test_equity_trend_marks_gap_instead_of_connecting(client):
     assert usd["gaps"] == [{"from": "2026-03-09", "to": "2026-03-09", "missing": ["US.NVDA"], "days": 1}]
     hkd = by(get_view(client, "equity_trend")[1]["data"]["series"], "currency", "HKD")
     assert all(p["status"] == "ok" for p in hkd["points"])                                       # 港股行情完整，不受美股缺口影响
+
+
+def test_equity_trend_header_ignores_lagging_quotes_of_codes_already_sold(tmp_path):
+    """审核 Q5：已清仓标的行情停更是正常的，不让资产趋势页头变陈旧；仍持有的落后才算。"""
+    p = build_demo_db(tmp_path)
+    led = dbmod.connect_writer(p, "ledger")
+    buy(led, "x1", "US.AAPL", 10, 200, "2026-03-03T15:00:00.000000Z")
+    sell(led, "x2", "US.AAPL", 10, 210, "2026-03-04T15:00:00.000000Z")
+    led.close()
+    mk = dbmod.connect_writer(p, "market")
+    put_closes(mk, "US.AAPL", {"2026-03-02": "195", "2026-03-03": "200", "2026-03-04": "210"})
+    mk.close()
+    h = get_view(make_app(tmp_path, p).test_client(), "equity_trend")[1]["header"]
+    q = next(s for s in h["sources"] if s["name"].startswith("行情"))
+    assert q["staleness"] == "新鲜" and "AAPL" not in q["text"]
 
 
 def test_equity_trend_currencies_are_separate_series(client):
