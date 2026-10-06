@@ -5,7 +5,7 @@ from decimal import Decimal as D
 from mystock2.core import db as dbmod
 from mystock2.ledger.events import EventDraft, correct_event, ensure_account, fill_key, flow_key, post_event, post_fx
 from mystock2.ledger.opening import add_split, record_opening
-from mystock2.ledger.projection import load_events, project
+from mystock2.ledger.projection import incomplete_fx_groups, load_events, project
 from mystock2.web.series import LedgerState, build_equity_series, replay_states
 
 UTC = timezone.utc
@@ -134,3 +134,26 @@ def test_dividend_receivable_counts_in_equity_with_unadjusted_price():
     pts, _ = build_equity_series("USD", days, [LedgerState(positions={"US.NVDA": D(10)}, cash={"USD": D(0)}, receivable={"USD": D(100)})],
                                  {"US.NVDA": "USD"}, {"US.NVDA": {"2026-03-03": D(100)}})
     assert pts[0]["equity"] == D(1100)
+
+
+def _cmp_all(c, cuts):
+    rows = load_events(c, A)
+    splits = [dict(r) for r in c.execute("SELECT code, effective_at, ratio_num, ratio_den FROM corporate_action")]
+    got = replay_states(rows, splits, T0, cuts, incomplete_fx_groups(c, A))
+    for cut, st in zip(cuts, got, strict=True):
+        p = project(c, A, as_of=cut)
+        assert (st.positions, st.cash, st.receivable, st.external_flow) == (p.positions, p.cash, p.receivable, p.external_flow), cut
+    return got
+
+
+def test_replay_matches_projection_after_opening_correction_and_broken_fx_group(tmp_path):
+    """审核 P0-1：开账更正的冲销与开账同刻，须按被冲销事件的类型判边界（否则旧、新期初都计入）；缺腿换汇组整组不生效。"""
+    c = new_db(tmp_path)
+    record_opening(c, A, T0, {"US.NVDA": "100"}, {"USD": "1000"})
+    fill(c, "t0", "US.NVDA", 1, 100, T0)                                       # 恰在 t0 的成交：属于开账前（只作描述）
+    correct_event(c, f"opening:{A}:pos:US.NVDA", EventDraft(f"opening:{A}:pos:US.NVDA", A, "OPENING_POSITION", T0, "USD", code="US.NVDA", qty_delta="80"), "rq-pos")
+    correct_event(c, f"opening:{A}:cash:USD", EventDraft(f"opening:{A}:cash:USD", A, "OPENING_CASH", T0, "USD", cash_delta="900"), "rq-cash")
+    post_event(c, EventDraft(f"fx:{A}:half:out", A, "FX", "2026-03-04T15:00:00.000000Z", "USD", cash_delta="-5", group_id="half", leg_id="out"),
+               _internal_fx=True)                                              # 只有一条腿（数据损坏）：整组不生效
+    got = _cmp_all(c, [dt("2026-03-02T00:00:00.000000Z"), dt("2026-03-05T00:00:00.000000Z")])
+    assert got[-1].positions == {"US.NVDA": D(80)} and got[-1].cash == {"USD": D(900)}

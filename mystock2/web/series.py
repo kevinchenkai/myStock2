@@ -9,7 +9,7 @@
 
 缺行情的日子**不插值、不连线**：该点 `status="gap"`，写明缺哪些标的。
 
-`replay_states` 与 `mystock2.ledger.projection.project` 的语义一致（开账边界、拆股因子、冲销按被冲销类型归类、同刻先拆股），
+`replay_states` 与 `mystock2.ledger.projection.project` 的语义一致（开账边界与冲销都按被冲销事件的类型判断、缺腿换汇组整组不生效、拆股因子、同刻先拆股），
 但只扫一遍事件、在每个截止时点取状态，避免每个日期都重扫账本；一致性由测试对照 `project` 验证。
 """
 from __future__ import annotations
@@ -46,9 +46,11 @@ def _effective_type(row) -> str:
 
 
 def replay_states(rows: Sequence[Mapping], splits: Iterable[Mapping], opening_at: str | datetime | None,
-                  cutoffs: Sequence[datetime]) -> list[LedgerState]:
-    """在每个截止时点（升序）返回账本状态。rows 为 `projection.load_events` 的原始事件行（含冲销与各版本）。"""
+                  cutoffs: Sequence[datetime], bad_fx_groups: Iterable[str] = ()) -> list[LedgerState]:
+    """在每个截止时点（升序）返回账本状态。rows 为 `projection.load_events` 的原始事件行（含冲销与各版本）；
+    bad_fx_groups 为 `projection.incomplete_fx_groups` 的结果：缺腿／不合规的换汇组整组不生效（与 `project` 相同）。"""
     t0 = ensure_utc(opening_at) if opening_at is not None else None
+    bad_fx = set(bad_fx_groups)
     items: list[tuple] = []
     for i, r in enumerate(rows):
         items.append((ensure_utc(r["event_at"]), 1, i, "E", r))
@@ -76,10 +78,12 @@ def replay_states(rows: Sequence[Mapping], splits: Iterable[Mapping], opening_at
                         pos[code] = pos[code] * obj["ratio_num"] / obj["ratio_den"]
                     continue
                 t = obj["event_type"]
-                if t not in OPENING_TYPES and t_is_pre(t0, dt):
+                et = _effective_type(obj)                  # 冲销按被冲销事件的类型归类：开账更正的冲销也在开账边界内生效
+                if et == "FX" and obj["group_id"] in bad_fx:
+                    continue
+                if et not in OPENING_TYPES and t_is_pre(t0, dt):
                     continue
                 ccy, cash, recv, qty = obj["currency"], dec(obj["cash_delta"]), dec(obj["recv_delta"]), dec(obj["qty_delta"])
-                et = _effective_type(obj)
                 if cash:
                     _add(st.cash, ccy, cash)
                     if et in EXTERNAL_TYPES or (et == "ADJUST" and obj["adjust_class"] == "EXTERNAL_FLOW"):

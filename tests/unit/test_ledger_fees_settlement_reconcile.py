@@ -182,3 +182,14 @@ def test_derive_opening_from_a_later_snapshot_gives_exact_positions_and_residual
     s2 = snap(conn2, D3, {"US.NVDA": "10"}, {"USD": "0"})
     _, _, w2 = derive_opening(conn2, ACCT, s2, T0)
     assert any("为负" in w for w in w2)
+
+
+def test_derive_opening_ignores_broken_fx_group_like_projection(tmp_path):
+    """缺腿的换汇组在 project 里整组不生效；倒推开账也不能把它当成真实现金变动（审核 P3）。"""
+    from mystock2.ledger.opening import derive_opening
+
+    conn = make_db(tmp_path)
+    post_event(conn, EventDraft(f"fx:{ACCT}:g:in", ACCT, "FX", D1, "USD", cash_delta="100", group_id="g", leg_id="in"), _internal_fx=True)
+    snap_id = snap(conn, D3, {}, {"USD": "500"})
+    _, cash, _ = derive_opening(conn, ACCT, snap_id, T0)
+    assert cash == {"USD": "500"}

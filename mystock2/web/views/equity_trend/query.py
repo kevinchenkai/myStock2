@@ -13,7 +13,7 @@ from datetime import timedelta
 from mystock2.core import calendars as cal
 from mystock2.core.timeutil import ensure_utc
 from mystock2.instruments.code_map import currency_of
-from mystock2.ledger.projection import load_events
+from mystock2.ledger.projection import incomplete_fx_groups, load_events
 from mystock2.web import common as C
 from mystock2.web.series import build_equity_series, replay_states
 from mystock2.web.valuation import closes_by_date, expected_session, latest_close
@@ -77,12 +77,13 @@ def run(conn, params):
     end_all = max([e for e in (expected_session(m, now) for m in ("HK", "US")) if e] or [start])
     prices = {c: closes_by_date(conn, c, start - timedelta(days=1), end_all) for c in codes}
 
+    bad_fx = incomplete_fx_groups(conn, aid)
     series, notes, adjust_other = [], [], 0
     for ccy in ccys:
         axis = [(d, c) for d, c in _axis(ccy, start, now) if c >= start_dt]
         if not axis:
             continue
-        states = replay_states(rows, splits, opening_at, [c for _, c in axis])
+        states = replay_states(rows, splits, opening_at, [c for _, c in axis], bad_fx)
         pts, base_date = build_equity_series(ccy, [d for d, _ in axis], states, code_ccy, prices)
         adjust_other = max(adjust_other, states[-1].adjust_other)
         gaps = _runs(pts)

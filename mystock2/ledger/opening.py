@@ -77,7 +77,7 @@ def derive_opening(conn: sqlite3.Connection, account_id: str, snapshot_id: str, 
     非成交的数量变化——有则在 warnings 里报告）；期初现金是**倒推的残差**：任何没有入账的外部流水（出入金、换汇、利息）都被吸进去，
     不能当作真实的期初现金。返回 (positions, cash, warnings)。
     """
-    from mystock2.ledger.projection import effective_events
+    from mystock2.ledger.projection import effective_events, incomplete_fx_groups
 
     snap = conn.execute("SELECT * FROM account_snapshot WHERE snapshot_id=? AND account_id=?", (snapshot_id, account_id)).fetchone()
     if snap is None:
@@ -88,8 +88,11 @@ def derive_opening(conn: sqlite3.Connection, account_id: str, snapshot_id: str, 
     pos = {r["code"]: dec(r["qty"]) for r in conn.execute("SELECT code, qty FROM snapshot_position WHERE snapshot_id=?", (snapshot_id,))}
     cash = {r["currency"]: dec(r["cash"]) for r in conn.execute("SELECT currency, cash FROM snapshot_cash WHERE snapshot_id=?", (snapshot_id,))}
     warnings: list[str] = []
+    bad_fx = set(incomplete_fx_groups(conn, account_id))                # 与 project 一致：缺腿换汇组整组不生效
     for e in effective_events(conn, account_id):
         if e["event_type"] in ("OPENING_POSITION", "OPENING_CASH") or not (t0 < iso_utc(e["event_at"]) <= t1):
+            continue
+        if e["event_type"] == "FX" and e["group_id"] in bad_fx:
             continue
         if e["qty_delta"] and dec(e["qty_delta"]) != 0:
             pos[e["code"]] = pos.get(e["code"], dec(0)) - dec(e["qty_delta"])
