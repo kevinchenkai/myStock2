@@ -1,6 +1,11 @@
 MS.registerPanel("account_overview", function (root, d) {
   var h = MS.h;
-  var money = function (key) { return function (r) { return r[key]; }; };
+
+  // 摘要：逐币种权益与现金（原币种，不相加）＋对账结论
+  var rc0 = d.reconciliation, tiles = [];
+  d.currencies.forEach(function (r) { tiles.push(["账户权益 · " + r.currency, r.equity]); tiles.push(["现金 · " + r.currency, r.cash]); });
+  tiles.push(["对账（账本 vs 券商快照）", { text: rc0.label, tag: rc0.status === "ok" ? null : "需关注" }]);
+  if (d.currencies.length) root.appendChild(MS.card(null, MS.kv(tiles, { stats: true })));
 
   // 逐币种（原币种；币种之间不相加）
   var cols = [
@@ -39,10 +44,10 @@ MS.registerPanel("account_overview", function (root, d) {
       { key: "rate_date", label: "汇率日期" }, { key: "source", label: "来源" }
     ], d.rates, { empty: "没有换算" });
     var kids = [totalRow, conv, h("h3", { text: "汇率来源与时间" }), rate];
-    if (t.unavailable && t.unavailable.length) kids.push(h("p", { class: "state", text: "有币种缺汇率，合计显示「不可用」：" + t.unavailable.map(function (u) { return u.currency; }).join("、") }));
+    if (t.unavailable && t.unavailable.length) kids.push(h("p", { class: "notice", text: "有币种缺汇率，合计显示「不可用」：" + t.unavailable.map(function (u) { return u.currency; }).join("、") }));
     root.appendChild(MS.card("基准币种合计（" + d.base_ccy + "）", kids));
   } else {
-    root.appendChild(MS.card("基准币种合计", MS.note("未选基准币种：不合计（币种之间不直接相加）。在上方「base_ccy」选择基准币种后，才会按有来源的汇率折算并合计。")));
+    root.appendChild(MS.card("基准币种合计", MS.note("未选基准币种：不合计（币种之间不直接相加）。在页头「基准币种」选择后，才会按有来源的汇率折算并合计。")));
   }
 
   // 持仓估值明细

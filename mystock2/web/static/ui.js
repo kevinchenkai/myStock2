@@ -73,8 +73,10 @@
   }
   /* 键值网格；opts.stats＝KPI 摘要卡（标签小、数值大、等宽数字），只用于每页最关键的几个数字。 */
   function kv(pairs, opts) {
-    return h("div", { class: "kv" + (opts && opts.stats ? " stats" : "") }, pairs.filter(Boolean).map(function (p) {
-      return h("div", null, [h("div", { class: "k", text: p[0] }), h("div", { class: "v" }, cell(p[1]))]);
+    var stats = opts && opts.stats;
+    return h("div", { class: "kv" + (stats ? " stats" : "") }, pairs.filter(Boolean).map(function (p) {
+      var t = p[1] && typeof p[1] === "object" ? String(p[1].text || "") : String(p[1] === null || p[1] === undefined ? "" : p[1]);
+      return h("div", null, [h("div", { class: "k", text: p[0] }), h("div", { class: "v" + (stats && t.length > 16 ? " long" : "") }, cell(p[1]))]);
     }));
   }
 
