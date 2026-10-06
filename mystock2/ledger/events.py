@@ -118,7 +118,7 @@ def _validate(d: EventDraft) -> dict:
     if not d.business_key or not d.account_id:
         raise LedgerError("business_key 与 account_id 必填")
     cur = (d.currency or "").upper()
-    if len(cur) != 3 or not cur.isalpha():
+    if len(cur) != 3 or not cur.isalpha() or cur == "NAN":          # pandas 缺值 NaN 会变成 "NAN"（审核 P3）
         raise LedgerError(f"币种非法：{d.currency!r}")
     qty, cash, recv = _num("qty_delta", d.qty_delta), _num("cash_delta", d.cash_delta), _num("recv_delta", d.recv_delta)
     t = d.event_type

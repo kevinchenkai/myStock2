@@ -102,6 +102,21 @@ def _q(x, step: Decimal) -> Decimal:
     return Decimal(repr(float(x))).quantize(step, rounding=ROUND_HALF_EVEN)
 
 
+def _missing(x) -> bool:
+    """futu 的缺值是字符串 'N/A'（NoneDataValue），也可能是 NaN/None。"""
+    return x is None or (isinstance(x, float) and x != x) or (isinstance(x, str) and x.strip().upper() in ("", "N/A", "NAN", "NONE"))
+
+
+def _opt(x, step: Decimal, *, absolute: bool = False) -> str | None:
+    """可缺失的数值字段：缺值→None；有值则量化（非有限数抛 ArithmeticError，由调用方按行处理）。"""
+    if _missing(x):
+        return None
+    q = _q(abs(float(x)) if absolute else x, step)
+    if not q.is_finite():
+        raise ArithmeticError(f"非有限数值：{x!r}")
+    return to_db(q)
+
+
 def collect_deals(ledger, api: TradeApi, *, account_id: str, acc_id: int, markets: list[str], start: date, end: date, window_days: int = WINDOW_DAYS,
                   sleep: Callable[[float], None] = time.sleep, min_interval: float = 3.2) -> CollectReport:
     rep = CollectReport("deals")
@@ -180,15 +195,13 @@ def collect_orders(ledger, api: TradeApi, *, account_id: str, acc_id: int, marke
                         raise ValueError(f"side/order_id {side}/{r.get('order_id')}")
                     created = _local_to_utc(mk, r["create_time"])
                     updated = _local_to_utc(mk, r["updated_time"]) if r.get("updated_time") else None
-                except (KeyError, CodeError, ValueError, TypeError) as exc:
+                    oid = str(r["order_id"])
+                    vals = dict(market=mk, code=code, side=side, order_type=str(r.get("order_type") or ""), status=str(r.get("status") or "UNKNOWN"),
+                                price=_opt(r.get("price"), PRICE_Q), qty=_opt(r.get("qty"), QTY_Q, absolute=True), dealt_qty=_opt(r.get("dealt_qty"), QTY_Q, absolute=True),
+                                dealt_avg_price=_opt(r.get("dealt_avg_price"), PRICE_Q) if r.get("dealt_avg_price") else None, created_at=created, updated_at=updated)
+                except (KeyError, CodeError, ValueError, TypeError, ArithmeticError) as exc:     # 单行脏数据（如价格 NaN）只跳过该行（审核 C-04）
                     rep.notes.append(f"skipped:{r.get('order_id')}:{exc}")
                     continue
-                oid = str(r["order_id"])
-                def _n(x, step):
-                    return None if x is None else to_db(_q(abs(float(x)) if step == QTY_Q else x, step))
-                vals = dict(market=mk, code=code, side=side, order_type=str(r.get("order_type") or ""), status=str(r.get("status") or "UNKNOWN"),
-                            price=_n(r.get("price"), PRICE_Q), qty=_n(r.get("qty"), QTY_Q), dealt_qty=_n(r.get("dealt_qty"), QTY_Q),
-                            dealt_avg_price=_n(r.get("dealt_avg_price"), PRICE_Q) if r.get("dealt_avg_price") else None, created_at=created, updated_at=updated)
                 with atomic(ledger):
                     cur = ledger.execute("SELECT status, updated_at, source FROM broker_order WHERE account_id=? AND order_id=?", (account_id, oid)).fetchone()
                     if cur is None:
@@ -230,21 +243,26 @@ def collect_snapshot(ledger, api: TradeApi, *, account_id: str, acc_id: int, mar
         for m in markets:
             sleep(min_interval)
             for p in api.positions(acc_id, m):
-                market_of(p["code"])
+                try:
+                    market_of(p["code"])
+                except CodeError:                                # 期权等非股票代码：单列在回执里，不让整份快照失败（审核 C-06）
+                    rep.notes.append(f"unsupported_position:{p.get('code')}")
+                    continue
                 if p.get("stock_name"):
                     names[p["code"]] = str(p["stock_name"])
-                positions[p["code"]] = {"qty": str(_q(p["qty"], QTY_Q)), "sellable_qty": str(_q(p["can_sell_qty"], QTY_Q)) if p.get("can_sell_qty") is not None else None,
-                                        "cost_basis": str(_q(p["cost_price"], PRICE_Q)) if p.get("cost_price") else None,     # 历史列：券商 cost_price＝摊薄成本（首跑核实，可为负）
-                                        "average_cost": str(_q(p["average_cost"], PRICE_Q)) if p.get("average_cost") else None,
-                                        "diluted_cost": str(_q(p["diluted_cost"], PRICE_Q)) if p.get("diluted_cost") is not None else None}
+                # 成本类字段缺值（futu 'N/A'）只置空该字段，不放弃整份快照（审核 C-03）；数量缺失则整份快照失败（不记零）
+                positions[p["code"]] = {"qty": str(_q(p["qty"], QTY_Q)), "sellable_qty": _opt(p.get("can_sell_qty"), QTY_Q),
+                                        "cost_basis": _opt(p.get("cost_price"), PRICE_Q) if p.get("cost_price") else None,     # 历史列：券商 cost_price＝摊薄成本（首跑核实，可为负）
+                                        "average_cost": _opt(p.get("average_cost"), PRICE_Q) if p.get("average_cost") else None,
+                                        "diluted_cost": _opt(p.get("diluted_cost"), PRICE_Q)}
         sleep(min_interval)
         funds = api.funds(acc_id)
+        cash = {ccy.upper(): {k: _opt(v, Decimal("0.01")) for k, v in d.items()} for ccy, d in funds.items() if not _missing(d.get("cash"))}
     except Exception as exc:  # noqa: BLE001
         rep.ok = False
         rep.failed_scopes.append(f"snapshot: {type(exc).__name__}: {exc}")
         return rep
     upsert_names(ledger, names, "futu")
-    cash = {ccy.upper(): {k: (str(_q(v, Decimal('0.01'))) if v is not None else None) for k, v in d.items()} for ccy, d in funds.items()}
     create_snapshot(ledger, account_id, captured_at, "futu", {c: {k: v for k, v in p.items() if v is not None} for c, p in positions.items()},
                     {c: {k: v for k, v in d.items() if v is not None} for c, d in cash.items()})
     rep.rows = len(positions) + len(cash)
@@ -575,7 +593,7 @@ class FutuTradeApi:
             row = df.iloc[0]
             out = {}
             for ccy, col in (("HKD", "hk_cash"), ("USD", "us_cash"), ("CNH", "cn_cash")):
-                if col in row and row[col] == row[col]:
+                if col in row and not _missing(row[col]):                  # 缺某币种时 futu 给 'N/A'（不是 NaN）
                     out[ccy] = {"cash": row[col]}
             return out
         finally:

@@ -215,3 +215,27 @@ def test_nan_rows_from_vendor_are_dropped_not_fatal(mk):
     nan_bar = DailyBar(CODE, date(2026, 3, 4), "nan", "nan", "nan", "nan", "nan", "0")
     res = collect_daily(mk, [FakeSource("v", [bar("2026-03-03"), nan_bar, bar("2026-03-05")])], CODE, date(2026, 3, 2), date(2026, 3, 5), run_id="r1", now=now)
     assert res["status"] == "partial" and res["rejected_invalid_ohlc"] == ["2026-03-04"]
+
+
+def test_fx_bad_rows_are_dropped_not_the_whole_pair(mk):
+    """审核 C-05：汇率有一行 NaN/非正：丢该行（留缺口），其余照常入库并留回执。"""
+    rows = [(date(2026, 3, 2), "7.8"), (date(2026, 3, 3), "nan"), (date(2026, 3, 4), "0"), (date(2026, 3, 5), "7.81")]
+    r = collect_fx(mk, [FakeSource("fx1", rows)], "USDHKD", date(2026, 3, 2), date(2026, 3, 5))
+    assert r["status"] == "ok" and r["rows"] == 2
+    assert [x["rate_date"] for x in mk.execute("SELECT rate_date FROM fx_rate ORDER BY rate_date")] == ["2026-03-02", "2026-03-05"]
+    assert "dropped_invalid=2" in mk.execute("SELECT detail FROM collection_log WHERE kind='fx'").fetchone()["detail"]
+
+
+def test_read_only_uri_escapes_question_marks_and_hashes(tmp_path):
+    """审核 P3：库路径含 ? 或 # 时，只读连接仍是只读，且不会另建文件。"""
+    import sqlite3
+
+    from mystock2.core import db as dbmod
+    d = tmp_path / "a?b#c"
+    d.mkdir()
+    p = d / "x.db"
+    sqlite3.connect(p).execute("CREATE TABLE t(x)")
+    ro = dbmod.connect_ro(p)
+    with pytest.raises(sqlite3.OperationalError):
+        ro.execute("CREATE TABLE u(x)")
+    assert sorted(x.name for x in tmp_path.iterdir()) == ["a?b#c"]

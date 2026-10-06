@@ -7,13 +7,14 @@ yfinance 是公开接口的个人研究工具，不保证实时（实施方案 �
 from __future__ import annotations
 
 import hashlib
+import math
 import sqlite3
 from datetime import date, datetime, timedelta
 from typing import Protocol
 
 from mystock2.core import calendars as cal
 from mystock2.core.db import atomic
-from mystock2.core.money import MoneyError
+from mystock2.core.money import MoneyError, dec
 from mystock2.core.timeutil import MARKET_TZ, iso_utc, utc_now
 from mystock2.instruments.code_map import futu_to_yf, market_of
 from mystock2.market.bars import BarError, DailyBar, HourlyBar, _check_ohlc, put_daily, put_hourly
@@ -134,18 +135,37 @@ def collect_fx(conn, sources: list[QuoteSource], pair: str, start: date, end: da
                 _log(conn, run_id, pair, "fx", src.name, "empty", at=now)
             attempts.append((src.name, "empty"))
             continue
+        good, bad = [], 0
+        for d, rate in rates:                                # 逐行校验：一行 NaN/非正不拖垮整个币对（审核 C-05），坏行留作缺口
+            try:
+                if dec(str(rate)) <= 0:
+                    raise MoneyError("非正汇率")
+                good.append((d, rate))
+            except (MoneyError, ArithmeticError, ValueError):
+                bad += 1
+        if not good:
+            with atomic(conn):
+                _log(conn, run_id, pair, "fx", src.name, "empty", detail="all rows invalid", at=now)
+            attempts.append((src.name, "empty"))
+            continue
         with atomic(conn):
-            for d, rate in rates:
+            for d, rate in good:
                 put_rate(conn, pair, d, rate, source=src.name, event_at=datetime(d.year, d.month, d.day, 23, 59, tzinfo=utc_now().tzinfo), received_at=now)
-            _log(conn, run_id, pair, "fx", src.name, "ok", rows=len(rates), at=now)
+            _log(conn, run_id, pair, "fx", src.name, "ok", rows=len(good), detail=f"dropped_invalid={bad}" if bad else None, at=now)
         attempts.append((src.name, "ok"))
-        return {"status": "ok", "source": src.name, "rows": len(rates), "attempts": attempts}
+        return {"status": "ok", "source": src.name, "rows": len(good), "attempts": attempts}
     return {"status": "failed", "source": None, "rows": 0, "attempts": attempts}
 
 
 # ---------------------------------------------------------------- yfinance 真实源
 def _px(x) -> str:
     return f"{float(x):.4f}"
+
+
+def _vol(x) -> str | None:
+    """成交量：NaN / inf → 缺失（不让一行脏数据让整只标的失败，审核 P3）。"""
+    v = float(x)
+    return str(int(v)) if math.isfinite(v) else None
 
 
 class YFinanceSource:
@@ -162,7 +182,7 @@ class YFinanceSource:
         for idx, r in df.iterrows():
             out.append(DailyBar(code, idx.date(), _px(r["Open"]), _px(r["High"]), _px(r["Low"]), _px(r["Close"]),
                                 _px(r["Adj Close"]) if "Adj Close" in r and r["Adj Close"] == r["Adj Close"] else None,
-                                str(int(r["Volume"])) if r["Volume"] == r["Volume"] else None))
+                                _vol(r["Volume"])))
         return out
 
     def hourly(self, code: str, start: date, end: date) -> list[HourlyBar]:
@@ -177,7 +197,7 @@ class YFinanceSource:
             if be <= bs:
                 continue
             out.append(HourlyBar(code, bs, be, _px(r["Open"]), _px(r["High"]), _px(r["Low"]), _px(r["Close"]),
-                                 str(int(r["Volume"])) if r["Volume"] == r["Volume"] else None, be <= now))
+                                 _vol(r["Volume"]), be <= now))
         return out
 
     def fx_daily(self, pair: str, start: date, end: date) -> list[tuple[date, str]]:

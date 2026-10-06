@@ -15,7 +15,7 @@ from pathlib import Path
 
 from mystock2.collectors.v1_import import PRICE_Q, V1Error, _local_to_utc, _q
 from mystock2.core import calendars as cal
-from mystock2.core.db import atomic
+from mystock2.core.db import atomic, ro_uri
 from mystock2.core.money import to_db
 from mystock2.core.timeutil import MARKET_TZ, iso_utc, utc_now
 from mystock2.instruments.code_map import CodeError, market_of
@@ -28,7 +28,7 @@ def open_ro(path: str | Path) -> sqlite3.Connection:
     p = Path(path)
     if not p.exists():
         raise V1Error(f"V1 数据库不存在：{p}")
-    conn = sqlite3.connect(f"file:{p}?mode=ro", uri=True)
+    conn = sqlite3.connect(ro_uri(p), uri=True)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA query_only = ON")
     return conn

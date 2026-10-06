@@ -101,10 +101,15 @@ def _authorizer_for(owners: tuple[str, ...]):
     return authorizer
 
 
+def ro_uri(path: str | Path) -> str:
+    """只读 URI。路径必须转义：含 `?`/`#` 的路径直接拼进 `file:` URI 会吞掉 `mode=ro`，以读写方式打开另一个文件（审核 P3）。"""
+    return Path(path).resolve().as_uri() + "?mode=ro"
+
+
 def _base_connect(path: str | Path, *, uri_mode: str | None = None) -> sqlite3.Connection:
     p = str(path)
     if uri_mode:
-        conn = sqlite3.connect(f"file:{p}?mode={uri_mode}", uri=True, isolation_level=None)
+        conn = sqlite3.connect(Path(p).resolve().as_uri() + f"?mode={uri_mode}", uri=True, isolation_level=None)
     else:
         conn = sqlite3.connect(p, isolation_level=None)
     conn.row_factory = sqlite3.Row

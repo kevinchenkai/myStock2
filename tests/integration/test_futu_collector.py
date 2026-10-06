@@ -330,3 +330,30 @@ def test_missing_ids_bad_amounts_and_bad_codes_only_affect_their_own_row(led):
     api.flows[d2] = [{**dep, "clearing_date": "2026-04-02", "cashflow_id": "OK1", "cashflow_amount": 100}]
     rep = collect_cash_flows(led, api, account_id=ACCT, acc_id=1, days=[d1, d2], type_map=DIVMAP, **NOSLEEP)
     assert rep.inserted == 1 and rep.pending == 4 and project(led, ACCT).cash == {"USD": D("100")}
+
+
+def test_snapshot_survives_na_values_and_option_positions_and_orders_skip_nan_rows(led):
+    """审核 C-03/C-04/C-06：futu 缺值是字符串 'N/A'：缺某币种现金、持仓缺平均成本不让整份快照失败；期权等非股票持仓单列；
+    订单价格 NaN 视为缺值、不中断整次采集。"""
+    class Api(FakeApi):
+        def positions(self, acc_id, market):
+            return {"US": [{"code": "US.NVDA", "qty": 15.0, "can_sell_qty": "N/A", "cost_price": 101.2, "average_cost": "N/A", "diluted_cost": 101.2},
+                           {"code": "US.SYN260417C10000", "qty": 1.0}], "HK": []}[market]
+
+        def funds(self, acc_id):
+            return {"USD": {"cash": 899.0}, "HKD": {"cash": 0.0}, "CNH": {"cash": "N/A"}}
+
+        def orders(self, acc_id, market, start, end):
+            base = {"code": "US.NVDA", "side": "BUY", "qty": 1, "create_time": "2026-03-03 10:00:00", "status": "FILLED_ALL"}
+            return [{**base, "order_id": "O1", "price": float("nan")}, {**base, "order_id": "O2", "price": 10.0}] if market == "US" else []
+
+    from mystock2.collectors.futu import collect_orders
+    api = Api()
+    rep = collect_snapshot(led, api, account_id=ACCT, acc_id=1, markets=["US", "HK"], captured_at="2026-03-05T21:00:00Z", **NOSLEEP)
+    assert rep.ok and rep.notes == ["unsupported_position:US.SYN260417C10000"]
+    pos = led.execute("SELECT code, qty, average_cost FROM snapshot_position").fetchall()
+    assert [(r["code"], r["qty"], r["average_cost"]) for r in pos] == [("US.NVDA", "15", None)]
+    assert {r["currency"] for r in led.execute("SELECT currency FROM snapshot_cash")} == {"USD", "HKD"}
+    orep = collect_orders(led, api, account_id=ACCT, acc_id=1, markets=["US"], start=date(2026, 3, 1), end=date(2026, 3, 31), **NOSLEEP)
+    assert orep.inserted == 2 and orep.ok                                     # NaN 价格＝缺值：该字段置空，不中断整次订单采集
+    assert {r["order_id"]: r["price"] for r in led.execute("SELECT order_id, price FROM broker_order")} == {"O1": None, "O2": "10"}
