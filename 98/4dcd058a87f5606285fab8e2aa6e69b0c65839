@@ -1,0 +1,35 @@
+mystock2/web/common.py
+  s_4e5dbfa251c076::t_60cbac15ac650a 164-167,197,213-214
+mystock2/web/views/account_overview/query.py
+  s_4e5dbfa251c076::t_60cbac15ac650a 17,132-133
+mystock2/web/views/data_status/query.py
+  s_4e5dbfa251c076::t_60cbac15ac650a 229-230
+mystock2/web/valuation.py
+  s_4e5dbfa251c076::t_60cbac15ac650a 45-54
+tests/unit/test_web_views.py
+  s_4e5dbfa251c076::t_4202d155e96c79 117-118,121-124
+mystock2/web/views/holdings/query.py
+  s_4e5dbfa251c076::t_60cbac15ac650a 22,98
+mystock2/web/views/stock/query.py
+  s_4e5dbfa251c076::t_60cbac15ac650a 536-538
+tests/unit/test_web_common.py
+  s_4e5dbfa251c076::t_4202d155e96c79 97-104
+mystock2/web/views/equity_trend/query.py
+  s_4e5dbfa251c076::t_60cbac15ac650a 19,114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "984dcd058a87f5606285fab8e2aa6e69b0c65839",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
