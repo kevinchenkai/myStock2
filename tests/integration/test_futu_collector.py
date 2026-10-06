@@ -93,7 +93,7 @@ def test_bad_rows_missing_deal_id_and_conflicts(led):
     del bad["deal_id"]
     api._deals["US"] = [deal(1), bad, deal(2, side="HOLD"), {"deal_id": "D3", "code": "XX.1", "side": "BUY", "price": 1, "qty": 1, "create_time": "2026-03-03 10:00:00"}]
     rep = collect_deals(led, api, account_id=ACCT, acc_id=1, markets=["US"], start=date(2026, 3, 1), end=date(2026, 3, 31), **NOSLEEP)
-    assert (rep.inserted, rep.pending) == (1, 1) and len(rep.notes) == 2 and len(open_pending(led)) == 1
+    assert (rep.inserted, rep.pending) == (1, 3) and len(rep.notes) == 2 and len(open_pending(led)) == 3     # 认不出的方向/代码：进待匹配，不静默丢
     api._deals["US"] = [deal(1, price=101.0)]                                                              # 同 deal_id 不同价：真冲突
     assert collect_deals(led, api, account_id=ACCT, acc_id=1, markets=["US"], start=date(2026, 3, 1), end=date(2026, 3, 31), **NOSLEEP).conflicts
 
@@ -242,3 +242,16 @@ def test_external_rule_uses_amount_sign_for_direction(led):
     assert rep.inserted == 3 and rep.pending == 0
     kinds = {r["event_type"]: r["cash_delta"] for r in led.execute("SELECT event_type, cash_delta FROM ledger_event WHERE currency='HKD'")}
     assert kinds == {"DEPOSIT": "5000", "WITHDRAW": "-2000"}
+
+
+def test_short_sell_buy_back_and_cancelled_deals_are_not_booked_silently(led):
+    """审核 P1-4：SELL_SHORT/BUY_BACK 不按买卖猜，被券商取消（CANCELLED）的成交不能入账；都进待匹配，对账能看见。"""
+    api = FakeApi()
+    cancelled = deal(4)
+    cancelled["status"] = "CANCELLED"
+    api._deals["US"] = [deal(1, side="SELL_SHORT"), deal(2, side="BUY_BACK"), deal(3), cancelled]
+    rep = collect_deals(led, api, account_id=ACCT, acc_id=1, markets=["US"], start=date(2026, 3, 1), end=date(2026, 3, 31), **NOSLEEP)
+    assert (rep.inserted, rep.pending) == (1, 3)
+    assert [r["ref_deal_id"] for r in led.execute("SELECT ref_deal_id FROM ledger_event WHERE event_type='FILL'")] == ["D3"]
+    reasons = sorted(r["reason"] for r in open_pending(led))
+    assert any("SELL_SHORT" in x for x in reasons) and any("BUY_BACK" in x for x in reasons) and any("CANCELLED" in x for x in reasons)

@@ -115,19 +115,27 @@ def collect_deals(ledger, api: TradeApi, *, account_id: str, acc_id: int, market
                 continue
             for r in rows:
                 rep.rows += 1
+                src = SourceDraft("futu", str(r.get("deal_id") or ""),
+                                  {k: str(v) for k, v in r.items() if k in ("deal_id", "order_id", "code", "side", "price", "qty", "create_time", "status")})
                 try:
                     code = r["code"]
                     mk = market_of(code)
                     side = str(r["side"]).upper()
+                    status = str(r.get("status") or "OK").upper()
+                    if side not in ("BUY", "SELL"):                       # 卖空/买回（SELL_SHORT/BUY_BACK）等：不按买卖猜，进待匹配（审核 P1-4）
+                        raise ValueError(f"成交方向 {side} 未支持")
+                    if status not in ("OK", "NONE"):                     # 券商取消/改动的成交（CANCELLED/CHANGED）不能当成交入账
+                        raise ValueError(f"成交状态 {status}（非 OK）")
                     price, qty = _q(r["price"], PRICE_Q), _q(abs(float(r["qty"])), QTY_Q)
                     at = _local_to_utc(mk, r["create_time"])
-                    if side not in ("BUY", "SELL") or qty == 0:
-                        raise ValueError(f"side/qty {side}/{qty}")
-                except (KeyError, CodeError, ValueError, TypeError) as exc:
+                    if qty == 0 or not price.is_finite():
+                        raise ValueError(f"qty/price {qty}/{price}")
+                except (KeyError, CodeError, ValueError, TypeError, ArithmeticError) as exc:
+                    queue_pending(ledger, src, f"富途成交无法入账：{exc}")          # 不静默丢行：进待匹配，对账会列出
+                    rep.pending += 1
                     rep.notes.append(f"skipped:{r.get('deal_id')}:{exc}")
                     continue
                 signed = qty if side == "BUY" else -qty
-                src = SourceDraft("futu", str(r.get("deal_id") or ""), {k: str(v) for k, v in r.items() if k in ("deal_id", "order_id", "code", "side", "price", "qty", "create_time")})
                 try:
                     res = post_event(ledger, EventDraft(
                         fill_key(account_id, str(r["deal_id"]) if r.get("deal_id") else None), account_id, "FILL", at, "HKD" if mk == "HK" else "USD",
@@ -449,7 +457,7 @@ class FutuTradeApi:
             if ret != ft.RET_OK:
                 raise FutuApiError(str(df))
             return [{"deal_id": r.deal_id, "order_id": r.order_id, "code": r.code, "side": str(r.trd_side), "price": r.price, "qty": r.qty,
-                     "create_time": r.create_time} for r in df.itertuples()] if df is not None and len(df) else []
+                     "create_time": r.create_time, "status": str(getattr(r, "status", "") or "") or None} for r in df.itertuples()] if df is not None and len(df) else []
         finally:
             ctx.close()
 
