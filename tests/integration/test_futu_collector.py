@@ -244,6 +244,21 @@ def test_external_rule_uses_amount_sign_for_direction(led):
     assert kinds == {"DEPOSIT": "5000", "WITHDRAW": "-2000"}
 
 
+def test_external_plain_books_only_blank_remark_integer_amounts(led):
+    """审核 Q3：EXTERNAL_PLAIN 只放行「空备注＋整数金额」；带备注（补偿、奖励、IPO 退款）或有小数的进待匹配，不自动记外部存取。"""
+    api = FakeApi()
+    d = date(2026, 4, 2)
+    api.flows[d] = [      # 合成测试值
+        {"cashflow_id": "P1", "clearing_date": "2026-04-02", "currency": "HKD", "cashflow_type": "其他", "cashflow_amount": -3000, "cashflow_remark": ""},
+        {"cashflow_id": "P2", "clearing_date": "2026-04-02", "currency": "USD", "cashflow_type": "其他", "cashflow_amount": 12.5, "cashflow_remark": ""},
+        {"cashflow_id": "P3", "clearing_date": "2026-04-02", "currency": "HKD", "cashflow_type": "其他", "cashflow_amount": 100, "cashflow_remark": "IPO refund"},
+    ]
+    rep = collect_cash_flows(led, api, account_id=ACCT, acc_id=1, days=[d], type_map={"其他": "EXTERNAL_PLAIN"}, **NOSLEEP)
+    assert (rep.inserted, rep.pending) == (1, 2)
+    assert [(r["event_type"], r["cash_delta"]) for r in led.execute("SELECT event_type, cash_delta FROM ledger_event")] == [("WITHDRAW", "-3000")]
+    assert all("EXTERNAL_PLAIN" in r["reason"] for r in open_pending(led))
+
+
 def test_short_sell_buy_back_and_cancelled_deals_are_not_booked_silently(led):
     """审核 P1-4：SELL_SHORT/BUY_BACK 不按买卖猜，被券商取消（CANCELLED）的成交不能入账；都进待匹配，对账能看见。"""
     api = FakeApi()

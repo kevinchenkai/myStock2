@@ -915,7 +915,7 @@ def register(sub) -> None:
     for k, kw in (("--account-id", {"required": True}), ("--acc-id", {"required": True, "type": int}), ("--start", {"required": True}), ("--end", {"required": True}),
                   ("--what", {"default": "deals,fees,snapshot"}), ("--assume-market-currency", {"action": "store_true", "help": "订单费用接口无币种字段：按成交市场币种入账（2026-10-05 首跑核实：港股印花税 0.1%、美股佣金 0.99 与市场币种一致）"}),
                   ("--cashflow-file", {"help": "JSONL：离线重放原始资金流水（不连 OpenD）"}),
-                  ("--cashflow-map", {"help": "YAML：资金流水类型→入账方式（DEPOSIT/WITHDRAW/INTEREST/TAX/RECON_ONLY/DIVIDEND/DIVIDEND_WHT/ACCOUNT_FEE/EXTERNAL）"})):
+                  ("--cashflow-map", {"help": "YAML：资金流水类型→入账方式（DEPOSIT/WITHDRAW/INTEREST/TAX/RECON_ONLY/DIVIDEND/DIVIDEND_WHT/ACCOUNT_FEE/EXTERNAL/EXTERNAL_PLAIN）"})):
         cf.add_argument(k, **kw)
     cf.set_defaults(fn=cmd_collect_futu)
     v1 = sub.add_parser("v1", help="V1 数据").add_subparsers(dest="v1cmd", required=True)

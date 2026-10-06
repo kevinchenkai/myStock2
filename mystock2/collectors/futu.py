@@ -44,7 +44,8 @@ FEE_BATCH = 400                     # order_fee_query 每次最多 400 个订单
 PRICE_Q, QTY_Q = Decimal("0.0001"), Decimal("0.000001")
 
 # 资金流水的入账方式（必须显式映射；值见 CASHFLOW_RULES：DEPOSIT / WITHDRAW / INTEREST / TAX / RECON_ONLY / DIVIDEND / DIVIDEND_WHT /
-# ACCOUNT_FEE / EXTERNAL）。未映射的类型进待匹配队列。改映射后重放不会以新键再入账（已入账的流水号报冲突）。
+# ACCOUNT_FEE / EXTERNAL / EXTERNAL_PLAIN）。未映射的类型进待匹配队列。改映射后重放不会以新键再入账（已入账的流水号报冲突）。
+# EXTERNAL_PLAIN＝只有「空备注＋整数金额」才按符号记外部存取，其余（补偿、奖励、IPO 退款等）进待匹配（审核 Q3，负责人 2026-10-06 同意）。
 # DIVIDEND＝股息总额、DIVIDEND_WHT＝同日同标的预扣税（成对入账为 post_dividend 情形①；接口无除息日：应收与支付同日，是已声明的局限）。
 _DIV_CODE = re.compile(r"\(([A-Z0-9.]+)\)\s*dividend", re.I)                       # 美股新格式：「… COM(MSFT) dividend, USD 0.91 per share」
 _DIV_CODE_OLD = re.compile(r"^([A-Z][A-Z0-9.]*)\s+[\d.]+\s+SHARES\b")                  # 美股旧格式：「TSM 1.00000000 SHARES DIVIDENDS …」
@@ -368,7 +369,7 @@ def _fill_time(ledger, account_id: str, deal_id: str) -> str:
 
 
 _MISSING_IDS = {"", "N/A", "NONE", "NAN", "NULL"}
-CASHFLOW_RULES = ("DEPOSIT", "WITHDRAW", "INTEREST", "TAX", "RECON_ONLY", "DIVIDEND", "DIVIDEND_WHT", "ACCOUNT_FEE", "EXTERNAL")
+CASHFLOW_RULES = ("DEPOSIT", "WITHDRAW", "INTEREST", "TAX", "RECON_ONLY", "DIVIDEND", "DIVIDEND_WHT", "ACCOUNT_FEE", "EXTERNAL", "EXTERNAL_PLAIN")
 
 
 def _flow_id(f: dict) -> str | None:
@@ -457,6 +458,11 @@ def _one_flow(ledger, f: dict, d: date, account_id: str, type_map: CashflowMap, 
     if rule == "ACCOUNT_FEE":                                       # ADR/公司行动/过户等账户级费用：无对应成交 → ADJUST(INVESTMENT)，计入业绩（不是外部流水）
         kind, etype, extra = "acctfee", "ADJUST", {"adjust_class": "INVESTMENT", "note": f"futu {ctype} {str(f.get('cashflow_remark', ''))[:80]}".strip()}
     else:
+        if rule == "EXTERNAL_PLAIN":
+            if str(f.get("cashflow_remark") or "").strip() or amount != amount.to_integral_value():
+                pend(f, f"{ctype}：有备注或金额非整数，不按外部存取自动入账（EXTERNAL_PLAIN）")
+                return
+            rule = "EXTERNAL"
         if rule == "EXTERNAL":                                       # 方向由金额符号决定：正＝转入（DEPOSIT），负＝转出（WITHDRAW）；类型含义须已由负责人确认
             rule = "DEPOSIT" if amount > 0 else "WITHDRAW"
         if rule == "RECON_ONLY":                                     # 成交/换汇等已由其他来源记账：只用于对账
