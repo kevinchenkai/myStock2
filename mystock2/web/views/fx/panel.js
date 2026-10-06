@@ -11,7 +11,7 @@ MS.registerPanel("fx", function (root, d) {
   if (!d.history.length) kids.unshift(h("p", { class: "state", text: "最近 " + d.history_days + " 天没有 " + d.pair + " 的汇率记录：不可用。" }));
   else {
     var color = getComputedStyle(document.documentElement).getPropertyValue("--fx").trim() || "#55688f";
-    MS.lineChart(host, { xs: d.history.map(function (x) { return x.date; }), ccy: d.pair.slice(3), fmt: function (y) { return MS.fmtDec(y, 4) + " " + d.pair.slice(3) + "/" + d.pair.slice(0, 3); }, series: [{ name: d.pair + " 汇率", color: color, points: pts }], label: d.pair + " 汇率历史", gaps: {} });
+    MS.lineChart(host, { xs: d.history.map(function (x) { return x.date; }), ccy: d.pair.slice(3), fmt: function (y) { return MS.fmtDec(y, 4) + " " + d.pair.slice(3) + "/" + d.pair.slice(0, 3); }, series: [{ name: d.pair + " 汇率", color: color, points: pts }], label: d.pair + " 汇率历史", gaps: {}, height: 150 });
     kids.push(MS.table([{ key: "date", label: "日期" }, { key: "rate", label: "汇率", num: true, render: function (r) { return { text: MS.fmtDec(r.rate, 6).replace(/0+$/, "").replace(/\.$/, ""), fx: true, v: r.rate }; } },
       { key: "source", label: "来源" }, { key: "inverse", label: "取自", render: function (r) { return r.inverse ? "反向币对" : "原币对"; } }], d.history.slice(-15).reverse()));
   }

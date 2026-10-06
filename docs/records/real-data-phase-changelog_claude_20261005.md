@@ -93,3 +93,7 @@
 ## 8 后记：对账基线（2026-10-05）
 
 例行 `us` 更新三次都因 `ledger reconcile` 退出码 1 被标失败：美元现金账本−券商 = −13.84（持仓与港币一致）。该残差是已知的（FR-6），但每次都报失败会掩盖真正的新差异。改动：`reconcile()` 新增 `known_cash_diffs`（币种→基线差额），差额与基线之差在容差内记入 `baseline_cash_diffs`（照列不隐藏），偏离基线才进 `cash_diffs` 并使 `ok=False`；基线只豁免登记的币种。基线值写在本机 `config.yaml`（`reconcile.known_cash_diffs.USD: "-13.84"`），`config.example.yaml` 给出注释示例。
+
+## 9 后记：外汇页（2026-10-05）
+
+外汇页默认回看 120 天 → 730 天（`config/views.yaml` 的 fx.days；库内 USDCNY 自 2024-01-01 起共 720 个交易日，页面最多可回看 2000 天）；汇率曲线高度 240 → 150（`views/fx/panel.js`）。
