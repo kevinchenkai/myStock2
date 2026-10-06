@@ -108,7 +108,8 @@ def build_cards(conn_ledger: sqlite3.Connection, conn_market: sqlite3.Connection
         # 当时证据（成交前已存在的）
         intents = conn_ledger.execute("SELECT action, limit_price, qty, recorded_at, seen_ai FROM intent WHERE code=? AND target_session=? AND recorded_at<=? ORDER BY recorded_at",
                                       (f["code"], f["date"].isoformat(), f["at"])).fetchall() if _has_table(conn_ledger, "intent") else []
-        tickets = conn_ledger.execute("SELECT line_id, action, limit_price, qty, visible_at FROM ticket WHERE code=? AND target_session=? AND visible_at<=? AND status='frozen'",
+        tickets = conn_ledger.execute("SELECT line_id, action, limit_price, qty, visible_at FROM ticket WHERE code=? AND target_session=? AND visible_at<=? AND status='frozen' "
+                                      "AND line_id NOT LIKE '%:human_plan'",                  # 人类计划线冻结的单不是 AI 单（审核 P3）
                                       (f["code"], f["date"].isoformat(), f["at"])).fetchall() if _has_table(conn_ledger, "ticket") else []
         c.evidence = {"intents": [dict(r) for r in intents], "tickets_existing": [dict(r) for r in tickets]}
         if not intents:

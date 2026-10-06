@@ -137,3 +137,14 @@ def test_run_log_records_interrupts_as_failed_not_running(tmp_path):
             raise KeyboardInterrupt
     row = c.execute("SELECT status, detail_json FROM run_log").fetchone()
     assert row["status"] == "failed" and '"aborted": true' in row["detail_json"]
+
+
+def test_lookup_queries_use_indexes(tmp_path):
+    """审核 W-04：复盘按（标的、目标日）查操作单/人类计划、数据状态按标的查采集回执，不得全表扫描。"""
+    p = tmp_path / "i.db"
+    dbmod.migrate(p)
+    c = dbmod.connect_ro(p)
+    for sql in ("SELECT * FROM ticket WHERE code=? AND target_session=?", "SELECT * FROM intent WHERE code=? AND target_session=?",
+                "SELECT * FROM collection_log WHERE code=? AND kind=?"):
+        plan = " ".join(r[-1] for r in c.execute("EXPLAIN QUERY PLAN " + sql, ("x", "y")))
+        assert "USING INDEX" in plan, (sql, plan)

@@ -113,6 +113,10 @@ def test_cards_pick_up_prior_intents_and_pre_existing_tickets(env):
                "strategy_version,protocol_version,state_ref_type,state_ref,generated_at,frozen_at,visible_at,deadline_at,frozen_hash) VALUES "
                "('t1','B','B:ai','line_sim','US',?,?,'close','frozen','BUY','101','10','[]','[]','{}','v','p','line_state','s','x','x',?, 'x','h2')",
                (CODE, d.isoformat(), f"{d.isoformat()}T10:00:00Z"))
+    cw.execute("INSERT INTO ticket(ticket_id,batch_id,line_id,kind,market,code,target_session,stage,status,action,limit_price,qty,reason_json,invalidate_json,uncertainty_json,"
+               "strategy_version,protocol_version,state_ref_type,state_ref,generated_at,frozen_at,visible_at,deadline_at,frozen_hash) VALUES "
+               "('t2','B','B:human_plan','line_sim','US',?,?,'human_plan','frozen','BUY','102','10','[]','[]','{}','human','p','line_state','s','x','x',?, 'x','h3')",
+               (CODE, d.isoformat(), f"{d.isoformat()}T10:30:00Z"))                 # 人类计划线冻结的单：不是 AI 单（审核 P3）
     led2 = dbmod.connect_ro(p)
     (c,) = build_cards(led2, dbmod.connect_ro(p), ACCT)
     assert len(c.evidence["intents"]) == 1 and len(c.evidence["tickets_existing"]) == 1 and "动机未记录" not in c.gaps
