@@ -1,0 +1,23 @@
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_6c140aafdd67b9 80-81
+docs/guides/daily-update_claude_20261005.md
+  s_97d138eaf84b50::t_dd38f4e7bf49b8 69-72
+docs/records/real-data-phase-changelog_claude_20261005.md
+  s_97d138eaf84b50::t_ca76455d188159 134-135
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "7de747cbdd0d9c8f5dc6294cc88486ea539b758d",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
