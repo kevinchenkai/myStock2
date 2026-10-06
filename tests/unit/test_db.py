@@ -122,3 +122,18 @@ def test_run_log_success_failure_and_partial(db):
     assert rows["boom"]["status"] == "failed" and "RuntimeError" in rows["boom"]["detail_json"]
     assert rows["half"]["status"] == "partial" and rows["half"]["retry_scope"] == "retry HK only"
     assert rows["demo"]["run_id"].startswith("r_")
+
+
+def test_run_log_records_interrupts_as_failed_not_running(tmp_path):
+    """审核 U-11：KeyboardInterrupt 等非 Exception 中断也要把回执改成 failed（aborted），不能永远停在 running。"""
+    import pytest
+
+    from mystock2.core.runs import run_log
+    p = tmp_path / "r.db"
+    dbmod.migrate(p)
+    c = dbmod.connect_writer(p, "core")
+    with pytest.raises(KeyboardInterrupt):
+        with run_log(c, "x"):
+            raise KeyboardInterrupt
+    row = c.execute("SELECT status, detail_json FROM run_log").fetchone()
+    assert row["status"] == "failed" and '"aborted": true' in row["detail_json"]

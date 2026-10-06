@@ -102,6 +102,11 @@ def test_full_daily_flow_sealed_output_exposure_and_consistent_scoreboard(env):
     r = cli(env, "intent", "freeze", "--batch", "B1", "--target", TARGET.isoformat(), "--now", "2026-03-05T12:50:00+00:00", *loc)
     assert r.returncode == 0 and "human_plan_tickets=1" in r.stdout and "plan_missing=0" in r.stdout
 
+    # 审核 F-01：目标日还没收盘时不能评到目标日（否则 UNKNOWN/OK 会泄露有没有 AI 单）；运行回执记下时钟覆盖（U-10）
+    r = cli(env, "scoreboard", "run", "--batch", "B1", "--end", TARGET.isoformat(), "--now", "2026-03-05T15:00:00+00:00", *loc)
+    assert r.returncode == 2 and "已收盘" in r.stderr
+    over = dbmod.connect_ro(env["db"]).execute("SELECT inputs_json FROM run_log WHERE command LIKE 'coach run%' ORDER BY started_at DESC LIMIT 1").fetchone()
+    assert "clock_override" in json.loads(over["inputs_json"])
     # 记分牌：CLI 打印的数值＝库内 eval_run.metrics_json（SB-01）
     r = cli(env, "scoreboard", "run", "--batch", "B1", "--end", TARGET.isoformat(), *loc)
     assert r.returncode == 0, r.stderr

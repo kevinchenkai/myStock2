@@ -54,6 +54,8 @@ def _now(args):
     if getattr(args, "now", None):
         if os.environ.get(ENV_NOW) != "1":
             raise ConfigError(f"--now 只用于测试：需显式设置环境变量 {ENV_NOW}=1（生产运行的记录时间/揭示时间/冻结时间必须是真实时钟）")
+        from mystock2.core.runs import CLOCK_OVERRIDE_ENV
+        os.environ[CLOCK_OVERRIDE_ENV] = str(args.now)          # 本进程之后的 run_log 都会记下时钟覆盖
         return ensure_utc(args.now)
     return utc_now()
 
@@ -500,6 +502,11 @@ def cmd_scoreboard_run(args) -> int:
     if drift_records(ro, b.batch_id):                      # 漂移期产生的单据/计划混在批次里：整次 run 只能是 pilot，即使本次运行没有漂移
         drift = drift + ["drift_records"]
     end = date.fromisoformat(args.end)
+    now = _now(args)
+    if not cal.is_session(b.market, end) or cal.session(b.market, end).close_utc > now:
+        # 只评到已收盘的交易日：开盘前评到目标日，AI 线当日 UNKNOWN/OK 取决于有没有订单，是密封期侧信道（审核 F-01）
+        print(f"--end {end} 不是 {b.market} 已收盘的交易日；记分牌只评到已收盘的交易日", file=sys.stderr)
+        return 2
     weights = {c: Decimal(1) / len(b.codes) for c in b.codes} if b.codes else {}       # 默认：交易仓标的等权（协议可预注册覆盖）
     for c, w in ((loc.protocol.get("buyhold") or {}).get("weights") or {}).items():
         weights[c] = dec(str(w))
@@ -827,7 +834,8 @@ def cmd_forecast_run(args) -> int:
             run.note(**{c: v for c, v in stats.items()})
             print(f"run_id={run.run_id}")
     print(json.dumps(stats, ensure_ascii=False, indent=2))
-    return 0
+    ok = sum(v["ok"] for v in stats.values())
+    return 1 if ok == 0 and any(v["unavailable"] for v in stats.values()) else 0      # 全部不可用不能报成功（审核 U-08）
 
 
 def register(sub) -> None:
@@ -953,7 +961,8 @@ def register(sub) -> None:
     sc = sub.add_parser("scoreboard", help="记分牌").add_subparsers(dest="scmd", required=True)
     rn = sc.add_parser("run", help="重算各线并写入新 run")
     rn.add_argument("--batch", required=True)
-    rn.add_argument("--end", required=True)
+    rn.add_argument("--end", required=True, help="评到哪个交易日（含）：必须已收盘")
+    rn.add_argument("--now", help="测试用时钟（需 MYSTOCK2_ALLOW_NOW_OVERRIDE=1）")
     rn.add_argument("--allow-drift", action="store_true")
     rn.add_argument("--local-dir", **ld)
     rn.set_defaults(fn=cmd_scoreboard_run)

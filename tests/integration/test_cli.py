@@ -81,3 +81,11 @@ def test_ledger_open_skips_flat_snapshot_lines_and_reconcile_refuses_float_basel
     data["reconcile"] = {"known_cash_diffs": {"usd": "0"}}
     cfg.write_text(yaml.safe_dump(data), encoding="utf-8")
     assert run("ledger", "reconcile", "--account-id", "main", cfg=cfg).returncode == 0
+
+
+def test_forecast_run_with_everything_unavailable_is_not_success(tmp_path):
+    """审核 U-08：没有任何一条预测生成（全部不可用）时退出码非 0，例行更新才会把它记成失败。"""
+    cfg = make_cfg(tmp_path)
+    run("db", "migrate", cfg=cfg)
+    r = run("forecast", "run", "--start", "2026-03-02", "--end", "2026-03-04", "--codes", "US.NVDA", cfg=cfg)
+    assert r.returncode == 1 and '"unavailable": 3' in r.stdout
