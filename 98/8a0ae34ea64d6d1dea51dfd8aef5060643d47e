@@ -1,0 +1,32 @@
+mystock2/cli/ops.py
+  s_97d138eaf84b50::t_11e7ebe1bee2a2 737
+  s_97d138eaf84b50::t_88eded197365ba 738,740
+config.example.yaml
+  s_97d138eaf84b50::t_28cc5e33d3d031 31-35
+docs/guides/daily-update_claude_20261005.md
+  s_97d138eaf84b50::t_aff66827172675 55
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_aff66827172675 80
+tests/unit/test_ledger_fees_settlement_reconcile.py
+  s_97d138eaf84b50::t_28cc5e33d3d031 123-137
+docs/records/real-data-phase-changelog_claude_20261005.md
+  s_97d138eaf84b50::t_aff66827172675 88,92-95
+mystock2/ledger/reconcile.py
+  s_97d138eaf84b50::t_88eded197365ba 24,35-38,56-61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "988a0ae34ea64d6d1dea51dfd8aef5060643d47e",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
