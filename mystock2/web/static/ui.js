@@ -38,14 +38,18 @@
   var PILLS = { "买入": "pill-buy", "卖出": "pill-sell", "全部成交": "pill-ok", "部分成交": "pill-ok", "失败": "pill-warn",
     "全部撤单": "", "部分成交后撤单": "", "已撤单（未成交）": "", "已删除": "", "已失效": "" };
   function pillOf(text) { return Object.prototype.hasOwnProperty.call(PILLS, text) ? h("span", { class: ("pill " + PILLS[text]).trim(), text: text }) : null; }
+  var DATE_RE = /^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}( UTC)?)?$/;          // 日期/时间不在连字符处折行
   function cell(c) {
     if (c === null || c === undefined) return h("span", { class: "na", text: "—" });
-    if (typeof c !== "object") return pillOf(String(c)) || document.createTextNode(String(c));
+    if (typeof c !== "object") {
+      var s = String(c);
+      return pillOf(s) || (DATE_RE.test(s) ? h("span", { class: "amt", text: s }) : document.createTextNode(s));
+    }
     if (!c.na && !c.dir && c.v === undefined && !c.ccy && !c.fx && !c.subs && !c.tag && typeof c.text === "string" && pillOf(c.text)) return pillOf(c.text);
     var cls = [];
     if (c.na) cls.push("na");
     else if (c.fx) cls.push("fx", "amt");
-    else if (c.ccy || c.v !== undefined) cls.push("amt");
+    else if (c.ccy || c.v !== undefined || DATE_RE.test(String(c.text || ""))) cls.push("amt");
     if (c.dir) cls.push("dir-" + c.dir);
     var span = h("span", { class: cls.join(" "), title: c.title || null, text: c.text });
     if (c.subs && c.subs.length) {                                  // 副行：若干带涨跌色的小字（如相对基准的位置）
