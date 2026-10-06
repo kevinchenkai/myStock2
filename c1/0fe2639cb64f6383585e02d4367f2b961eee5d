@@ -1,0 +1,24 @@
+mystock2/cli/ops.py
+  s_4e5dbfa251c076::t_6e873b9928735d 364-366,373
+tests/unit/test_coach_decide.py
+  s_4e5dbfa251c076::t_81da0536dc82eb 187-197
+mystock2/coach/decide.py
+  s_4e5dbfa251c076::t_6e873b9928735d 95,99-100,114-115
+  s_4e5dbfa251c076::t_358ae71c377f30 116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "c10fe2639cb64f6383585e02d4367f2b961eee5d",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
