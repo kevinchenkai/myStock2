@@ -131,3 +131,5 @@ CQR 修复后模型版本升为 `lgbm-cqr-v2`，预测页每个模型只取最�
 - 测试：`test_forward_is_written_once_per_code_day_model_params_and_late_runs_do_not_duplicate`、`test_hk_phase_also_writes_forward_forecast_for_last_closed_session_only`；全量测试与 ruff 通过。
 
 **补充（同日）**：`us` 阶段也写前向（最近已收盘的美股交易日，规则同上）。已手动补写 HK 2026-10-06 → 10-07 的前向预测（3 标的 × baseline、lgbm = 6 条，输入截止 14:05 UTC，早于 10-07 开盘 01:30 UTC；数值与同日 rebuilt 一致）；重复运行验证未新增行。**历史前向不能回补**：前向要求「目标日开盘前生成」，过去的日期按规则只能是 rebuilt；US 10-05→10-06 的前向因 10-06 已开盘（13:30 UTC）也已错过。排查「缺的几天」发现 HK lgbm 在 2025-12-24～2026-03-18 缺 40～43 天，原因是半日市成交量为 0（见 OPEN_ITEMS FC-1），不是漏跑，补不回。
+
+**补充 2（同日，FC-1）**：富途日 K 有成交量（`request_history_kline`，OpenD 实测，半日市当天为真实值，单位与 yfinance 一致）。①`FutuVolumeSource`、`collect quotes --futu-volume`（例行更新日线步骤已带；只在有 0 成交量时才连 OpenD，连不上只记 `volume_source_error`，不影响价格入库）；②`collect volume` 历史修补：名单内 19 行（00700×6、09988×5、09926×8）追加新版本（旧版本保留），重复运行幂等；③LGBM 升 `lgbm-cqr-v3`（量比窗口跳过缺失/0 的日子），v3 历史已重跑（2475 条 rebuilt，用时约 3 分钟），并为 HK 10-06→10-07 补写 v3 前向 3 条（此前 v2 前向 3 条保留，今后前向为 v3）。**发现**：这 19 行价格也是平的（FC-2），成交量补了但价格没改，故这 19 天本身仍无 LGBM 预测。

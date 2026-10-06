@@ -66,3 +66,7 @@ CASHFLOW_FILE=data/cashflow_raw_<日期>.jsonl PY=/opt/anaconda3/envs/mk/bin/pyt
 ```
 
 资金流水逐日请求约 3 秒/天，所以保留了原始 JSONL 用于离线重放（`--cashflow-file`）。重建后再跑行情与预测（见上）。
+
+
+## 成交量补源（半日市）
+yfinance 对港股半日市等日子给成交量 0（且价格是平的）。例行更新的日线步骤带 `--futu-volume`：终值日线成交量为 0/缺失时用富途日 K 的成交量补（需 OpenD 在线；不在线只记日志）。历史修补：`python -m mystock2 collect volume --start 2024-01-01 --end <今天>`（默认名单，追加新版本，幂等）。LGBM 对仍为 0 的日子在量比窗口内跳过。
