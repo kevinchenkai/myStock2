@@ -11,7 +11,7 @@ MS.registerPanel("tickets", function (root, d) {
         { key: "status_text", label: "状态" }, { key: "price", label: "委托价", num: true }, { key: "qty", label: "委托数量", num: true },
         { key: "dealt_qty", label: "已成交数量", num: true }, { key: "dealt_avg_price", label: "成交均价", num: true },
         { key: "source", label: "来源" }
-      ], o.rows, { empty: "没有订单记录" }),
+      ], o.rows, { empty: "没有订单记录", filters: [{ key: "side_text" }, { key: "status_text" }] }),
       MS.note(o.note + (o.shown < o.total ? "（只显示最近 " + o.shown + " 条）" : ""))
     ]));
   }

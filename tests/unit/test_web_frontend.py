@@ -388,3 +388,46 @@ def test_table_pagination_with_sort_filter_and_row_click():
     assert o["size20"] == [20, "20"]
     assert o["us"] == [20, True]
     assert o["sortedFirst"] == "US.00119" and o["clicked"] == ["US.00119"]
+
+
+def test_table_column_filters_intersect_reset_page_and_work_with_market_filter():
+    script = r"""
+    const vm = require('vm'), fs = require('fs');
+    class El {
+      constructor(t){ this.tag=t; this.children=[]; this.attrs={}; this.listeners={}; this.className=''; this._text=''; this.nodeType=1; this.value=''; this.parentNode=null; }
+      setAttribute(k,v){ this.attrs[k]=v; } appendChild(c){ c.parentNode=this; this.children.push(c); return c; }
+      addEventListener(e,f){ (this.listeners[e]=this.listeners[e]||[]).push(f); }
+      set textContent(v){ this._text=String(v); this.children=[]; } get textContent(){ return this._text + this.children.map(c=>c.textContent).join(''); }
+      click(){ (this.listeners.click||[]).forEach(f=>f({target:this})); }
+      change(v){ this.value=v; (this.listeners.change||[]).forEach(f=>f()); }
+      find(pred, out=[]){ if(pred(this)) out.push(this); this.children.forEach(c=>c.find&&c.find(pred,out)); return out; }
+    }
+    const store = {};
+    const ctx = { window: { localStorage: { getItem:k=>store[k]||null, setItem:(k,v)=>{store[k]=v;} } }, console,
+      document: { createElement: t => new El(t), createElementNS: (n,t) => new El(t), createTextNode: s => { const e=new El('#text'); e._text=String(s); return e; } } };
+    vm.createContext(ctx);
+    vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), ctx);
+    const MS = ctx.window.MS;
+    const rows = []; for (let i = 1; i <= 120; i++) rows.push({ code: (i % 2 ? 'US.' : 'HK.') + String(i).padStart(5,'0'), side_text: i % 3 ? '买入' : '卖出', status_text: i % 4 ? '全部成交' : '全部撤单' });
+    const host = MS.table([{key:'code',label:'标的'},{key:'side_text',label:'方向'},{key:'status_text',label:'状态'}], rows, { filters: [{key:'side_text'},{key:'status_text'}] });
+    const body = () => host.find(e=>e.tag==='tbody')[0].children;
+    const sel = label => host.find(e=>e.tag==='select').filter(s=>s.attrs['aria-label']===label)[0];
+    const btn = label => host.find(e=>e.tag==='button').filter(b=>b.textContent===label)[0];
+    const count = () => host.find(e=>e.className==='muted small count')[0].textContent;
+    const out = {};
+    out.options = sel('方向筛选').children.map(o=>o.textContent);
+    btn('下一页 ›').click();
+    sel('方向筛选').change('卖出'); out.sell = [body().length, count()];             // 40 行卖出：回到第 1 页、不再需要翻页
+    sel('状态筛选').change('全部撤单'); out.both = [body().length, count()];           // 卖出且撤单：i 是 12 的倍数 → 10 行
+    sel('状态筛选').change(''); sel('方向筛选').change('');
+    out.reset = count();
+    btn('美股').click(); sel('方向筛选').change('买入'); out.us_buy = count();        // 与市场筛选取交集
+    console.log(JSON.stringify(out));
+    """
+    r = subprocess.run([node, "-e", script, str(STATIC / "ui.js")], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    import json
+    o = json.loads(r.stdout.strip())
+    assert o["options"] == ["方向：全部", "买入（80）", "卖出（40）"]
+    assert o["sell"] == [40, "40 / 120 行"] and o["both"] == [10, "10 / 120 行"] and o["reset"] == "120 行"
+    assert o["us_buy"] == "40 / 120 行"                                              # 奇数 i（美股）且 i%3≠0：60 − 20 = 40

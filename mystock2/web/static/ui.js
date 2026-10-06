@@ -88,6 +88,7 @@
        · 点表头排序（再点切换升/降；第三次点恢复服务器原顺序）；窄屏表头被折叠，用工具条的「排序」下拉；
        · 市场筛选（opts.market === false 可关闭，如单一标的的弹窗）：行里有 code（US./HK. 前缀）或 currency（USD/HKD）时，工具条出现「全部 / 美股 / 港股」；选择记在 localStorage（可选），各表共用；
          没有市场归属的行（如汇总行）始终显示。
+       · 列筛选（opts.filters=[{key,label}]）：按该列显示文本的取值生成下拉（全部 + 各取值及行数），多个筛选取交集；选项不记忆，换页重置。
      排序键：单元的 v（规范十进制字符串，转 Number 只用于比较）；没有 v 则取文本；不可用/缺失一律排最后。 */
   var MARKET_KEY = "mystock2.market";
   function marketOf(r) {
@@ -115,6 +116,12 @@
     if (/^[+-]?[\d,]+(\.\d+)?\s*[A-Za-z%]*$/.test(str)) return Number(str.replace(/[,+A-Za-z%\s]/g, ""));
     return str;
   }
+  function cellText(c, r) {
+    var v = typeof c.render === "function" ? c.render(r) : r[c.key];
+    if (v === null || v === undefined) return "";
+    if (typeof v === "object") return v.na ? "" : (v.text === undefined || v.text === null ? "" : String(v.text));
+    return String(v);
+  }
   function compareValues(a, b) {
     if (a === null && b === null) return 0;
     if (a === null) return 1;                       // 缺失永远在最后（不论升降）
@@ -134,15 +141,20 @@
     opts = opts || {};
     if (!rows || !rows.length) return h("p", { class: "muted", text: opts.empty || "（暂无数据）" });
     var host = h("div", { class: "tbl-host" });
-    var state = { sortKey: null, dir: 1, market: storedMarket(), page: 1, pageSize: opts.paginate === false ? 0 : storedPageSize(opts.pageSize || 50) };
+    var state = { sortKey: null, dir: 1, market: storedMarket(), page: 1, filters: {}, pageSize: opts.paginate === false ? 0 : storedPageSize(opts.pageSize || 50) };
     var pagerEl = h("div", { class: "pager" });
     var hasMarket = opts.market !== false && rows.length > 1 && rows.filter(function (r) { return marketOf(r); }).length * 2 >= rows.length;
     var canSort = opts.sortable !== false && rows.length > 1;
+    var filterCols = (opts.filters || []).map(function (f) { return columns.filter(function (c) { return c.key === f.key; })[0]; }).filter(Boolean);
     var tableEl = h("table", { class: "tbl" + (columns.length >= 8 ? " wide" : "") });
     var wrap = h("div", { class: "tbl-wrap" }, tableEl);
     var toolbar = null, selectEl = null, dirBtn = null, countEl = null;
     function visibleRows() {
       var out = rows.filter(function (r) { var m = marketOf(r); return !hasMarket || state.market === "ALL" || m === null || m === state.market; });
+      filterCols.forEach(function (c) {
+        var want = state.filters[c.key];
+        if (want !== undefined && want !== "") out = out.filter(function (r) { return cellText(c, r) === want; });
+      });
       if (state.sortKey !== null) {
         var col = columns.filter(function (c) { return c.key === state.sortKey; })[0];
         if (col) {
@@ -219,8 +231,17 @@
       state.page = 1;
       draw();
     }
-    if (hasMarket || canSort) {
+    if (hasMarket || canSort || filterCols.length) {
       var kids = [];
+      filterCols.forEach(function (c) {
+        var counts = {}, order = [];
+        rows.forEach(function (r) { var t = cellText(c, r); if (!(t in counts)) { counts[t] = 0; order.push(t); } counts[t] += 1; });
+        var sel = h("select", { "aria-label": c.label + "筛选" }, [h("option", { value: "", text: c.label + "：全部" })].concat(order.map(function (t) {
+          return h("option", { value: t, text: (t || "—") + "（" + counts[t] + "）" });
+        })));
+        sel.addEventListener("change", function () { state.filters[c.key] = sel.value; state.page = 1; draw(); });
+        kids.push(h("span", { class: "sortbox" }, sel));
+      });
       if (hasMarket) {
         kids.push(h("span", { class: "seg", role: "group", "aria-label": "市场筛选" }, [["ALL", "全部"], ["US", "美股"], ["HK", "港股"]].map(function (m) {
           var b = h("button", { type: "button", class: "seg-btn" + (state.market === m[0] ? " on" : ""), text: m[1], "aria-pressed": state.market === m[0] ? "true" : "false" });
