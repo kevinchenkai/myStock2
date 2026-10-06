@@ -3,6 +3,9 @@
 - 冻结后不可改（触发器）；内容相同的重复冻结是 no-op（保留首次时间）；内容变化＝新版本并 `supersedes` 指向同一单元内上一张。
 - 冻结晚于项目截止：**不回填为正式单**，记一行 `status='missed_deadline'` 的 SKIP（覆盖率可统计）。
 - 缺关键数据：`status='unavailable'`，`orders` 为空，旧单带过期标识，**不用旧单冒充新单**。
+- 每次成功冻结（status='frozen'）登记一个**冻结组**（`ticket_group`，迁移 0010）：本次全部单的 id，含内容未变、沿用旧行的单。
+  选择以组为单元：截止前最后一个冻结组，组内取该标的的单（审核 P0-3：否则否决只改一张买单时，其余单会因不在最新组而失效）。
+  没有冻结组登记的旧库／旧单回退到「同一 visible_at 为一组」。
 - 选择单元＝(batch, line, kind, market, target_session, code)；正式评分采用「截止前最后一个成功冻结且已记录 visible_at 的版本」；
   该版本的 `state_ref` 与当前线内状态不符（持仓/现金已变）则**失效**，按「无订单」处理并释放预留（§6A.3）。
 """
@@ -108,7 +111,60 @@ def freeze_tickets(conn: sqlite3.Connection, *, batch_id: str, line_id: str, kin
                  json.dumps(body["uncertainty"], sort_keys=True), eff.model_ref, strategy_version, protocol_version, state_ref_type, state_ref,
                  iso_utc(gen), iso_utc(now), iso_utc(now), iso_utc(deadline), prev["ticket_id"] if prev else None, h))
             ids.append(tid)
+        if status == "frozen" and ids and _has_group_table(conn):
+            _record_group(conn, batch_id, line_id, kind, market, target_session.isoformat(), stage, iso_utc(now), ids)
     return ids
+
+
+def _has_group_table(conn: sqlite3.Connection) -> bool:
+    return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ticket_group'").fetchone() is not None
+
+
+def _latest_group(conn: sqlite3.Connection, batch_id: str, line_id: str, kind: str, market: str, target_session: str, *, until: str | None = None):
+    sql = "SELECT * FROM ticket_group WHERE batch_id=? AND line_id=? AND kind=? AND market=? AND target_session=?"
+    args: list = [batch_id, line_id, kind, market, target_session]
+    if until is not None:
+        sql += " AND frozen_at<=?"
+        args.append(until)
+    return conn.execute(sql + " ORDER BY frozen_at DESC, rowid DESC LIMIT 1", args).fetchone()
+
+
+def _record_group(conn, batch_id, line_id, kind, market, target_session, stage, frozen_at, ids) -> None:
+    members = sorted(set(ids))
+    last = _latest_group(conn, batch_id, line_id, kind, market, target_session)
+    if last is not None and json.loads(last["member_ids"]) == members:
+        return                                                   # 整组内容不变的重跑：no-op，保留首次冻结时间
+    gid = hashlib.sha256(json.dumps([batch_id, line_id, kind, market, target_session, frozen_at, members]).encode()).hexdigest()[:24]
+    conn.execute("INSERT OR IGNORE INTO ticket_group(group_id, batch_id, line_id, kind, market, target_session, stage, frozen_at, member_ids) "
+                 "VALUES (?,?,?,?,?,?,?,?,?)", (gid, batch_id, line_id, kind, market, target_session, stage, frozen_at, json.dumps(members)))
+
+
+def current_group(conn: sqlite3.Connection, batch_id: str, line_id: str, kind: str, market: str, target_session: str, *,
+                  deadline_at=None) -> list[sqlite3.Row] | None:
+    """该单元（截止前）最后一个冻结组的成员单；没有任何冻结组时返回 None（调用方回退到按 visible_at 分组的旧规则）。"""
+    if not _has_group_table(conn):
+        return None
+    until = iso_utc(deadline_at) if deadline_at is not None else None
+    if _latest_group(conn, batch_id, line_id, kind, market, target_session) is None:
+        return None
+    g = _latest_group(conn, batch_id, line_id, kind, market, target_session, until=until)
+    if g is None:
+        return []
+    ids = json.loads(g["member_ids"])
+    rows = conn.execute(f"SELECT * FROM ticket WHERE ticket_id IN ({','.join('?' * len(ids))}) AND status='frozen'", ids).fetchall()
+    return sorted(rows, key=lambda r: r["code"])
+
+
+def latest_tickets(conn: sqlite3.Connection, batch_id: str, line_id: str, kind: str, market: str, target_session: str) -> dict[str, sqlite3.Row]:
+    """当前（最后一个冻结组；旧库为每个标的最后一张）已冻结的单，按标的。供揭示、否决导出与导入的基础单核对使用。"""
+    grp = current_group(conn, batch_id, line_id, kind, market, target_session)
+    if grp is not None:
+        return {r["code"]: r for r in grp}
+    out: dict[str, sqlite3.Row] = {}
+    for r in conn.execute("SELECT * FROM ticket WHERE batch_id=? AND line_id=? AND kind=? AND market=? AND target_session=? AND status='frozen' "
+                          "ORDER BY visible_at, rowid", (batch_id, line_id, kind, market, target_session)):
+        out[r["code"]] = r
+    return out
 
 
 @dataclass(frozen=True)
@@ -125,6 +181,14 @@ def select_ticket(conn: sqlite3.Connection, cell: Cell, *, deadline_at, current_
     失效：`state_ref` 与当前线内状态不符、或已过 `valid_to`（`invalidate_if` 中其余条件由冻结器在生成时检查）。
     """
     deadline = iso_utc(deadline_at)
+    grp = current_group(conn, cell.batch_id, cell.line_id, cell.kind, cell.market, cell.target_session, deadline_at=deadline_at)
+    if grp is not None:                                              # 显式冻结组（迁移 0010 之后）
+        if not grp:
+            return Selection(None, "not_visible_before_deadline")
+        mine = [r for r in grp if r["code"] == cell.code]
+        if not mine:
+            return Selection(None, "not_in_latest_group")
+        return _validate(mine[-1], current_state_ref, deadline)
     rows = conn.execute(
         "SELECT * FROM ticket WHERE batch_id=? AND line_id=? AND kind=? AND market=? AND target_session=? AND status='frozen' ORDER BY visible_at, rowid",
         (cell.batch_id, cell.line_id, cell.kind, cell.market, cell.target_session)).fetchall()
@@ -137,7 +201,10 @@ def select_ticket(conn: sqlite3.Connection, cell: Cell, *, deadline_at, current_
     mine = [r for r in visible if r["visible_at"] == group_at and r["code"] == cell.code]
     if not mine:
         return Selection(None, "not_in_latest_group")
-    last = mine[-1]
+    return _validate(mine[-1], current_state_ref, deadline)
+
+
+def _validate(last: sqlite3.Row, current_state_ref: str | None, deadline: str) -> Selection:
     if current_state_ref is not None and last["state_ref"] != current_state_ref:
         return Selection(None, "state_changed")
     if last["valid_to"] is not None and last["valid_to"] < deadline:

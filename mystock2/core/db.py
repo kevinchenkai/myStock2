@@ -66,6 +66,7 @@ TABLE_OWNERS: dict[str, str] = {
     "intent": "coach",
     "intent_exposure": "coach",
     "protocol_freeze": "coach",
+    "ticket_group": "coach",
     # assistant（M9）
     "veto_packet": "assistant",
     "llm_call": "assistant",

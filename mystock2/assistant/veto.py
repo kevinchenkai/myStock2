@@ -17,7 +17,7 @@ from datetime import date
 from decimal import Decimal
 
 from mystock2.coach.decide import BUY, SKIP, TicketDraft
-from mystock2.coach.tickets import freeze_tickets
+from mystock2.coach.tickets import freeze_tickets, latest_tickets
 from mystock2.core.db import atomic
 from mystock2.core.money import dec
 from mystock2.core.timeutil import ensure_utc, iso_utc, utc_now
@@ -266,11 +266,7 @@ def import_veto(conn_write: sqlite3.Connection, conn_read: sqlite3.Connection, *
         return close("rejected", "late_after_deadline")
     # 基础单被更新（刷新/重跑产生新版本）则旧包失效
     base_hashes = json.loads(row["base_hashes"])
-    current = {}
-    for r in conn_read.execute(
-            "SELECT code, frozen_hash, visible_at, rowid FROM ticket WHERE batch_id=? AND line_id=? AND kind='line_sim' AND market=? AND target_session=? AND status='frozen' "
-            "ORDER BY visible_at, rowid", (row["batch_id"], row["line_id"], row["market"], row["target_session"])):
-        current[r["code"]] = r["frozen_hash"]
+    current = {c: r["frozen_hash"] for c, r in latest_tickets(conn_read, row["batch_id"], row["line_id"], "line_sim", row["market"], row["target_session"]).items()}
     if current != base_hashes:
         return close("rejected", "base_ticket_updated")
     resp, errors = validate_response(response_text, pack, pack_id)

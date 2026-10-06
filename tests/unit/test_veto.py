@@ -298,3 +298,36 @@ def test_f15_freeze_and_receipt_commit_atomically(db, monkeypatch):
     assert ro.execute("SELECT COUNT(*) c FROM llm_call").fetchone()["c"] == 0
     monkeypatch.undo()
     assert do_import(db, pack, resp(pack)).status == "applied"                              # 可重试
+
+
+def test_p0_3_partial_veto_keeps_untouched_sell_and_skip_in_the_selected_group(db):
+    """审核 P0-3：否决只取消一张买单（flags 为空，其余单内容不变）时，未改的卖单与 SKIP 必须仍被选中——
+    否则等于 LLM 取消了卖单。冻结组显式登记全部成员（含沿用的旧行）。"""
+    pack = setup_pack(db)
+    res = do_import(db, pack, resp(pack, flags=[]))
+    assert res.status == "applied"
+    assert selected(db, "US.NVDA")["action"] == SKIP
+    assert selected(db, "US.TSLA")["action"] == SELL
+    assert selected(db, "US.AMD")["action"] == SKIP
+    ro = dbmod.connect_ro(db)
+    groups = ro.execute("SELECT member_ids FROM ticket_group WHERE line_id=? ORDER BY frozen_at", (L,)).fetchall()
+    assert len(groups) == 2 and len(json.loads(groups[-1]["member_ids"])) == 3
+
+
+def test_partial_refresh_and_identical_rerun_follow_the_explicit_group(db):
+    """部分刷新：只有一张单内容变了也登记整组；与最新组完全相同的重跑是 no-op（保留首次冻结时间）。"""
+    _a, c, _ro = conns(db)
+    base_tickets(c)
+    base_tickets(c)                                                               # 同内容重跑：不新增组
+    ro = dbmod.connect_ro(db)
+    assert ro.execute("SELECT COUNT(*) n FROM ticket_group").fetchone()["n"] == 1
+    drafts = [TicketDraft("US.NVDA", SKIP, reason_codes=("no_edge",), model_ref="p1"),
+              TicketDraft("US.TSLA", SELL, __import__("decimal").Decimal("250"), 10, 1, None, ("sell_target",), model_ref="p2"),
+              TicketDraft("US.AMD", SKIP, reason_codes=("no_edge",))]
+    freeze_tickets(c, batch_id=B, line_id=L, kind="line_sim", market="US", target_session=TARGET, stage="close", drafts=drafts, state_ref_type="line_state",
+                   state_ref="s0", strategy_version="v", protocol_version="p", generated_at=BEFORE, now=BEFORE + timedelta(minutes=5), deadline_at=DEADLINE)
+    assert selected(db, "US.NVDA")["action"] == SKIP and selected(db, "US.TSLA")["action"] == SELL and selected(db, "US.AMD")["action"] == SKIP
+    # 截止前看得到的是最后一个组；把截止设在第二组之前，选到的是第一组的买单
+    early = select_ticket(dbmod.connect_ro(db), Cell(B, L, "line_sim", "US", TARGET.isoformat(), "US.NVDA"), deadline_at=BEFORE + timedelta(minutes=1),
+                          current_state_ref="s0").ticket
+    assert early["action"] == BUY

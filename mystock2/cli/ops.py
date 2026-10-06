@@ -21,7 +21,7 @@ import yaml
 
 from mystock2.coach.decide import Prediction, StrategyParams, decide
 from mystock2.coach.intents import plan_to_drafts, record_intent, reveal, select_human_plan
-from mystock2.coach.tickets import freeze_tickets
+from mystock2.coach.tickets import freeze_tickets, latest_tickets
 from mystock2.core import calendars as cal
 from mystock2.core import db as dbmod
 from mystock2.core.config import REPO_ROOT, ConfigError, load_config
@@ -385,12 +385,10 @@ def cmd_coach_show(args) -> int:
     market = args.market.upper()
     target = date.fromisoformat(args.target)
     ro = _conn_ro(cfg)
-    rows = ro.execute("SELECT * FROM ticket WHERE batch_id=? AND market=? AND target_session=? AND kind=? AND status='frozen' ORDER BY code, visible_at, rowid",
-                      (args.batch, market, target.isoformat(), "line_sim" if not args.live else "live_guidance")).fetchall()
-    latest = {}
-    for r in rows:
-        if "human_plan" not in r["line_id"]:
-            latest[(r["line_id"], r["code"])] = r
+    kind = "line_sim" if not args.live else "live_guidance"
+    lines = [r["line_id"] for r in ro.execute("SELECT DISTINCT line_id FROM ticket WHERE batch_id=? AND market=? AND target_session=? AND kind=? AND status='frozen'",
+                                              (args.batch, market, target.isoformat(), kind))]
+    latest = {(ln, c): r for ln in lines if "human_plan" not in ln for c, r in latest_tickets(ro, args.batch, ln, kind, market, target.isoformat()).items()}
     with _opener(cfg, "coach") as w:
         reveal(w, batch_id=args.batch, market=market, target_session=target, channel="coach_show", version_hashes=[r["frozen_hash"] for r in latest.values()],
                at=_now(args))
@@ -525,9 +523,7 @@ def cmd_veto_export(args) -> int:
         print(f"导出会揭示 AI 单：请先为 {missing_plan} 记录人类计划（intent add，含 no_trade），或加 --no-human-plan 接受「揭示前无记录」后果。", file=sys.stderr)
         return 2
     line_id = b.lines["ai_veto"]
-    rows = ro.execute("SELECT * FROM ticket WHERE batch_id=? AND line_id=? AND kind='line_sim' AND market=? AND target_session=? AND status='frozen' ORDER BY code, visible_at, rowid",
-                      (b.batch_id, line_id, b.market, target.isoformat())).fetchall()
-    base = {r["code"]: r for r in rows}
+    base = latest_tickets(ro, b.batch_id, line_id, "line_sim", b.market, target.isoformat())
     if not base:
         print("没有可导出的机械基础单（先 coach run）", file=sys.stderr)
         return 2
