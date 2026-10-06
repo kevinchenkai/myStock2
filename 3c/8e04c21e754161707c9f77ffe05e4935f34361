@@ -1,0 +1,19 @@
+mystock2/web/views/trades/panel.js
+  s_4e5dbfa251c076::t_2053f274fb7dc9 19-21,23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "3c8e04c21e754161707c9f77ffe05e4935f34361",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "unknown"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
