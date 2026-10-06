@@ -33,10 +33,11 @@ class QuoteSource(Protocol):
 
 
 class VolumeSource(Protocol):
-    """日线成交量补源（只补成交量，不碰价格）。返回 {交易日: 成交量字符串}，只含成交量为正的日子。"""
+    """日线补源（用于「占位日线」：成交量为 0/缺失的终值日线，如港股半日市 yfinance 给的价是平的、量是 0）。
+    返回 {交易日: {"open","high","low","close","volume"}（字符串；只含成交量为正的日子）}。"""
     name: str
 
-    def volumes(self, code: str, start: date, end: date) -> dict[date, str]: ...
+    def bars(self, code: str, start: date, end: date) -> dict[date, dict[str, str]]: ...
 
 
 def _zero_volume(v) -> bool:
@@ -46,59 +47,91 @@ def _zero_volume(v) -> bool:
         return True
 
 
-def fill_zero_volume(bars: list[DailyBar], src: VolumeSource, code: str) -> tuple[list[DailyBar], list[str], str | None]:
-    """把成交量为 0/缺失的终值日线用补源的成交量补上；补不到的保持原样（下游把 0 当缺失跳过，不编造）。
-    返回 (新 bar 列表, 已补的日期, 补源错误)。补源任何异常都不影响价格入库。"""
-    need = [b for b in bars if _zero_volume(b.volume)]
-    if not need:
-        return bars, [], None
+def _is_flat(o, h, lo, c) -> bool:
     try:
-        vols = src.volumes(code, min(b.session_date for b in need), max(b.session_date for b in need))
-    except Exception as exc:  # noqa: BLE001 —— OpenD 未开/限频等：成交量补不上不拖垮行情采集
-        return bars, [], f"{type(exc).__name__}: {exc}"
-    out, filled = [], []
+        return dec(o) == dec(h) == dec(lo) == dec(c)
+    except (MoneyError, ArithmeticError, ValueError, TypeError):
+        return False
+
+
+def _placeholder(o, h, lo, c, v) -> bool:
+    """占位日线：成交量为 0/缺失，或价格是平的（开=高=低=收；供应商对半日市等日子的占位）。"""
+    return _zero_volume(v) or _is_flat(o, h, lo, c)
+
+
+def _merge_fallback(o, h, lo, c, adj, vol, fb: dict[str, str]) -> tuple[str, str, str, str, str | None, str, bool]:
+    """占位日线：成交量为 0/缺失的取补源的成交量；价格是平的（开=高=低=收）的价格也取补源的（补源 OHLC 自相矛盾则不动价格）。
+    复权收盘价按原复权比例换算（不改比例）。返回 (开, 高, 低, 收, 复权收, 量, 是否改了价格)。"""
+    vol = vol if not _zero_volume(vol) else fb["volume"]
+    if _is_flat(o, h, lo, c):
+        try:
+            _check_ohlc(fb["open"], fb["high"], fb["low"], fb["close"])
+            ratio = dec(adj) / dec(c) if adj is not None and dec(c) > 0 else None
+            new_adj = _px(float(dec(fb["close"]) * ratio)) if ratio is not None else None
+            return fb["open"], fb["high"], fb["low"], fb["close"], new_adj, vol, True
+        except (BarError, MoneyError, ArithmeticError, ValueError, KeyError):
+            pass
+    return o, h, lo, c, adj, vol, False
+
+
+def fill_zero_volume(bars: list[DailyBar], src: VolumeSource, code: str) -> tuple[list[DailyBar], list[str], str | None, list[str]]:
+    """把成交量为 0/缺失的终值日线用补源补上（见 _merge_fallback）；补不到的保持原样（下游把 0 当缺失跳过，不编造）。
+    返回 (新 bar 列表, 已补成交量的日期, 补源错误, 同时改了价格的日期)。补源任何异常都不影响价格入库。"""
+    need = [b for b in bars if _placeholder(b.open, b.high, b.low, b.close, b.volume)]
+    if not need:
+        return bars, [], None, []
+    try:
+        fb = src.bars(code, min(b.session_date for b in need), max(b.session_date for b in need))
+    except Exception as exc:  # noqa: BLE001 —— OpenD 未开/限频等：补不上不拖垮行情采集
+        return bars, [], f"{type(exc).__name__}: {exc}", []
+    out, filled, priced = [], [], []
     for b in bars:
-        v = vols.get(b.session_date) if _zero_volume(b.volume) else None
-        if v is not None:
-            out.append(dataclasses.replace(b, volume=v))
-            filled.append(b.session_date.isoformat())
-        else:
+        f = fb.get(b.session_date) if _placeholder(b.open, b.high, b.low, b.close, b.volume) else None
+        if f is None:
             out.append(b)
-    return out, filled, None
+            continue
+        o, h, lo, c, adj, vol, changed = _merge_fallback(b.open, b.high, b.low, b.close, b.adj_close, b.volume, f)
+        out.append(dataclasses.replace(b, open=o, high=h, low=lo, close=c, adj_close=adj, volume=vol))
+        filled.append(b.session_date.isoformat())
+        if changed:
+            priced.append(b.session_date.isoformat())
+    return out, filled, None, priced
 
 
 def repair_zero_volume(conn: sqlite3.Connection, src: VolumeSource, codes: list[str], start: date, end: date, *,
                        run_id: str | None = None, now: datetime | None = None) -> dict:
-    """历史修补：把库里「最新版本成交量为 0/缺失」的终值日线，用补源的成交量追加一个新版本（价格与来源标记不变，只追加）。
-    只在确有此类行时才连补源；补不到的日子原样保留并列出。"""
+    """历史修补：库里「最新版本是占位日线（成交量为 0/缺失，或价格是平的）」的终值日线，用补源追加一个新版本（成交量；价格是平的则价格也取补源；
+    来源标记不变，只追加，不改旧行）。只在确有此类行时才连补源；补不到的日子原样保留并列出。"""
     now = now or utc_now()
     out: dict = {}
     for code in codes:
-        rows = [r for r in get_daily(conn, code, start, end) if r["quality"] == "ok" and _zero_volume(r["volume"])]
+        rows = [r for r in get_daily(conn, code, start, end) if r["quality"] == "ok" and _placeholder(r["open"], r["high"], r["low"], r["close"], r["volume"])]
         if not rows:
-            out[code] = {"status": "ok", "need": 0, "repaired": 0, "unavailable": []}
+            out[code] = {"status": "ok", "need": 0, "repaired": 0, "priced": [], "unavailable": []}
             continue
         try:
-            vols = src.volumes(code, date.fromisoformat(rows[0]["session_date"]), date.fromisoformat(rows[-1]["session_date"]))
+            fb = src.bars(code, date.fromisoformat(rows[0]["session_date"]), date.fromisoformat(rows[-1]["session_date"]))
         except Exception as exc:  # noqa: BLE001
             with atomic(conn):
                 _log(conn, run_id, code, "volume_repair", src.name, "error", detail=f"{type(exc).__name__}: {exc}", at=now)
             out[code] = {"status": "failed", "need": len(rows), "repaired": 0, "error": f"{type(exc).__name__}: {exc}"}
             continue
-        done, missing = 0, []
+        done, missing, priced = 0, [], []
         with atomic(conn):
             for r in rows:
                 d = date.fromisoformat(r["session_date"])
-                v = vols.get(d)
-                if v is None:
+                f = fb.get(d)
+                if f is None:
                     missing.append(r["session_date"])
                     continue
-                bar = DailyBar(code, d, r["open"], r["high"], r["low"], r["close"], r["adj_close"], v)
-                put_daily(conn, [bar], source=r["source"], received_at=now, quality="ok")
+                o, h, lo, c, adj, vol, changed = _merge_fallback(r["open"], r["high"], r["low"], r["close"], r["adj_close"], r["volume"], f)
+                put_daily(conn, [DailyBar(code, d, o, h, lo, c, adj, vol)], source=r["source"], received_at=now, quality="ok")
                 done += 1
+                if changed:
+                    priced.append(r["session_date"])
             _log(conn, run_id, code, "volume_repair", src.name, "ok" if not missing else "partial", rows=done,
-                 detail=f"need={len(rows)} unavailable={missing}", at=now)
-        out[code] = {"status": "ok" if not missing else "partial", "need": len(rows), "repaired": done, "unavailable": missing}
+                 detail=f"need={len(rows)} price_replaced={priced} unavailable={missing}", at=now)
+        out[code] = {"status": "ok" if not missing else "partial", "need": len(rows), "repaired": done, "priced": priced, "unavailable": missing}
     return out
 
 
@@ -145,9 +178,10 @@ def collect_daily(conn: sqlite3.Connection, sources: list[QuoteSource], code: st
             (final if cal.session(market, b.session_date).close_utc + FINAL_BUFFER <= now else partial).append(b)
         vol_note = ""
         if volume_source is not None and final:
-            final, filled, vol_err = fill_zero_volume(final, volume_source, code)
+            final, filled, vol_err, priced = fill_zero_volume(final, volume_source, code)
             if filled or vol_err:
-                vol_note = f" volume_filled_by_{volume_source.name}={filled}" + (f" volume_source_error={vol_err}" if vol_err else "")
+                vol_note = (f" volume_filled_by_{volume_source.name}={filled} price_replaced_by_{volume_source.name}={priced}"
+                            + (f" volume_source_error={vol_err}" if vol_err else ""))
         with atomic(conn):
             counts = put_daily(conn, final, source=src.name, received_at=now, quality="ok") if final else {}
             if partial:
@@ -286,17 +320,17 @@ class YFinanceSource:
 
 # ---------------------------------------------------------------- 富途成交量补源
 class FutuVolumeSource:
-    """富途历史日 K 线的成交量（只读行情查询，不涉及交易与账户；需本机 OpenD 在线并有该市场行情权限）。
-    原始价口径（不复权）；成交量为 0（停牌/无数据）的日子不返回。单位与 yfinance 一致（港股为股数）。"""
+    """富途历史日 K 线补源（只读行情查询，不涉及交易与账户；需本机 OpenD 在线并有该市场行情权限）。
+    原始价口径（不复权）；成交量单位与 yfinance 一致（港股为股数）；成交量为 0（停牌/无数据）的日子不返回。"""
     name = "futu"
 
     def __init__(self, host: str = "127.0.0.1", port: int = 11111):
         self.host, self.port = host, port
 
-    def volumes(self, code: str, start: date, end: date) -> dict[date, str]:
+    def bars(self, code: str, start: date, end: date) -> dict[date, dict[str, str]]:
         from futu import RET_OK, AuType, KLType, OpenQuoteContext
         ctx = OpenQuoteContext(host=self.host, port=self.port)
-        out: dict[date, str] = {}
+        out: dict[date, dict[str, str]] = {}
         try:
             key = None
             while True:
@@ -307,7 +341,8 @@ class FutuVolumeSource:
                 for _, r in df.iterrows():
                     v = float(r["volume"])
                     if math.isfinite(v) and v > 0:
-                        out[date.fromisoformat(str(r["time_key"])[:10])] = str(int(v))
+                        out[date.fromisoformat(str(r["time_key"])[:10])] = {"open": _px(r["open"]), "high": _px(r["high"]), "low": _px(r["low"]),
+                                                                           "close": _px(r["close"]), "volume": str(int(v))}
                 if key is None:
                     return out
         finally:

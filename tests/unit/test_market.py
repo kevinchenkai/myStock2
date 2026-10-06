@@ -270,15 +270,20 @@ class FakeVolume:
     def __init__(self, vols=None, exc=None):
         self.vols, self.exc, self.calls = vols or {}, exc, 0
 
-    def volumes(self, code, start, end):
+    def bars(self, code, start, end):
         self.calls += 1
         if self.exc:
             raise self.exc
-        return {d: v for d, v in self.vols.items() if start <= d <= end}
+        return {d: (v if isinstance(v, dict) else {"open": "9.8", "high": "10.4", "low": "9.6", "close": "10.2", "volume": v})
+                for d, v in self.vols.items() if start <= d <= end}
 
 
 def zero_bar(d):
     return DailyBar(CODE, date.fromisoformat(d), "10", "11", "9", "10.5", "10.5", "0")
+
+
+def flat_bar(d):                                                  # yfinance 对半日市的占位：开=高=低=收、成交量 0
+    return DailyBar(CODE, date.fromisoformat(d), "10", "10", "10", "10", "9.5", "0")
 
 
 def test_collect_daily_fills_zero_volume_from_volume_source_and_leaves_prices_alone(mk):
@@ -324,3 +329,46 @@ def test_repair_zero_volume_appends_new_versions_only_where_available(mk):
     assert again["need"] == 1 and mk.execute("SELECT count(*) FROM quote_daily WHERE session_date='2026-03-03'").fetchone()[0] == 2     # 幂等
     broken = repair_zero_volume(mk, FakeVolume(exc=OSError("down")), [CODE], date(2026, 3, 1), date(2026, 3, 31), now=t0 + timedelta(hours=4))[CODE]
     assert broken["status"] == "failed"
+
+
+def test_flat_zero_volume_bar_takes_prices_from_volume_source_with_adj_ratio_kept(mk):
+    now = after_close(date(2026, 3, 5))
+    vs = FakeVolume({date(2026, 3, 3): "555", date(2026, 3, 4): "444"})
+    collect_daily(mk, [FakeSource("yf", [flat_bar("2026-03-03"), zero_bar("2026-03-04")])], CODE, date(2026, 3, 3), date(2026, 3, 4), run_id="r1", now=now, volume_source=vs)
+    got = {r["session_date"]: r for r in get_daily(mk, CODE, date(2026, 3, 1), date(2026, 3, 31))}
+    flat = got["2026-03-03"]
+    assert (flat["open"], flat["high"], flat["low"], flat["close"], flat["volume"]) == ("9.8", "10.4", "9.6", "10.2", "555")
+    assert Decimal(flat["adj_close"]) == Decimal("9.69")                                   # 复权比例 9.5/10 不变
+    nonflat = got["2026-03-04"]
+    assert (nonflat["open"], nonflat["close"], nonflat["volume"]) == ("10", "10.5", "444")  # 价格不是平的：只补成交量，不动价格
+    detail = mk.execute("SELECT detail FROM collection_log WHERE kind='daily'").fetchone()["detail"]
+    assert "price_replaced_by_futu=['2026-03-03']" in detail
+    collect_daily(mk, [FakeSource("yf", [flat_bar("2026-03-03"), zero_bar("2026-03-04")])], CODE, date(2026, 3, 3), date(2026, 3, 4), run_id="r2", now=now, volume_source=vs)
+    assert mk.execute("SELECT count(*) FROM quote_daily").fetchone()[0] == 2                # 重复采集：同内容不新增版本
+    bad = FakeVolume({date(2026, 3, 5): {"open": "9", "high": "8", "low": "9", "close": "9", "volume": "1"}})   # 补源价格自相矛盾：只取成交量
+    collect_daily(mk, [FakeSource("yf", [flat_bar("2026-03-05")])], CODE, date(2026, 3, 5), date(2026, 3, 5), now=after_close(date(2026, 3, 6)), volume_source=bad)
+    r = get_daily(mk, CODE, date(2026, 3, 5), date(2026, 3, 5))[0]
+    assert (r["close"], r["volume"]) == ("10", "1")
+
+
+def test_repair_replaces_flat_prices_too_and_keeps_old_versions(mk):
+    from mystock2.collectors.quotes import repair_zero_volume
+    t0 = after_close(date(2026, 3, 5))
+    put_daily(mk, [flat_bar("2026-03-03")], source="yf", received_at=t0, quality="ok")
+    res = repair_zero_volume(mk, FakeVolume({date(2026, 3, 3): "555"}), [CODE], date(2026, 3, 1), date(2026, 3, 31), now=t0 + timedelta(hours=1))[CODE]
+    assert res["repaired"] == 1 and res["priced"] == ["2026-03-03"]
+    r = get_daily(mk, CODE, date(2026, 3, 3), date(2026, 3, 3))[0]
+    assert (r["version"], r["close"], r["volume"], r["source"]) == (2, "10.2", "555", "yf")
+    assert mk.execute("SELECT close FROM quote_daily WHERE version=1").fetchone()["close"] == "10"        # 旧版本不改
+
+
+def test_repair_also_fixes_flat_bars_whose_volume_was_already_filled(mk):
+    """FC-2：成交量已补（非 0）但价格仍是平的占位价 → 仍按占位日线修补；成交量保留原值。"""
+    from mystock2.collectors.quotes import repair_zero_volume
+    t0 = after_close(date(2026, 3, 5))
+    put_daily(mk, [DailyBar(CODE, date(2026, 3, 3), "10", "10", "10", "10", "9.5", "321")], source="yf", received_at=t0, quality="ok")
+    res = repair_zero_volume(mk, FakeVolume({date(2026, 3, 3): "999"}), [CODE], date(2026, 3, 1), date(2026, 3, 31), now=t0 + timedelta(hours=1))[CODE]
+    assert res["repaired"] == 1 and res["priced"] == ["2026-03-03"]
+    r = get_daily(mk, CODE, date(2026, 3, 3), date(2026, 3, 3))[0]
+    assert (r["close"], r["volume"], r["version"]) == ("10.2", "321", 2)
+    assert repair_zero_volume(mk, FakeVolume({date(2026, 3, 3): "999"}), [CODE], date(2026, 3, 1), date(2026, 3, 31), now=t0 + timedelta(hours=2))[CODE]["need"] == 0   # 修好后不再是占位
