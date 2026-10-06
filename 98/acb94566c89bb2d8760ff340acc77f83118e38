@@ -1,0 +1,23 @@
+mystock2/web/views/holdings/panel.js
+  s_97d138eaf84b50::t_ea5b4539d5479e 12,15
+mystock2/web/static/index.html
+  s_97d138eaf84b50::t_ea5b4539d5479e 14
+docs/records/real-data-phase-changelog_claude_20261005.md
+  s_97d138eaf84b50::t_b08df04fcebe4e 144-145
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "98acb94566c89bb2d8760ff340acc77f83118e38",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
