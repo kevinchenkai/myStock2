@@ -1,0 +1,21 @@
+tests/unit/test_scoreboard.py
+  s_4e5dbfa251c076::t_3d8315543d8a89 503-518
+mystock2/scoreboard/human_actual.py
+  s_4e5dbfa251c076::t_3d8315543d8a89 16,28-30,33-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "1d9c992d96f2d3d3cd9c0b214b29ac6c239f01c4",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
