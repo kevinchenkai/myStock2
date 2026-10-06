@@ -1,0 +1,21 @@
+tests/unit/test_web_ledgerdata.py
+  s_4e5dbfa251c076::t_dfbb20859362e5 1-22
+mystock2/web/ledgerdata.py
+  s_4e5dbfa251c076::t_8845d714b00a2d 39-40,49-51,62-66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "021c34a1a940bd6f1bce407d75690cdd61a09690",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
