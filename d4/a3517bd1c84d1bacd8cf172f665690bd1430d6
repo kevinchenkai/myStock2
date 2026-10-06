@@ -1,0 +1,31 @@
+docs/README.md
+  s_4e5dbfa251c076::t_3e3bb7826d48cf 18
+docs/OPEN_ITEMS.md
+  s_4e5dbfa251c076::t_3e3bb7826d48cf 64,68-69,72-81
+  s_4e5dbfa251c076::t_3899989ede9795 82
+docs/records/webui-upgrade-20261005_claude_20261005.md
+  s_4e5dbfa251c076::t_833caf7f076fae 1-65,67-69,73-75
+  s_4e5dbfa251c076::t_ed80dcb4a9e873 66,70-72,76-116
+docs/records/code-review-20261005_claude_20261005.md
+  s_4e5dbfa251c076::t_47d57a7fe95165 80,88
+  s_4e5dbfa251c076::t_c6d0ecd22e2430 139-146,151-200
+  s_4e5dbfa251c076::t_67269bfbbcd187 150
+docs/records/real-data-phase-changelog_claude_20261005.md
+  s_4e5dbfa251c076::t_3e3bb7826d48cf 7,104-111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "d4a3517bd1c84d1bacd8cf172f665690bd1430d6",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
