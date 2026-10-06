@@ -1,0 +1,25 @@
+tests/unit/test_replay.py
+  s_4e5dbfa251c076::t_00ee3cb641ca41 116-119
+migrations/0012_lookup_indexes.sql
+  s_4e5dbfa251c076::t_41c5fc75032cd7 1-5
+tests/unit/test_db.py
+  s_4e5dbfa251c076::t_4c9d03987b7b19 140-150
+mystock2/replay/cards.py
+  s_4e5dbfa251c076::t_41c5fc75032cd7 111-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "c63fde374d7875670731ca3331b6e74d378a093b",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
