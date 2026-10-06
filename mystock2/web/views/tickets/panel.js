@@ -4,7 +4,7 @@ MS.registerPanel("tickets", function (root, d) {
   if (o) {
     var okv = [["订单总数", String(o.total)]].concat(o.by_status.map(function (x) { return [x.text, String(x.count)]; }));
     root.appendChild(MS.card("我的订单（券商，实际操作；含已撤/失败）", [
-      MS.kv(okv),
+      MS.kv(okv, { stats: true }),
       MS.table([
         { key: "created_at", label: "下单时间", render: function (r) { return { text: MS.fmtTime(r.created_at), title: r.time_trust === "assumed_local_tz" ? "交易所本地时间按市场补时区（推断）" : null }; } },
         { key: "code", label: "标的" }, { key: "side_text", label: "方向" }, { key: "order_type", label: "类型" },
@@ -16,7 +16,7 @@ MS.registerPanel("tickets", function (root, d) {
     ]));
   }
   if (d.batch_id === null) {
-    root.appendChild(MS.card("AI 操作单", [h("p", { class: "state", text: "暂无" }), MS.note(d.no_batch_text), MS.note(d.live_guidance.note)]));
+    root.appendChild(MS.card("AI 操作单", [MS.empty("还没有 AI 操作单", d.no_batch_text), MS.note(d.live_guidance.note)]));
     return;
   }
   root.appendChild(MS.card("批次 " + d.batch_id, [
@@ -36,7 +36,7 @@ MS.registerPanel("tickets", function (root, d) {
     ]));
     body.push(MS.note("阶段：" + (Object.keys(c.by_stage).map(function (k) { return k + " " + c.by_stage[k]; }).join("；") || "无")));
     if (sealed) {
-      body.push(h("p", { class: "state", text: "已密封：该目标日的动作、限价、数量与原因在揭示之前不显示（API 同样不返回）。" }));
+      body.push(h("p", { class: "notice", text: "已密封：该目标日的动作、限价、数量与原因在揭示之前不显示（API 同样不返回）。" }));
     } else {
       body.push(MS.note("揭示记录 " + m.reveal.count + " 条，首次 " + MS.fmtTime(m.reveal.first_revealed_at) + "，通道：" + m.reveal.channels.join("、")));
       body.push(MS.table([
