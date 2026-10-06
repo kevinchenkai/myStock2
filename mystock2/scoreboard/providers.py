@@ -6,15 +6,17 @@
 from __future__ import annotations
 
 import sqlite3
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 
 from mystock2.coach.intents import select_human_plan
 from mystock2.coach.tickets import Cell, select_ticket
 from mystock2.core import calendars as cal
-from mystock2.core.money import dec
+from mystock2.core.money import dec, floor_to_lots
 from mystock2.core.timeutil import ensure_utc
-from mystock2.scoreboard.types import BUY, SELL, LineState, SimOrder
+from mystock2.ledger.fees import FeeRule, max_buy_cost, possible_fills_bound, select_rule
+from mystock2.scoreboard.types import BUY, SELL, ExecProtocol, LineState, SimOrder
 
 
 class TicketProvider:
@@ -38,8 +40,15 @@ class TicketProvider:
 
 
 class HumanPlanProvider:
-    def __init__(self, conn: sqlite3.Connection, *, batch_id: str, line_id: str, market: str, codes: list[str]):
+    """人类计划 → 订单。传入 `fee_rules` 时按**整组**累计预算（审核 P1-11）：记录时每条计划只对全部可交易现金单独检查，
+    组合起来可能超预算；这里按固定顺序（卖单在前，买单按代码字母序）累计，超出部分按协议预注册的 `constraint_handling`
+    截断到整手（truncate）或整条作废（reject），并记标记——不留给撮合时整单拒绝。"""
+
+    def __init__(self, conn: sqlite3.Connection, *, batch_id: str, line_id: str, market: str, codes: list[str],
+                 fee_rules: list[FeeRule] | None = None, lot_sizes: dict[str, int] | None = None, constraint_handling: str = "reject",
+                 protocol: ExecProtocol | None = None):
         self.conn, self.batch_id, self.line_id, self.market, self.codes = conn, batch_id, line_id, market, codes
+        self.fee_rules, self.lot_sizes, self.handling, self.protocol = fee_rules, lot_sizes or {}, constraint_handling, protocol or ExecProtocol()
         self.flags: dict[tuple[date, str], list[str]] = {}
 
     def __call__(self, state: LineState, day: date) -> list[SimOrder]:
@@ -54,4 +63,34 @@ class HumanPlanProvider:
                     continue
                 orders.append(SimOrder(self.line_id, code, p["action"], int(p["qty"]), Decimal(p["limit_price"]), p["intent_id"],
                                        ensure_utc(p["valid_to"]) if p.get("valid_to") else None))
-        return orders
+        if self.fee_rules is None:
+            return orders
+        return self._group_budget(state, day, orders)
+
+    def _group_budget(self, state: LineState, day: date, orders: list[SimOrder]) -> list[SimOrder]:
+        sells = [o for o in orders if o.side == SELL]
+        buys = sorted((o for o in orders if o.side == BUY), key=lambda o: o.code)
+        rule = select_rule(self.fee_rules, self.market, BUY, day.isoformat())
+        bound = possible_fills_bound(self.market, day)
+        left = state.tradable_cash()
+        out = list(sells)
+        for o in buys:
+            def need(n: int, o=o) -> Decimal:
+                return max_buy_cost(rule, n, o.limit_price, slippage_bps=self.protocol.slippage_bps, fee_multiplier=self.protocol.fee_multiplier,
+                                    possible_fills=bound)
+            q = o.qty
+            if need(q) > left:
+                lot = self.lot_sizes.get(o.code, 1)
+                if self.handling == "truncate":
+                    while q > 0 and need(q) > left:
+                        q -= lot
+                    q = int(floor_to_lots(Decimal(q), lot)) if q > 0 else 0
+                else:
+                    q = 0
+                self.flags.setdefault((day, o.code), []).append("group_budget_truncated" if q > 0 else "group_budget_exceeded")
+                if q <= 0:
+                    continue
+                o = replace(o, qty=q)
+            left -= need(q)
+            out.append(o)
+        return out

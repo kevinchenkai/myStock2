@@ -465,3 +465,38 @@ def test_p1_10_sizing_and_engine_reservation_share_one_cost_function():
                      provider=lambda s, d, t=t: [SimOrder("ai", CODE, t.action, t.qty, t.limit_price)], protocol=PROTO, fee_rules=fees,
                      settlement=settle, lot_sizes={CODE: lot}).results[0]
         assert not x.rejected, x.rejected
+
+
+def test_p1_11_human_plans_share_one_budget_truncated_in_a_fixed_order(tmp_path):
+    """审核 P1-11：两条买入计划各自都在预算内、合计超预算；协议选「截断」时按固定顺序（买单按代码）截断第二条，不留给撮合整单拒绝。"""
+    from datetime import timedelta
+
+    from mystock2.coach.intents import record_intent
+    from mystock2.core import calendars as cal
+    from mystock2.core import db as dbmod
+    from mystock2.instruments.security_rule import SecurityRule, parse_bands
+    from mystock2.scoreboard.providers import HumanPlanProvider
+
+    fees = [FeeRule("syn", "US", "ANY", "order", "USD", pct_fee=Decimal("0.001"), min_fee=Decimal("1"))]
+    tgt, p = DAYS[0], tmp_path / "c.db"
+    dl = cal.project_deadline("US", tgt)
+    dbmod.migrate(p)
+    w = dbmod.connect_writer(p, "coach")
+    st = LineState("USD", Decimal(10000))
+    for code in (CODE, CODE2):
+        record_intent(w, batch_id="B", line_id="B:human_plan", market="US", code=code, target_session=tgt, action="BUY", limit_price="10", qty=900,
+                      state=st, state_hash=st.hash(), now=dl - timedelta(hours=2), deadline_at=dl, constraint_handling="truncate",
+                      rule=SecurityRule(code, "2026-01-01", None, 1, parse_bands('[{"tick":"0.01"}]'), "合成", True), fee_rules=fees)
+    md = FakeMD()
+    md.flat(CODE, DAYS[:1], 10)
+    md.flat(CODE2, DAYS[:1], 10)
+    for handling, second in (("truncate", True), ("reject", False)):
+        prov = HumanPlanProvider(w, batch_id="B", line_id="B:human_plan", market="US", codes=[CODE, CODE2], fee_rules=fees,
+                                 lot_sizes={CODE: 1, CODE2: 1}, constraint_handling=handling)
+        res = run_line(md, market="US", currency="USD", initial=st, sessions=[tgt], provider=prov, protocol=PROTO, fee_rules=fees,
+                       settlement=SettlementRule("US", 1), lot_sizes={CODE: 1, CODE2: 1}).results[0]
+        assert not res.rejected
+        got = {f.code: f.qty for f in res.fills}
+        first, other = sorted((CODE, CODE2))
+        assert got[first] == 900 and (0 < got.get(other, 0) < 900) == second
+        assert prov.flags[(tgt, other)] == ["group_budget_truncated" if second else "group_budget_exceeded"]

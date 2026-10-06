@@ -191,7 +191,9 @@ def simulate_line(conn, loc: Local, b: Batch, kind: str, upto: date, *, buyhold_
     if kind in ("ai", "ai_veto", "ai_lgbm"):
         provider = TicketProvider(conn, batch_id=b.batch_id, line_id=line_id, market=b.market, codes=b.codes)
     elif kind == "human_plan":
-        provider = HumanPlanProvider(conn, batch_id=b.batch_id, line_id=line_id, market=b.market, codes=b.codes)
+        provider = HumanPlanProvider(conn, batch_id=b.batch_id, line_id=line_id, market=b.market, codes=b.codes, fee_rules=loc.fee_rules,
+                                     lot_sizes=lot_sizes(conn, b.codes, b.start), protocol=proto,
+                                     constraint_handling=(loc.protocol.get("human_plan") or {}).get("constraint_handling") or "reject")
     elif kind == "buyhold":
         first = cal.next_session(b.market, b.start)
         provider = BuyHoldProvider(md, market=b.market, weights=buyhold_weights or {}, first_day=first, lot_sizes=lot_sizes(conn, b.codes, first),
