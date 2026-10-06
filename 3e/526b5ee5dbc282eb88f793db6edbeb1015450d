@@ -1,0 +1,21 @@
+tests/integration/test_daily_flow.py
+  s_4e5dbfa251c076::t_1214444934a842 251-258
+mystock2/cli/ops.py
+  s_4e5dbfa251c076::t_334bf8c253acf5 82-95,392,454,466-467,478,487,500-501,590,598
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "3e526b5ee5dbc282eb88f793db6edbeb1015450d",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
