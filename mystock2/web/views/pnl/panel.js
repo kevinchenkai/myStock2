@@ -2,13 +2,13 @@ MS.registerPanel("pnl", function (root, d, ctx) {
   var h = MS.h;
   d.summary.forEach(function (s) {
     var kids = [MS.kv([
-      ["已实现交易盈亏 · 精确（费用后）", s.realized_exact],
-      ["已实现交易盈亏 · 估算（费用后）", s.realized_estimated],
-      ["无成本证据的卖出股数（盈亏不可用）", s.has_unavailable ? { text: s.unavailable_qty.text + " 股", tag: "不可用" } : s.unavailable_qty],
-      ["费用合计（已计入上述盈亏）", s.fees_total],
-      ["成交净现金流（现金流水，不是盈亏）", s.trade_net_cashflow],
-      ["开账日前成交（只作描述，无盈亏）", s.pre_opening + " 笔"]
-    ])];
+      ["已实现盈亏 · 精确（费用后）", s.realized_exact],
+      ["已实现盈亏 · 估算（费用后）", s.realized_estimated],
+      ["无成本证据的卖出（盈亏不可用）", s.has_unavailable ? { text: s.unavailable_qty.text + " 股", tag: "不可用" } : s.unavailable_qty],
+      ["费用合计（已计入盈亏）", s.fees_total],
+      ["成交净现金流（不是盈亏）", s.trade_net_cashflow],
+      ["开账日前成交（只作描述）", s.pre_opening + " 笔"]
+    ], { stats: true })];
     root.appendChild(MS.card("币种 " + s.currency, kids));
   });
   if (!d.summary.length) root.appendChild(MS.card("盈亏", MS.note("没有成交，无盈亏可算。")));
