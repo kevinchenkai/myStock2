@@ -255,3 +255,24 @@ def test_short_sell_buy_back_and_cancelled_deals_are_not_booked_silently(led):
     assert [r["ref_deal_id"] for r in led.execute("SELECT ref_deal_id FROM ledger_event WHERE event_type='FILL'")] == ["D3"]
     reasons = sorted(r["reason"] for r in open_pending(led))
     assert any("SELL_SHORT" in x for x in reasons) and any("BUY_BACK" in x for x in reasons) and any("CANCELLED" in x for x in reasons)
+
+
+def test_fee_titles_changing_language_do_not_double_book_and_negative_or_repeated_items_are_handled(led):
+    """审核 P1-5：费用项标题是展示文本（OpenD 语言切换会变），金额构成与已入账一致时一律视为重复；
+    标题变了且金额也变了 → 冲突不入账。负费用（返还）进待匹配；同一订单两条同名同额费用都保留。"""
+    api = FakeApi()
+    api._deals["US"] = [deal(1, order="O1"), deal(2, order="O2")]
+    collect_deals(led, api, account_id=ACCT, acc_id=1, markets=["US"], start=date(2026, 3, 1), end=date(2026, 3, 31), **NOSLEEP)
+    api.fees = {"O1": [{"item": "Commission", "amount": 0.99, "currency": "USD"}, {"item": "Platform Fee", "amount": 1.0, "currency": "USD"}],
+                "O2": [{"item": "Settlement Fee", "amount": 0.3, "currency": "USD"}, {"item": "Settlement Fee", "amount": 0.3, "currency": "USD"},
+                       {"item": "Rebate", "amount": -0.5, "currency": "USD"}]}
+    first = collect_order_fees(led, api, account_id=ACCT, acc_id=1, **NOSLEEP)
+    assert (first.inserted, first.pending) == (4, 1)
+    total = lambda: sum(D(r["cash_delta"]) for r in led.execute("SELECT cash_delta FROM ledger_event WHERE event_type='FEE'"))  # noqa: E731
+    assert total() == D("-2.59")
+    api.fees["O1"] = [{"item": "佣金", "amount": 0.99, "currency": "USD"}, {"item": "平台使用费", "amount": 1.0, "currency": "USD"}]
+    again = collect_order_fees(led, api, account_id=ACCT, acc_id=1, **NOSLEEP)
+    assert again.inserted == 0 and total() == D("-2.59") and "fee_titles_changed:O1" in again.notes
+    api.fees["O1"] = [{"item": "佣金", "amount": 1.99, "currency": "USD"}, {"item": "平台使用费", "amount": 1.0, "currency": "USD"}]
+    changed = collect_order_fees(led, api, account_id=ACCT, acc_id=1, **NOSLEEP)
+    assert changed.inserted == 0 and changed.conflicts and total() == D("-2.59")

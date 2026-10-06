@@ -269,7 +269,8 @@ def collect_order_fees(ledger, api: TradeApi, *, account_id: str, acc_id: int, s
     last_deal: dict[str, sqlite3.Row] = {}
     for r in rows:
         last_deal[r["ref_order_id"]] = r
-    have = {r["business_key"]: r["cash_delta"] for r in ledger.execute("SELECT business_key, cash_delta FROM ledger_event WHERE account_id=? AND event_type='FEE'", (account_id,))}
+    have = {r["business_key"]: (r["currency"], dec(r["cash_delta"])) for r in ledger.execute(
+        "SELECT business_key, currency, cash_delta FROM ledger_event WHERE account_id=? AND event_type='FEE'", (account_id,))}
     todo = list(last_deal)
     for i in range(0, len(todo), FEE_BATCH):
         chunk = todo[i:i + FEE_BATCH]
@@ -284,30 +285,56 @@ def collect_order_fees(ledger, api: TradeApi, *, account_id: str, acc_id: int, s
             fill = last_deal.get(oid)
             if fill is None:
                 continue
+            prefix = f"fee:{account_id}:order:{oid}:"
+            wanted: dict[str, tuple] = {}                         # 规范键 → (币种, 入账金额, 原始项, 来源)
+            seen: dict[str, int] = {}
             for it in items:
-                amount = dec(str(it["amount"]))
+                src = SourceDraft("futu", f"fee:{oid}:{it.get('item')}", {"order_id": oid, "item": str(it.get("item")), "amount": str(it.get("amount"))})
+                try:
+                    amount = dec(str(it["amount"]))
+                except (KeyError, LedgerError, ArithmeticError, ValueError) as exc:
+                    queue_pending(ledger, src, f"订单费用金额无法解析：{exc}")
+                    rep.pending += 1
+                    continue
                 if amount == 0:
                     continue
+                if amount < 0:                                    # 负费用项（返还/冲回）：方向不猜，进待匹配（审核 L-06）
+                    queue_pending(ledger, src, f"订单费用为负（{amount}）：返还/冲回需人工核对，不按支出入账")
+                    rep.pending += 1
+                    continue
                 item = str(it["item"]).lower().replace(" ", "_")
-                key = f"fee:{account_id}:order:{oid}:{item}"
-                src = SourceDraft("futu", f"fee:{oid}:{it['item']}", {"order_id": oid, "item": it["item"], "amount": str(it["amount"])})
+                seen[item] = seen.get(item, 0) + 1
+                key = prefix + item + (f"#{seen[item]}" if seen[item] > 1 else "")     # 同一订单两条同名费用项：都保留，不当重复
                 ccy = (it.get("currency") or "").upper() or (currency_of(fill["code"]) if assume_market_currency else "")
                 if not ccy:
                     queue_pending(ledger, src, "订单费用缺少币种：未核实前不猜（首跑核对后可用 assume_market_currency）")
                     rep.pending += 1
                     continue
-                if key in have:
-                    if dec(have[key]) != -abs(amount):                    # 同订单同费用项金额变了（如又有新成交）：冲突并报告，不覆盖不重复入账
-                        rep.conflicts.append(f"{oid}/{it['item']}: 已入账 {have[key]}，现为 {-abs(amount)}；请人工更正")
+                wanted[key] = (ccy, -amount, it, src)
+            booked = {k: v for k, v in have.items() if k.startswith(prefix)}
+            if booked:
+                same_amounts = sorted((c, a) for c, a in booked.values()) == sorted((w[0], w[1]) for w in wanted.values())
+                if same_amounts:                                  # 金额构成与已入账完全一致：重复（费用项标题可能因语言等变化，审核 P1-5）
+                    rep.duplicate += len(wanted)
+                    if set(booked) != set(wanted):
+                        rep.notes.append(f"fee_titles_changed:{oid}")
+                    continue
+                if not set(booked) <= set(wanted):                # 已入账的费用项在本次结果里找不到（标题变了且金额也变了）：不猜对应关系
+                    rep.conflicts.append(f"{oid}: 费用项与已入账不一致（已入账 {sorted(booked)}，本次 {sorted(wanted)}）；请人工核对")
+                    continue
+            for key, (ccy, cash, it, src) in wanted.items():
+                if key in booked:
+                    if booked[key] != (ccy, cash):                # 同订单同费用项金额变了（如又有新成交）：冲突并报告，不覆盖不重复入账
+                        rep.conflicts.append(f"{oid}/{it['item']}: 已入账 {booked[key][1]}，现为 {cash}；请人工更正")
                     else:
                         rep.duplicate += 1
                     continue
                 try:
-                    res = post_event(ledger, EventDraft(key, account_id, "FEE", _fill_time(ledger, account_id, fill["ref_deal_id"]), ccy, cash_delta=str(-abs(amount)),
+                    res = post_event(ledger, EventDraft(key, account_id, "FEE", _fill_time(ledger, account_id, fill["ref_deal_id"]), ccy, cash_delta=str(cash),
                                                         ref_deal_id=fill["ref_deal_id"], ref_order_id=oid, note="futu order_fee_query"), source=src)
                     rep.inserted += res.status == "inserted"
                     rep.duplicate += res.status == "duplicate"
-                    have[key] = str(-abs(amount))
+                    have[key] = (ccy, cash)
                 except LedgerConflict as exc:
                     rep.conflicts.append(f"{oid}/{it['item']}: {exc}")
                 except LedgerError as exc:
