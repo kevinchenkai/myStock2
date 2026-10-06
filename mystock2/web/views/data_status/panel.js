@@ -6,12 +6,12 @@ MS.registerPanel("data_status", function (root, d) {
   var s = d.summary, pv = d.protocols.verdict;
   root.appendChild(MS.card("总览", [
     MS.kv([
-      ["采集（标的×种类×来源）有问题 / 总数", s.collection_problems + " / " + s.collection_groups],
-      ["行情有问题的标的 / 总数", s.quote_problems + " / " + s.quote_codes],
-      ["最近运行回执有问题", String(s.run_problems)],
+      ["采集有问题 / 总数（标的×种类×来源）", { text: s.collection_problems + " / " + s.collection_groups, tag: s.collection_problems ? "需关注" : null }],
+      ["行情有问题的标的 / 总数", { text: s.quote_problems + " / " + s.quote_codes, tag: s.quote_problems ? "需关注" : null }],
+      ["最近运行回执有问题", { text: String(s.run_problems), tag: s.run_problems ? "需关注" : null }],
       ["预测版本总数", String(s.prediction_versions)],
       ["协议冻结", { text: pv.text, tag: pv.pilot ? "pilot" : null }]
-    ]),
+    ], { stats: true }),
     d.calendar_warnings.length ? MS.notes(d.calendar_warnings.map(function (w) { return "交易日历提示：" + w.status + "，剩余 " + w.calendar_days_left + " 天（覆盖至 " + w.calendar_end + "）"; })) : null
   ]));
 
