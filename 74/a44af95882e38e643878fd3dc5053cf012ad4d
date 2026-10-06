@@ -1,0 +1,65 @@
+mystock2/web/views/fx/view.yaml
+  s_4e5dbfa251c076::t_983190ee6d8e81 4
+mystock2/web/views/pnl/view.yaml
+  s_4e5dbfa251c076::t_983190ee6d8e81 4
+mystock2/web/static/ui.js
+  s_4e5dbfa251c076::t_0c1fdc44f75d3d 327-397,399,401,405-408,412-413,418,422-423,425-436,443-444,452-453,462-470,472,474-475,478,481-482,491-493,497,502,519,521,532,541-545,555,557,560,563-564
+  s_4e5dbfa251c076::t_42643c912f65f3 37-40,43-44,62-64,66-68,74-76,576
+  s_4e5dbfa251c076::t_c011533d0f7ef6 155-156
+mystock2/web/views/scoreboard/view.yaml
+  s_4e5dbfa251c076::t_983190ee6d8e81 4
+mystock2/web/static/app.css
+  s_4e5dbfa251c076::t_c011533d0f7ef6 186,190-191,275-276
+  s_4e5dbfa251c076::t_a868bb404adf98 1-3,6-18,22-32,36-46,50,52-54,56-57,59-62,64-79,81-83,86,88-102,105-106,110,112-136,138,142,144-151,153,155-160,162-165,169-170,173-180,182,185,187-189,192-194,197-198,200-201,203,206-214,217,221-227,229-230,234,237-238,240,246-250,253-254,267,272-274,277-286
+  s_4e5dbfa251c076::t_e9d3730fabcf8b 166-168
+mystock2/web/views/tickets/view.yaml
+  s_4e5dbfa251c076::t_983190ee6d8e81 4
+mystock2/web/static/app.js
+  s_4e5dbfa251c076::t_48edd90777f75e 27,31,33-36,38-45,53,63,75,84-85,94,96-98,100-108,130-131,133-135,145,147-148,150,191
+mystock2/web/static/index.html
+  s_4e5dbfa251c076::t_48edd90777f75e 20-23
+mystock2/web/views/trades/view.yaml
+  s_4e5dbfa251c076::t_983190ee6d8e81 4
+mystock2/web/views/replay/view.yaml
+  s_4e5dbfa251c076::t_983190ee6d8e81 4
+mystock2/web/registry.py
+  s_4e5dbfa251c076::t_983190ee6d8e81 88,200
+mystock2/web/views/stock/view.yaml
+  s_4e5dbfa251c076::t_983190ee6d8e81 4
+mystock2/web/static/theme.js
+  s_4e5dbfa251c076::t_51de5e2f889066 5,14
+mystock2/web/views/holdings/view.yaml
+  s_4e5dbfa251c076::t_983190ee6d8e81 4
+mystock2/web/views/data_status/view.yaml
+  s_4e5dbfa251c076::t_983190ee6d8e81 4
+mystock2/web/views/equity_trend/view.yaml
+  s_4e5dbfa251c076::t_983190ee6d8e81 4
+mystock2/web/app.py
+  s_4e5dbfa251c076::t_983190ee6d8e81 142
+mystock2/web/views/account_overview/view.yaml
+  s_4e5dbfa251c076::t_983190ee6d8e81 4
+tests/unit/test_web_frontend.py
+  s_4e5dbfa251c076::t_34947a30571493 435-467
+mystock2/web/views/forecast/view.yaml
+  s_4e5dbfa251c076::t_983190ee6d8e81 4
+scripts/make_demo_db.py
+  s_4e5dbfa251c076::t_c13e217f1d9220 25-34
+  s_4e5dbfa251c076::t_235b846964db9c 1-24,35-184,187-192
+  s_4e5dbfa251c076::t_b9681daad2e226 185-186
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "74a44af95882e38e643878fd3dc5053cf012ad4d",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
