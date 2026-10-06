@@ -62,7 +62,7 @@ MS.registerPanel("stock", function (root, d, ctx) {
     if (!b.held) { kids.push(h("p", { class: "muted", text: b.message || "当前未持有" })); return kids; }
     kids.push(MS.kv([
       ["账本数量", b.qty],
-      ["券商快照数量", b.qty_match === null ? b.broker_qty : { text: b.broker_qty.text + (b.qty_match ? "（一致）" : "（不一致）"), tag: b.qty_match ? null : "未对账" }],
+      ["券商快照数量", b.qty_match === null ? b.broker_qty : { text: b.broker_qty.text + (b.qty_match ? (b.changed_since_snapshot ? "（快照时一致，之后有成交）" : "（一致）") : "（不一致）"), tag: b.qty_match ? null : "未对账" }],
       ["市值", b.market_value], ["占该币种持仓市值", b.weight],
       ["券商平均成本", b.broker_cost], ["摊薄成本", b.diluted_cost], ["本地移动平均成本", b.local_cost], ["浮动盈亏（按本地成本）", b.unrealized]
     ]));

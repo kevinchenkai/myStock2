@@ -56,6 +56,7 @@ def run(conn, params):
     spos = {}
     if snap is not None:
         spos = {r["code"]: r for r in conn.execute("SELECT * FROM snapshot_position WHERE snapshot_id=?", (snap["snapshot_id"],))}
+    at_snap = project(conn, aid, as_of=snap["captured_at"]).positions if snap is not None else {}     # 一致性按快照时点比较（审核 P1-8）
     trades = load_trades(conn, aid)
     pnl = compute_realized_pnl(trades.trade_events, trades.opening_at)
     roles, role_note = _roles(params.get("_universe_path"))
@@ -81,7 +82,8 @@ def run(conn, params):
             "role": C.text_cell(ROLE_TEXT.get(roles.get(code), "未配置") if roles else "未配置"),
             "qty": C.qty_cell(qty),
             "broker_qty": C.qty_cell(sq) if sq is not None else C.na_cell("没有快照"),
-            "qty_match": None if sq is None else sq == qty,
+            "qty_match": None if sq is None else sq == at_snap.get(code, ZERO),
+            "changed_since_snapshot": sq is not None and at_snap.get(code, ZERO) != qty,
             "price": C.price_cell(px.close, ccy, tag=f"陈旧 {px.session_date}" if px.stale else None, title=f"收盘日 {px.session_date}") if px.close is not None else C.na_cell(px.reason),
             "market_value": C.money_cell(mv, ccy) if mv is not None else C.na_cell(px.reason),
             "weight": weight, **costs,

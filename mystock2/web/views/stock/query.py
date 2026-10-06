@@ -246,9 +246,11 @@ def _position(ctx: Ctx) -> dict:
     prices = {c: (px if c == code else latest_close(ctx.conn, c, ctx.now)) for c in proj.positions}
     mv_by_ccy, missing = concentration(proj.positions, prices)
     sq = dec(sp["qty"]) if sp is not None else None
+    at_snap = project(ctx.conn, aid, as_of=snap["captured_at"]).positions.get(code, ZERO) if snap is not None else ZERO   # 按快照时点比较（审核 P1-8）
     out.update({
         "broker_qty": C.qty_cell(sq) if sq is not None else C.na_cell("没有快照"),
-        "qty_match": None if sq is None else sq == qty,
+        "qty_match": None if sq is None else sq == at_snap,
+        "changed_since_snapshot": sq is not None and at_snap != qty,
         "market_value": C.money_cell(mv, ccy) if mv is not None else C.na_cell(px.reason or "缺行情"),
         "weight": weight_cell(code, mv, mv_by_ccy, missing) if qty != 0 else C.na_cell("账本数量为 0"),
         **cost_cells(code, qty, px, sp, cp),

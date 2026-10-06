@@ -464,3 +464,21 @@ def test_pnl_finance_statistics_yearly_cashflow_by_market(client):
     assert [m["market"] for m in f["markets"]] == ["US", "HK"]                                                 # 固定顺序，币种不相加
     other = get_view(client, "pnl", year="2025")[1]["data"]["finance"]
     assert other["year"] == "2025" and other["markets"] == [] and other["years"] == ["2026"]                     # 该年没有成交
+
+
+def test_p1_8_trade_after_the_snapshot_is_not_reported_as_unreconciled(tmp_path):
+    """审核 P1-8：快照后正常买入 1 股：持仓「与快照一致」按快照时点比较，不报「未对账」，并标出快照后有变动。"""
+    from mystock2.core import db as dbmod
+
+    from .test_web_fixtures import buy, frozen_received
+
+    p = build_demo_db(tmp_path)
+    led = dbmod.connect_writer(p, "ledger")
+    with frozen_received():
+        buy(led, "after", "US.NVDA", 1, 106, "2026-03-10T15:00:00.000000Z")
+    led.close()
+    c = make_app(tmp_path, p).test_client()
+    nv = by(get_view(c, "holdings")[1]["data"]["rows"], "code", "US.NVDA")
+    assert nv["qty"]["text"] == "91" and nv["broker_qty"]["text"] == "90" and nv["qty_match"] is True and nv["changed_since_snapshot"] is True
+    pos = get_view(c, "stock", code="US.NVDA")[1]["data"]["position"]
+    assert pos["qty_match"] is True and pos["changed_since_snapshot"] is True

@@ -5,7 +5,7 @@ MS.registerPanel("holdings", function (root, d) {
     { key: "role", label: "角色" },
     { key: "qty", label: "账本数量", num: true },
     { key: "broker_qty", label: "券商快照数量", num: true, render: function (r) {
-      return r.qty_match === null ? r.broker_qty : { text: r.broker_qty.text + (r.qty_match ? "（一致）" : "（不一致）"), tag: r.qty_match ? null : "未对账" };
+      return r.qty_match === null ? r.broker_qty : { text: r.broker_qty.text + (r.qty_match ? (r.changed_since_snapshot ? "（快照时一致，之后有成交）" : "（一致）") : "（不一致）"), tag: r.qty_match ? null : "未对账" };
     } },
     { key: "price", label: "收盘价", num: true },
     { key: "market_value", label: "市值", num: true },
