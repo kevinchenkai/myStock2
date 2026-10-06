@@ -1,0 +1,22 @@
+tests/unit/test_web_views.py
+  s_4e5dbfa251c076::t_53c046a8f7a3a4 11,315-327
+  s_4e5dbfa251c076::t_8836b9d52e6e3c 328-329
+mystock2/web/views/equity_trend/query.py
+  s_4e5dbfa251c076::t_d0512613a3b00a 82,90,116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "8d0a38626c8b2251987e2e471cf7eb39f9e64ac2",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
