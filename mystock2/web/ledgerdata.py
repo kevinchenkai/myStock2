@@ -36,6 +36,8 @@ def _opening_cost_evidence(conn, account_id, op, events, t0) -> dict[str, Decima
 
     优先用开账快照自带的 average_cost；没有则用开账后**最早**一份带 average_cost 的券商快照，且要求该标的在开账点与该快照之间没有成交
     （否则平均成本已被改变，不能代表开账时的成本）。都没有 → 不给成本（不猜）。
+    开账点与该快照之间登记过拆股／并股时，快照的平均成本是拆股后的每股成本：按拆股因子换回开账时的每股成本
+    （pnl 会在拆股时刻再按因子调整，审核 P1-2）。
     """
     out: dict[str, Decimal] = {}
     if not op or t0 is None:
@@ -44,6 +46,9 @@ def _opening_cost_evidence(conn, account_id, op, events, t0) -> dict[str, Decima
     for e in events:
         if e["event_type"] == "FILL":
             fill_times.setdefault(e["code"], []).append(ensure_utc(e["event_at"]))
+    splits: dict[str, list[tuple]] = {}
+    for r in conn.execute("SELECT code, effective_at, ratio_num, ratio_den FROM corporate_action WHERE kind='SPLIT'"):
+        splits.setdefault(r["code"], []).append((ensure_utc(r["effective_at"]), r["ratio_num"], r["ratio_den"]))
     snaps = conn.execute("SELECT snapshot_id, captured_at FROM account_snapshot WHERE account_id=? AND source!='v1-date-only' AND captured_at>=? "
                          "ORDER BY captured_at, snapshot_id", (account_id, op["opening_at"])).fetchall()
     for s in snaps:
@@ -54,7 +59,11 @@ def _opening_cost_evidence(conn, account_id, op, events, t0) -> dict[str, Decima
                 continue
             if any(t0 < t <= cap for t in fill_times.get(code, ())):
                 continue
-            out[code] = dec(r["average_cost"])
+            cost = dec(r["average_cost"])
+            for eff, num, den in splits.get(code, ()):
+                if t0 < eff <= cap:
+                    cost = cost * Decimal(num) / Decimal(den)
+            out[code] = cost
     return out
 
 
