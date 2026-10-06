@@ -29,7 +29,7 @@ LOG_DIR = REPO_ROOT / "data" / "logs"
 SETTLE_AFTER_CLOSE = timedelta(hours=1)    # 收盘后至少过这么久的成功运行才算「已完成」（成交/费用在收盘后还会陆续入账）
 PHASES = {
     "hk": {"market": "HK", "futu": ("deals,orders,fees,snapshot", True), "forecast": True, "forward": True, "reconcile": True},
-    "us": {"market": "US", "futu": ("deals,orders,fees,snapshot", True), "forecast": True, "reconcile": True},
+    "us": {"market": "US", "futu": ("deals,orders,fees,snapshot", True), "forecast": True, "forward": True, "reconcile": True},
     "pre": {"market": "US", "futu": ("orders,snapshot", False), "forecast": False, "reconcile": False},
 }
 FINAL_BUFFER = timedelta(minutes=30)

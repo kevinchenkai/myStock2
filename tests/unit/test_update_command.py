@@ -59,13 +59,13 @@ def test_us_phase_runs_futu_quotes_hourly_forecast_reconcile_in_order(env):
     cfg, calls, _ = env
     assert up.cmd_update(args(cfg, "us")) == 0
     got = [" ".join(a[a.index("mystock2") + 3:a.index("mystock2") + 5]) for a in calls]       # 跳过 --config <path>
-    assert got == ["collect futu", "collect futu", "collect quotes", "collect quotes", "forecast run", "forecast run", "ledger reconcile"]
+    assert got == ["collect futu", "collect futu", "collect quotes", "collect quotes", "forecast run", "forecast run", "forecast run", "forecast run", "ledger reconcile"]
     futu = calls[0]
     assert futu[futu.index("--what") + 1] == "deals,orders,fees,snapshot" and "--assume-market-currency" in futu and futu[futu.index("--acc-id") + 1] == "7"
     assert calls[1][calls[1].index("--what") + 1] == "cashflow"
     daily = calls[2]
     assert daily[daily.index("--codes") + 1] == "US.NVDA,US.TSLA" and "--fx" in daily and "--hourly" in calls[3]
-    assert [c[c.index("--model") + 1] for c in calls[4:6]] == ["baseline", "lgbm"] and calls[4][calls[4].index("--codes") + 1] == "US.NVDA"   # 预测只对名单内标的
+    assert [c[c.index("--model") + 1] for c in calls[4:6]] == ["baseline", "lgbm"] and "--tag" in calls[6] and calls[4][calls[4].index("--codes") + 1] == "US.NVDA"   # 预测只对名单内标的
 
 
 def test_pre_phase_is_light_and_hk_phase_uses_hk_codes(env):
@@ -78,7 +78,7 @@ def test_pre_phase_is_light_and_hk_phase_uses_hk_codes(env):
     assert any("HK.00700" in a for c in calls for a in c) and not any("US.NVDA" in a for c in calls for a in c)
 
 
-def test_hk_phase_also_writes_forward_forecast_for_last_closed_session_only(env):
+def test_hk_and_us_phases_also_write_forward_forecast_for_last_closed_session_only(env):
     cfg, calls, _ = env
     assert up.cmd_update(args(cfg, "hk")) == 0
     fwd = [c for c in calls if "--tag" in c]
@@ -88,7 +88,11 @@ def test_hk_phase_also_writes_forward_forecast_for_last_closed_session_only(env)
     assert len(rebuilt) == 2                                                                      # 原有 rebuilt 回补仍在
     calls.clear()
     assert up.cmd_update(args(cfg, "us")) == 0
-    assert not any("--tag" in c for c in calls)                                                   # 美股阶段不写前向
+    fwd_us = [c for c in calls if "--tag" in c]                                                   # 美股阶段同样写前向（最近已收盘的美股交易日）
+    assert len(fwd_us) == 2 and all(c[c.index("--start") + 1] == c[c.index("--end") + 1] == "2026-10-05" for c in fwd_us)
+    calls.clear()
+    assert up.cmd_update(args(cfg, "pre")) == 0
+    assert not any("--tag" in c for c in calls)                                                   # 盘前阶段不预测
 
 
 def test_failures_do_not_stop_later_steps_exit_nonzero_and_notify(env, monkeypatch):
@@ -102,7 +106,7 @@ def test_failures_do_not_stop_later_steps_exit_nonzero_and_notify(env, monkeypat
     a = args(cfg, "us")
     a.notify = True
     assert up.cmd_update(a) == 1
-    assert len(seen) == 7                                                                           # 富途失败后公开行情/预测/对账照常执行
+    assert len(seen) == 9                                                                           # 富途失败后公开行情/预测/对账照常执行
     assert notes and "失败 2 步" in notes[0][1]
 
 
@@ -131,20 +135,20 @@ def test_last_final_session_waits_for_close_plus_buffer():
 
 def test_incremental_check_skips_when_target_done_and_fresh_but_reruns_when_stale_failed_or_forced(env, monkeypatch):
     cfg, calls, _ = env
-    assert up.cmd_update(args(cfg, "us")) == 0 and len(calls) == 7                 # 第一次：完整运行并记录成功
+    assert up.cmd_update(args(cfg, "us")) == 0 and len(calls) == 9                 # 第一次：完整运行并记录成功
     calls.clear()
     assert up.cmd_update(args(cfg, "us")) == 0 and calls == []                       # 备份时间点：同一目标已完成 → 不连富途、不拉行情
     a = args(cfg, "us")
     a.force = True
-    assert up.cmd_update(a) == 0 and len(calls) == 7                                 # --force 强制
+    assert up.cmd_update(a) == 0 and len(calls) == 9                                 # --force 强制
     calls.clear()
     monkeypatch.setattr(up, "freshness", lambda *a_, **k: ["US.NVDA: 最新终值 2026-10-02 < 应有 2026-10-05"])
-    assert up.cmd_update(args(cfg, "us")) == 1 and len(calls) == 7                   # 日线陈旧 → 不跳过（且本次仍陈旧 → 退出码 1）
+    assert up.cmd_update(args(cfg, "us")) == 1 and len(calls) == 9                   # 日线陈旧 → 不跳过（且本次仍陈旧 → 退出码 1）
     st = rec(cfg, "us")
     assert st["ok"] is False and st["target"] == "2026-10-05"
     monkeypatch.setattr(up, "freshness", lambda *a_, **k: [])
     calls.clear()
-    assert up.cmd_update(args(cfg, "us")) == 0 and len(calls) == 7                   # 上次失败 → 备份时间点重试，成功后记录
+    assert up.cmd_update(args(cfg, "us")) == 0 and len(calls) == 9                   # 上次失败 → 备份时间点重试，成功后记录
     assert rec(cfg, "us")["ok"] is True
 
 
@@ -152,7 +156,7 @@ def test_success_recorded_too_soon_after_close_does_not_count(env):
     cfg, calls, _ = env
     st = {key(cfg, "us"): {"target": "2026-10-05", "at": "2026-10-05T20:10:00+00:00", "ok": True, "complete": True}}   # 收盘后 10 分钟的成功：成交/费用可能还没到齐
     up.save_state(st)
-    assert up.cmd_update(args(cfg, "us")) == 0 and len(calls) == 7
+    assert up.cmd_update(args(cfg, "us")) == 0 and len(calls) == 9
 
 
 def test_pre_phase_is_once_per_day(env):
@@ -180,7 +184,7 @@ def test_u02_explicit_lookback_is_a_manual_backfill_and_is_validated(env):
     calls.clear()
     a = args(cfg, "us")
     a.lookback = 30
-    assert up.cmd_update(a) == 0 and len(calls) == 7                                 # 不被「已完成」跳过
+    assert up.cmd_update(a) == 0 and len(calls) == 9                                 # 不被「已完成」跳过
     hourly = next(c for c in calls if "--hourly" in c)
     assert hourly[hourly.index("--start") + 1] == "2026-09-05"                        # 小时线跟随回看天数（U-07）
     calls.clear()
@@ -201,10 +205,10 @@ def test_u04_unexpected_errors_and_bad_state_files_are_logged_and_notified(env, 
     cfg, calls, notes = env
     (up.LOG_DIR).mkdir(parents=True, exist_ok=True)
     (up.LOG_DIR / "state.json").write_text("null", encoding="utf-8")
-    assert up.cmd_update(args(cfg, "us")) == 0 and len(calls) == 7                  # 状态文件内容不对：当作没有记录
+    assert up.cmd_update(args(cfg, "us")) == 0 and len(calls) == 9                  # 状态文件内容不对：当作没有记录
     up.save_state({key(cfg, "us"): {"target": "2026-10-05", "ok": True, "complete": True}})       # 缺 at
     calls.clear()
-    assert up.cmd_update(args(cfg, "us")) == 0 and len(calls) == 7
+    assert up.cmd_update(args(cfg, "us")) == 0 and len(calls) == 9
     monkeypatch.setattr(up, "last_final_session", lambda *a_: (_ for _ in ()).throw(up.ConfigError("日历缺失")))
     a = args(cfg, "us")
     a.notify = True
@@ -226,7 +230,7 @@ def test_u09_state_is_per_database(env, tmp_path):
     other = tmp_path / "other.yaml"
     other.write_text(cfg.read_text(encoding="utf-8").replace("x.db", "y.db"), encoding="utf-8")
     calls.clear()
-    assert up.cmd_update(args(other, "us")) == 0 and len(calls) == 7                 # 另一个库：不因前一个库已完成而跳过
+    assert up.cmd_update(args(other, "us")) == 0 and len(calls) == 9                 # 另一个库：不因前一个库已完成而跳过
 
 
 def test_u06_codes_are_universe_current_holdings_and_recent_trades_not_all_history(tmp_path, monkeypatch):

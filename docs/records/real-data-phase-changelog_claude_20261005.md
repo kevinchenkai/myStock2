@@ -129,3 +129,5 @@ CQR 修复后模型版本升为 `lgbm-cqr-v2`，预测页每个模型只取最�
 - **去重**：`record_prediction` 与 `generate` 对前向增加 `existing_forward`——同标的、同数据截至日、同 `model_version`/`feature_version`/参数的前向只留第一条，重复运行返回已有 id、不再写证据快照。参数不同（如教练协议参数的基线）视为另一条，不互相顶替；rebuilt 不受影响。
 - **已知**：教练流程（`coach run`）若与例行更新的基线参数相同，会拿到例行更新先写的那条（输入截止时间略早于教练运行时刻）。
 - 测试：`test_forward_is_written_once_per_code_day_model_params_and_late_runs_do_not_duplicate`、`test_hk_phase_also_writes_forward_forecast_for_last_closed_session_only`；全量测试与 ruff 通过。
+
+**补充（同日）**：`us` 阶段也写前向（最近已收盘的美股交易日，规则同上）。已手动补写 HK 2026-10-06 → 10-07 的前向预测（3 标的 × baseline、lgbm = 6 条，输入截止 14:05 UTC，早于 10-07 开盘 01:30 UTC；数值与同日 rebuilt 一致）；重复运行验证未新增行。**历史前向不能回补**：前向要求「目标日开盘前生成」，过去的日期按规则只能是 rebuilt；US 10-05→10-06 的前向因 10-06 已开盘（13:30 UTC）也已错过。排查「缺的几天」发现 HK lgbm 在 2025-12-24～2026-03-18 缺 40～43 天，原因是半日市成交量为 0（见 OPEN_ITEMS FC-1），不是漏跑，补不回。
