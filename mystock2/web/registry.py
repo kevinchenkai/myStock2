@@ -85,6 +85,7 @@ class ViewSpec:
     run: Callable
     has_panel: bool
     origin: str = "builtin"
+    group: str = "其他"                 # 导航分组（view.yaml 的 group；未写的扩展视图归「其他」）
 
 
 @dataclass(frozen=True)
@@ -196,7 +197,7 @@ def load_view(folder: Path, origin: str = "builtin") -> ViewSpec:
     return ViewSpec(
         id=vid, title=str(meta.get("title", vid)), description=str(meta.get("description", "")), order=float(meta.get("order", 1000)),
         data_mode=mode, stale_after_hours=float(meta.get("stale_after_hours", 72)), params=_parse_params(meta.get("params"), vid),
-        dir=folder, run=run, has_panel=(folder / "panel.js").is_file(), origin=origin)
+        dir=folder, run=run, has_panel=(folder / "panel.js").is_file(), origin=origin, group=str(meta.get("group") or "其他"))
 
 
 def discover_views(dirs: list[Path]) -> tuple[dict[str, ViewSpec], list[ViewProblem]]:

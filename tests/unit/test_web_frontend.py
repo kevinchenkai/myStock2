@@ -432,3 +432,36 @@ def test_table_column_filters_intersect_reset_page_and_work_with_market_filter()
     assert o["options"] == ["方向：全部", "买入（80）", "卖出（40）"]
     assert o["sell"] == [40, "40 / 120 行"] and o["both"] == [10, "10 / 120 行"] and o["reset"] == "120 行"
     assert o["us_buy"] == "40 / 120 行"                                              # 奇数 i（美股）且 i%3≠0：60 − 20 = 40
+
+
+# ---------------------------------------------------------------- UI 升级（2026-10-06）
+def test_views_carry_a_nav_group_and_the_shell_renders_grouped_nav_and_page_head(tmp_path):
+    from .test_web_fixtures import make_app
+    js = make_app(tmp_path).test_client().get("/api/views").get_json()
+    groups = {v["id"]: v["group"] for v in js["views"]}
+    assert groups["account_overview"] == groups["trades"] == "账户" and groups["tickets"] == groups["replay"] == "教练" and groups["data_status"] == "系统"
+    app = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert "nav-group" in app and "page-title" in app and "fresh-strip" in app and "state empty" in app
+    assert 'id="page-title"' in HTML and 'id="page-desc"' in HTML
+
+
+@pytest.mark.skipif(node is None, reason="需要 node")
+def test_side_and_status_text_render_as_pills_without_red_green_and_charts_unbind_when_removed():
+    script = FAKE_DOM + r"""
+    const out = {};
+    out.buy = MS.cell({ text: '买入' }).className; out.sell = MS.cell('卖出').className; out.plain = MS.cell({ text: '买入', tag: 'x' }).className;
+    let added = 0, removed = 0;
+    ctx.window.addEventListener = () => { added++; }; ctx.window.removeEventListener = () => { removed++; };
+    const host = new El('div');
+    MS.lineChart(host, { xs: ['a','b'], series: [{ name: 's', color: '#000', points: [{y:'1'},{y:'2'}] }] });
+    out.added = added;
+    console.log(JSON.stringify(out));
+    """
+    r = subprocess.run([node, "-e", script, str(STATIC / "ui.js")], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    import json
+    o = json.loads(r.stdout.strip())
+    assert o["buy"] == "pill pill-buy" and o["sell"] == "pill pill-sell" and "pill" not in o["plain"]
+    assert o["added"] == 1                                          # 没有 ResizeObserver 时退化为一个 resize 监听（元素移除后解绑）
+    pills = CSS[CSS.index(".pill-buy"):CSS.index(".pill-ok")]
+    assert "var(--up)" not in pills and "var(--down)" not in pills   # 买卖徽标不用红绿

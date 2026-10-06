@@ -1,6 +1,7 @@
 title: 我的持仓
 description: 持仓数量、三类成本并列（券商成本／摊薄成本／本地移动平均成本，互不覆盖）、市值、集中度、角色与对账状态。
 order: 20
+group: 账户
 data_mode: cached
 stale_after_hours: 72
 params:

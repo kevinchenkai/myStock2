@@ -139,7 +139,7 @@ def _hostname(host: str) -> str:
 
 def _public(e: registry.ViewEntry) -> dict:
     s = e.spec
-    return {"id": s.id, "title": s.title, "description": s.description, "hidden": e.hidden, "data_mode": s.data_mode, "has_panel": s.has_panel,
+    return {"id": s.id, "title": s.title, "description": s.description, "group": s.group, "hidden": e.hidden, "data_mode": s.data_mode, "has_panel": s.has_panel,
             "params": [dict(p.public(), default=e.defaults.get(p.name, p.default)) for p in s.params.values()]}
 
 

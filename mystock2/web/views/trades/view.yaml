@@ -1,6 +1,7 @@
 title: 交易流水
 description: 成交流水（账本中的有效版本）：币种、费用及其归属、来源数、是否被更正；开账日前的成交只作描述。
 order: 30
+group: 账户
 data_mode: cached
 stale_after_hours: 72
 params:

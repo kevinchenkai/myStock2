@@ -24,12 +24,25 @@
     });
   }
 
+  /* 导航按 view.yaml 的 group 分组（账户 / 教练 / 系统 / 其他），组的顺序＝组内第一个视图的顺序；窄屏单行横向滚动。 */
   function renderNav(current) {
     var nav = $("nav");
     nav.textContent = "";
+    var groups = [], byName = {};
     state.views.filter(function (v) { return !v.hidden; }).forEach(function (v) {
-      nav.appendChild(h("a", { href: "#/" + encodeURIComponent(v.id), text: v.title, "aria-current": v.id === current ? "page" : null, title: v.description || null }));
+      var g = v.group || "其他";
+      if (!byName[g]) { byName[g] = h("div", { class: "nav-group", role: "group", "aria-label": g }, h("span", { class: "nav-label", text: g })); groups.push(byName[g]); }
+      var a = h("a", { href: "#/" + encodeURIComponent(v.id), text: v.title, "aria-current": v.id === current ? "page" : null, title: v.description || null });
+      byName[g].appendChild(a);
     });
+    groups.forEach(function (g) { nav.appendChild(g); });
+    var cur = nav.querySelector ? nav.querySelector('a[aria-current="page"]') : null;
+    if (cur && cur.scrollIntoView && nav.scrollWidth > nav.clientWidth) { try { cur.scrollIntoView({ block: "nearest", inline: "center" }); } catch (e) { /* 旧浏览器 */ } }
+  }
+  function shortLabel(p) {                                          // 参数用中文短标签（description 的第一段），完整说明放 title
+    var d = p.description || "";
+    var s = d.split("（")[0].split("，")[0].trim();
+    return s && s.length <= 14 ? s : (d ? d.slice(0, 12) : p.name);
   }
 
   function renderParams(view, payload, params) {
@@ -37,7 +50,7 @@
     box.textContent = "";
     var data = payload && payload.data;
     var applied = (payload && payload.params) || {};
-    function field(name, label, control) { return h("label", null, [label, control]); }
+    function field(name, label, control, title) { return h("label", { title: title || null }, [label, control]); }
     (view.params || []).forEach(function (p) {
       var cur = params[p.name] !== undefined ? params[p.name] : (applied[p.name] !== undefined ? applied[p.name] : p.default);
       var ctl;
@@ -47,7 +60,7 @@
           return h("option", { value: c, selected: c === data.symbol ? true : null, text: MS.codeLabel(c) });
         })));
         ssel.addEventListener("change", function () { var np = Object.assign({}, params); np.symbol = ssel.value; go(view.id, np); });
-        box.appendChild(field("symbol", "标的", ssel));
+        box.appendChild(field("symbol", "标的", ssel, "symbol"));
         return;
       }
       if (p.name === "symbol") return;                                     // 数据到达前不显示（选项来自数据）
@@ -59,7 +72,7 @@
         ctl = h("input", { value: cur === null || cur === undefined ? "" : cur, type: p.type === "int" ? "number" : "text", size: 10, "aria-label": p.name });
       }
       ctl.addEventListener("change", function () { var np = Object.assign({}, params); np[p.name] = ctl.value; go(view.id, np); });
-      box.appendChild(field(p.name, p.description ? p.name + "（" + p.description.split("（")[0] + "）" : p.name, ctl));
+      box.appendChild(field(p.name, shortLabel(p), ctl, p.name + (p.description ? "：" + p.description : "")));
     });
     if (data && data.accounts && data.accounts.length > 1) {
       var sel = h("select", { "aria-label": "account" }, data.accounts.map(function (a) { return h("option", { value: a, selected: a === data.account_id ? true : null, text: a }); }));
@@ -68,6 +81,8 @@
     }
   }
 
+  /* 新鲜度：页头下一行的徽标＋一句话（新鲜/陈旧/未知＋采集时间）；数据模式、事件/采集时间与各来源收进可展开的「数据来源」；
+     口径说明（header.notes）始终可见（小字），不藏起来——它们是诚实披露。 */
   function freshCard(header) {
     var s = header.staleness || {}, kind = s.label === "新鲜" ? "fresh-ok" : s.label === "陈旧" ? "fresh-stale" : "fresh-unknown";
     var grid = h("div", { class: "fresh" }, [
@@ -76,14 +91,21 @@
       h("div", null, [h("div", { class: "k", text: "采集时间" }), h("div", { class: "v", text: MS.fmtTime(header.collected_at) })]),
       h("div", null, [h("div", { class: "k", text: "陈旧度" }), h("div", { class: "v" }, MS.badge(s.label || "未知", kind))]),
     ]);
-    var kids = [grid, h("p", { class: "muted small", text: s.text || "" })];
+    var panel = [grid, h("p", { class: "muted small", text: s.text || "" })];
     if (header.sources && header.sources.length) {
-      kids.push(h("details", { class: "src" }, [h("summary", { text: "各来源时间（" + header.sources.length + "）" }),
-        MS.table([{ key: "name", label: "来源" }, { key: "event_at", label: "事件时间", render: function (r) { return MS.fmtTime(r.event_at); } },
-          { key: "collected_at", label: "采集时间", render: function (r) { return MS.fmtTime(r.collected_at); } }, { key: "text", label: "陈旧度" }], header.sources)]));
+      panel.push(MS.table([{ key: "name", label: "来源" }, { key: "event_at", label: "事件时间", render: function (r) { return MS.fmtTime(r.event_at); } },
+        { key: "collected_at", label: "采集时间", render: function (r) { return MS.fmtTime(r.collected_at); } }, { key: "text", label: "陈旧度" }], header.sources,
+        { market: false, sortable: false, paginate: false }));
     }
-    if (header.notes && header.notes.length) kids.push(MS.notes(header.notes));
-    return h("div", { class: "card" }, kids);
+    var strip = h("div", { class: "fresh-strip" }, [
+      MS.badge(s.label || "未知", kind),
+      h("span", { text: (header.data_mode_label || "数据") + " · 采集 " + MS.fmtTime(header.collected_at) }),
+      h("span", { class: "sep", text: "|" }),
+      h("details", { class: "src" }, [h("summary", { text: "数据来源与时间" + (header.sources && header.sources.length ? "（" + header.sources.length + "）" : "") }),
+        h("div", { class: "src-panel" }, panel)])
+    ]);
+    var notes = header.notes && header.notes.length ? h("ul", { class: "head-notes" }, header.notes.map(function (t) { return h("li", { text: t }); })) : null;
+    return h("div", { class: "fresh-wrap" }, [strip, notes]);
   }
   function renderFresh(header) {
     var box = $("fresh");
@@ -105,8 +127,12 @@
     return loaded[id];
   }
 
+  /* 状态：empty＝正常的「还没有数据」（如尚无比较批次）；unavailable＝缺数据；error＝出错。三者样式不同。 */
+  var EMPTY_CODES = ["no_batch", "no_predictions", "no_account", "no_events", "no_prediction", "no_flow", "no_profile"];
   function showState(root, kind, title, text, code) {
-    root.appendChild(h("div", { class: "state " + (kind === "error" ? "error" : "") }, [h("strong", { text: title }), h("div", { text: text }), code ? h("div", { class: "small", text: "状态码：" + code }) : null]));
+    if (kind === "unavailable" && EMPTY_CODES.indexOf(code) >= 0) kind = "empty";
+    var cls = kind === "error" ? "state error" : kind === "empty" ? "state empty" : "state";
+    root.appendChild(h("div", { class: cls }, [h("strong", { text: kind === "empty" ? "暂无数据" : title }), h("div", { text: text }), code ? h("div", { class: "small", text: "状态码：" + code }) : null]));
   }
 
   var seq = 0;
@@ -116,10 +142,12 @@
     var view = state.byId[route.id], root = $("panel");
     renderNav(route.id);
     root.textContent = ""; $("fresh").textContent = ""; $("params").textContent = "";
-    if (!view) { showState(root, "unavailable", "没有这个视图", route.id || "（空）", "unknown_view"); return; }
+    if (!view) { $("page-title").textContent = "没有这个视图"; $("page-desc").textContent = ""; showState(root, "unavailable", "没有这个视图", route.id || "（空）", "unknown_view"); return; }
     document.title = view.title + " · myStock2";
+    $("page-title").textContent = view.title;
+    $("page-desc").textContent = view.description || "";
     renderParams(view, null, route.params);
-    root.appendChild(h("p", { class: "muted", text: "加载中…" }));
+    root.appendChild(MS.loading());
     var qs = new URLSearchParams(route.params).toString();
     getJSON("/api/v/" + encodeURIComponent(view.id) + (qs ? "?" + qs : "")).then(function (payload) {
       if (my !== seq) return;
@@ -160,7 +188,7 @@
   function openStock(code, opener) {
     closeStock();
     var my = ++stockSeq;
-    var body = h("div", { class: "modal-body" }, h("p", { class: "muted", text: "加载中…" }));
+    var body = h("div", { class: "modal-body" }, MS.loading());
     var title = h("h2", { id: "stock-modal-title", text: MS.codeLabel(code) });
     var closeBtn = h("button", { type: "button", class: "btn modal-close", "aria-label": "关闭详情", text: "关闭 ✕" });
     var dialog = h("div", { class: "modal", role: "dialog", "aria-modal": "true", "aria-labelledby": "stock-modal-title" }, [h("div", { class: "modal-head" }, [title, closeBtn]), body]);

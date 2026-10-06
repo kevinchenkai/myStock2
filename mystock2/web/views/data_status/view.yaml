@@ -1,6 +1,7 @@
 title: 数据状态
 description: 各来源/标的最近一次成功采集与失败/空/陈旧、行情缺口交易日、预测版本数量与最新目标日、最近运行回执、账户快照、协议冻结状态（是否 pilot）。
 order: 100
+group: 系统
 data_mode: daily
 stale_after_hours: 96
 params:

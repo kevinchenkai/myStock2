@@ -1,6 +1,7 @@
 title: 盈亏
 description: 已实现交易盈亏（移动平均成本法，费用后）；依赖开账日前成本的部分标「估算」或「不可用」；成交净现金流单独命名，不叫盈利。
 order: 40
+group: 账户
 data_mode: cached
 stale_after_hours: 72
 params:

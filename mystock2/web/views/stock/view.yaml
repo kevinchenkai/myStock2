@@ -1,6 +1,7 @@
 title: 股票详情
 description: 单只标的的详情（弹窗里点代码打开，也可直接访问 #/stock?code=US.NVDA）：行情与 52 周高低、持仓与成本、价格走势与买卖标记、最近成交与已实现盈亏、股息、订单（意图）、资金流向、事后重建的预测区间、档案指标。各块来源缺失时各自显示「不可用」。
 order: 120
+group: 账户
 data_mode: daily
 stale_after_hours: 72
 params:

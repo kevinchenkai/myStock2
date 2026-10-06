@@ -2,7 +2,7 @@
 (function () {
   var KEY = "mystock2.theme";
   var ORDER = ["auto", "light", "dark"];
-  var LABEL = { auto: "主题：跟随系统", light: "主题：浅色", dark: "主题：深色" };
+  var LABEL = { auto: "◐ 跟随系统", light: "☀ 浅色", dark: "☾ 深色" };
   function read() {
     try { var v = window.localStorage.getItem(KEY); return ORDER.indexOf(v) >= 0 ? v : "auto"; } catch (e) { return "auto"; }
   }
@@ -11,7 +11,7 @@
     var root = document.documentElement;
     if (v === "light" || v === "dark") { root.setAttribute("data-theme", v); } else { root.removeAttribute("data-theme"); }
     var btn = document.getElementById("theme-btn");
-    if (btn) { btn.textContent = LABEL[v]; btn.setAttribute("aria-label", LABEL[v] + "（点击切换）"); }
+    if (btn) { btn.textContent = LABEL[v]; btn.setAttribute("aria-label", "主题：" + LABEL[v].slice(2) + "（点击切换）"); btn.setAttribute("title", "主题（点击切换：跟随系统 / 浅色 / 深色）"); }
   }
   var current = read();
   apply(current);

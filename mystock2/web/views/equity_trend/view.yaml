@@ -1,6 +1,7 @@
 title: 资产趋势
 description: 三条曲线分开命名——持仓市值、账户权益、剔除外部资金流的收益；缺行情的日子显式标缺口，不连线；入金当天不显示为收益。
 order: 50
+group: 账户
 data_mode: daily
 stale_after_hours: 72
 params:

@@ -1,6 +1,7 @@
 title: 复盘
 description: 逐笔成交的复盘卡（事实/证据/诊断/结果/缺口分栏，无意图记录则写「动机未记录」）、行为指标（含样本量，样本不足显示「不足」）、诊断回合（FIFO，诊断口径，不是账本收益）。
 order: 90
+group: 教练
 data_mode: daily
 stale_after_hours: 72
 params:
