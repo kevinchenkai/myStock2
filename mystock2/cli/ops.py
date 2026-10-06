@@ -838,8 +838,27 @@ def cmd_forecast_run(args) -> int:
     return 1 if ok == 0 and any(v["unavailable"] for v in stats.values()) else 0      # 全部不可用不能报成功（审核 U-08）
 
 
+def cmd_review_deal(args) -> int:
+    """复盘卡 AI 评价：调用本机 Codex，结果写入缓存（trade_review）。已有缓存且未 --refresh 时不调模型。"""
+    from mystock2.review.service import request_review
+
+    cfg = load_config(args.config)
+    account = args.account_id or (cfg.raw.get("update") or {}).get("account_id") or "main"
+    res = request_review(cfg.db_path, cfg.raw, str(account), args.deal_id, refresh=args.refresh)
+    if res.get("review"):
+        res["review"] = {k: v for k, v in res["review"].items() if k != "response_text"} | {"chars": len(res["review"].get("response_text") or "")}
+    print(json.dumps(res, ensure_ascii=False, indent=2))
+    return 0 if res.get("state") in ("ok", "running") else 1
+
+
 def register(sub) -> None:
     ld = {"help": "本地私有配置目录（默认 config/local/）"}
+    rv = sub.add_parser("review", help="复盘卡 AI 评价（本机 Codex）").add_subparsers(dest="rvcmd", required=True)
+    rd = rv.add_parser("deal", help="评价一笔成交；有缓存直接返回，--refresh 重新请求")
+    rd.add_argument("--deal-id", required=True)
+    rd.add_argument("--account-id", help="缺省取 config.yaml 的 update.account_id")
+    rd.add_argument("--refresh", action="store_true", help="忽略缓存，重新请求模型并新增一行")
+    rd.set_defaults(fn=cmd_review_deal)
     fc = sub.add_parser("forecast", help="预测留档").add_subparsers(dest="fcmd", required=True)
     fr = fc.add_parser("run", help="对区间内每个交易日生成并留档次日预测（历史区间为 rebuilt）")
     for a_, kw in (("--start", {"required": True}), ("--end", {"required": True}), ("--codes", {"help": "逗号分隔；缺省为名单内全部"}),

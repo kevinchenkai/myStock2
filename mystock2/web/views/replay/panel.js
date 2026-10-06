@@ -10,7 +10,9 @@ MS.registerPanel("replay", function (root, d) {
     outItems.push("持有窗口内最大不利变动：" + oc.max_adverse.text);
     outItems.push("持有窗口内最大有利变动：" + oc.max_favorable.text);
     outItems.push("库存：成交前 " + x.inventory.before.text + " → 成交后 " + x.inventory.after.text);
-    var content = MS.card(null, [
+    var aiBox = h("div");
+    MS.loadPanel("trade_review").then(function () { MS.reviewWidget(aiBox, r.deal_id); }, function (e) { aiBox.appendChild(h("p", { class: "notice", text: "AI 评价无法加载：" + (e && e.message || e) })); });
+    var content = h("div", null, [MS.card("AI 评价 · 本机 Codex", aiBox), MS.card(null, [
       h("div", { class: "cols" }, [
         column("事实", x.facts, "无"),
         column("证据 · 当时已有", x.evidence, "无"),
@@ -19,7 +21,7 @@ MS.registerPanel("replay", function (root, d) {
         column("缺口", x.gaps, "无缺口")
       ]),
       MS.note("诊断与结果是事后口径；不定义「当时应成交的最优价」。")
-    ]);
+    ])]);
     MS.openDialog("复盘卡 · " + r.side_text + " " + MS.codeLabel(r.code) + " · " + r.date, content);       // 悬浮弹窗：Esc / 点背景 / 关闭按钮可关
   }
 

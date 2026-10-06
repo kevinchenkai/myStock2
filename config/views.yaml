@@ -32,3 +32,5 @@ views:
   - id: data_status
   - id: stock               # 股票详情（弹窗里点代码打开；只读；各块独立，来源缺失只让该块「不可用」）
     hidden: true
+  - id: trade_review        # 复盘卡的 AI 评价缓存（复盘弹窗里读取；只读）
+    hidden: true

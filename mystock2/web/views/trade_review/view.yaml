@@ -1,0 +1,15 @@
+title: 复盘卡 AI 评价
+description: 某一笔成交的 AI 评价缓存（复盘卡弹窗里读取）：已有评价、是否在生成、输入是否已变化。只读；请求与刷新由受控 CLI 完成（页面经 POST /api/review/deal 拉起），Web 不写库。
+order: 130
+group: 账户
+data_mode: daily
+stale_after_hours: 720
+params:
+  deal_id:
+    type: str
+    default: ""
+    description: 成交 id（必填）
+  account:
+    type: str
+    default: ""
+    description: 账户 id（留空＝第一个账户）

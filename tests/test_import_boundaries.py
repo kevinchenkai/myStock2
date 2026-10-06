@@ -15,6 +15,7 @@ ALLOWED = {
     "coach": {"core", "instruments", "ledger", "market", "forecast"},
     "scoreboard": {"core", "instruments", "ledger", "market", "coach"},
     "replay": {"core", "instruments", "ledger", "market", "coach", "scoreboard"},
+    "review": {"core", "instruments", "ledger", "market", "replay"},   # 复盘卡 AI 评价（调本机 Codex）；web 不得依赖它，只经 replay/review_cache 读缓存
     "assistant": {"core", "instruments", "coach"},   # 不得依赖 ledger（无账本写接口）
     "web": {"core", "instruments", "ledger", "market", "coach", "scoreboard", "replay"},   # 不得依赖 forecast/collectors/assistant
     "cli": None,   # 入口：可依赖任何子包

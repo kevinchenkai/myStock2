@@ -117,3 +117,7 @@ CQR 修复后模型版本升为 `lgbm-cqr-v2`，预测页每个模型只取最�
 ## 12 后记：Web 细节调整（2026-10-06）
 
 负责人反馈四条（去掉陈旧状态、括号清理、翻页默认 30 且表上下各一条、复盘卡改弹窗）。详见 [Web 细节调整回执](webui-polish_claude_20261006.md)，供 Opus 审核。另：LGBM v2 历史已重跑（§11）。
+
+## 13 后记：复盘卡 AI 评价（2026-10-06）
+
+复盘卡弹窗新增「AI 评价」：本机 Codex（gpt-6.1-sol，medium）对每笔成交做评价，缓存到 `trade_review`（迁移 0013），可刷新。设计、发送清单、提示词与回执见 [trade-review-ai](trade-review-ai_claude_20261006.md)。AGENTS.md 增加「唯一 POST 例外」，供 Opus 审核。

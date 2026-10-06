@@ -293,3 +293,13 @@ body.modal-open { overflow: hidden; }
   .kv.stats .v { font-size: 17px; }
   .kv.stats .v.long { font-size: 14px; }
 }
+
+/* 复盘卡 AI 评价 */
+.ai-md h4.ai-h { margin: 12px 0 4px; font-size: 14px; }
+.ai-md h4.ai-h:first-child { margin-top: 0; }
+.ai-md p { margin: 4px 0; }
+.ai-md p.ai-scores { font-weight: 600; }
+.ai-md ul.ai-list { margin: 2px 0 6px; padding-left: 20px; }
+.ai-md ul.ai-list li { margin: 2px 0; }
+.ai-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-top: 10px; }
+.ai-busy { margin: 0 0 6px; }

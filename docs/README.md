@@ -17,6 +17,7 @@
 | [真实首跑回执](records/first-real-run_claude_20261005.md) | OpenD 只读采集、V1 导入、重建与核对 |
 | [全仓审核报告](records/code-review-20261005_claude_20261005.md) · [Web UI 升级回执](records/webui-upgrade-20261005_claude_20261005.md) | 2026-10-05/06 审核（P0/P1 全部修复）与界面升级 |
 | [Web 细节调整回执（负责人反馈）](records/webui-polish_claude_20261006.md) | 2026-10-06：撤回行情落后即陈旧、翻页默认 30 条上下各一、括号清理、复盘卡弹窗 |
+| [复盘卡 AI 评价（设计与提示词）](records/trade-review-ai_claude_20261006.md) | 2026-10-06：本机 Codex 评价每笔成交，缓存/刷新，脱敏发送清单，Web 唯一 POST |
 | [真实数据启动指南](guides/real-data-startup_claude_20261005.md) · [切换运行手册](guides/cutover-runbook_claude_20261005.md) | 从合成到真实前向观察；V1→V2 端口切换 |
 | [COLLABORATION.md](COLLABORATION.md) | 协作与多模型评审约定 |
 

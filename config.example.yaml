@@ -41,3 +41,10 @@ update:
 # reconcile:
 #   known_cash_diffs:
 #     USD: "-13.84"
+
+# 复盘卡 AI 评价（调用本机 Codex，订阅登录，不走 API Key）。默认值如下；不需要时整段可省略。
+# review:
+#   model: gpt-6.1-sol
+#   effort: medium
+#   timeout_s: 900
+#   codex_bin: /Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex   # 缺省自动查找

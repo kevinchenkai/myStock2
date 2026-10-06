@@ -240,6 +240,16 @@
     });
   }
   MS.openStock = openStock;
+  MS.getJSON = getJSON;
+  MS.loadPanel = loadPanel;
+  /* 唯一的 POST：拉起复盘卡 AI 评价（服务端只校验后启动 CLI）；带自定义头，浏览器跨站表单发不出这个头。 */
+  MS.postJSON = function (url, body) {
+    return fetch(url, { method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json", "X-MyStock2-Action": "review" }, body: JSON.stringify(body || {}), cache: "no-store" })
+      .then(function (r) {
+        return r.json().catch(function () { return { status: "error", error: { code: "bad_response", message: "服务器返回了无法解析的内容（HTTP " + r.status + "）" } }; })
+          .then(function (j) { j._http = r.status; return j; });
+      });
+  };
   /* 在弹窗里显示一块已构造好的内容（复盘卡等）：MS.openDialog(标题, 节点, 触发元素)。 */
   MS.openDialog = function (titleText, node, opener) { var sh = openShell(titleText, opener || document.activeElement); sh.body.textContent = ""; sh.body.appendChild(node); };
 

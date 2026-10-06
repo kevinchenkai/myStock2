@@ -55,12 +55,18 @@ def side_files(path: Path):
     return {p.name: p.stat().st_size for p in path.parent.iterdir() if p.name.startswith(path.name + "-")}
 
 
+REVIEW_POST = "/api/review/deal"
+
+
 def all_get_urls(app):
     """遍历 url_map 的每条路由，把 <view_id> 展开成每个视图，返回 (url, query) 列表。"""
     state = app.extensions["mystock2"]
     urls = []
     for rule in app.url_map.iter_rules():
-        assert rule.methods - {"OPTIONS", "HEAD"} <= {"GET"}, f"{rule.rule} 允许了写方法：{rule.methods}"
+        allowed = {"GET", "POST"} if rule.rule == REVIEW_POST else {"GET"}          # 唯一例外：拉起 CLI 的 POST（本身不写库，见 test_review_post_*）
+        assert rule.methods - {"OPTIONS", "HEAD"} <= allowed, f"{rule.rule} 允许了写方法：{rule.methods}"
+        if rule.rule == REVIEW_POST:
+            continue
         if rule.endpoint == "static":
             urls += [("/static/app.css", {}), ("/static/ui.js", {}), ("/static/nope.js", {})]
         elif "view_id" in rule.arguments:

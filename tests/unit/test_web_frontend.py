@@ -499,3 +499,55 @@ def test_replay_card_opens_in_a_popup_and_columns_use_hints_instead_of_parenthes
     ui = (STATIC / "ui.js").read_text(encoding="utf-8")
     assert "c.hint" in ui                                                         # 列的补充说明放进表头 tooltip
     assert "执行质量（区间位置）" not in panel
+
+
+def test_review_widget_requests_once_when_no_cache_then_shows_cached_text_and_refresh_posts():
+    script = r"""
+    const vm = require('vm'), fs = require('fs');
+    class El {
+      constructor(t){ this.tag=t; this.children=[]; this.attrs={}; this.listeners={}; this.className=''; this._text=''; this.nodeType=1; this.value=''; this.parentNode=null; }
+      setAttribute(k,v){ this.attrs[k]=v; } appendChild(c){ c.parentNode=this; this.children.push(c); return c; }
+      addEventListener(e,f){ (this.listeners[e]=this.listeners[e]||[]).push(f); }
+      set textContent(v){ this._text=String(v); this.children=[]; } get textContent(){ return this._text + this.children.map(c=>c.textContent).join(''); }
+      click(){ (this.listeners.click||[]).forEach(f=>f({target:this})); }
+      find(pred, out=[]){ if(pred(this)) out.push(this); this.children.forEach(c=>c.find&&c.find(pred,out)); return out; }
+    }
+    const store = {}; const timers = [];
+    const ctx = { window: { localStorage: { getItem:k=>store[k]||null, setItem:(k,v)=>{store[k]=v;} } }, console, Date, Math, JSON, String, Array, Promise,
+      setTimeout: (f)=>{ timers.push(f); return timers.length; }, clearTimeout(){},
+      document: { createElement: t => new El(t), createElementNS: (n,t) => new El(t), createTextNode: s => { const e=new El('#text'); e._text=String(s); return e; }, body: { contains: () => true }, head: new El('head') } };
+    vm.createContext(ctx);
+    vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), ctx);
+    const MS = ctx.window.MS; ctx.MS = MS;
+    // 服务端状态机：none → (POST) → running → ok
+    let server = { state: 'none', review: null, error: null, stale: false, history_count: 0 };
+    const posts = [];
+    MS.getJSON = url => Promise.resolve({ status: 'ok', data: Object.assign({ deal_id: 'd1', running_since: null }, server) });
+    MS.postJSON = (url, body) => { posts.push(body); server = { state: 'running', review: null, error: null, stale: false, history_count: 0 }; return Promise.resolve({ _http: 202, state: 'running' }); };
+    vm.runInContext(fs.readFileSync(process.argv[2], 'utf8'), ctx);
+    const host = new El('div');
+    const tick = async () => { for (let i = 0; i < 5; i++) await Promise.resolve(); };
+    const out = {};
+    MS.reviewWidget(host, 'd1');
+    (async () => {
+      await tick(); out.posts1 = posts.slice();                                   // 没有缓存：自动请求一次
+      out.busy = host.textContent.includes('正在');
+      server = { state: 'ok', stale: true, history_count: 1, error: null, review: { text: '## 结论\n减仓有依据\n- **做得好**：只减半\n过程评分：3/5 ｜ 结果评分：3/5', model: 'gpt-6.1-sol', effort: 'medium', finished_at: '2026-10-06T12:34:00.000000Z', duration_s: 35 } };
+      timers.shift()(); await tick();                                             // 下一次轮询：拿到评价
+      out.text = host.textContent;
+      out.h4 = host.find(e=>e.tag==='h4').map(e=>e.textContent);
+      out.strong = host.find(e=>e.tag==='strong').map(e=>e.textContent);
+      out.stale = host.textContent.includes('输入已变化');
+      const refresh = host.find(e=>e.tag==='button').filter(b=>b.textContent==='刷新评价')[0];
+      refresh.click(); await tick(); out.posts2 = posts.slice();                  // 刷新：带 refresh=true
+      console.log(JSON.stringify(out));
+    })();
+    """
+    r = subprocess.run([node, "-e", script, str(STATIC / "ui.js"), str(STATIC.parent / "views" / "trade_review" / "panel.js")], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    import json
+    o = json.loads(r.stdout.strip())
+    assert o["posts1"] == [{"deal_id": "d1", "refresh": False}] and o["busy"] is True
+    assert "减仓有依据" in o["text"] and o["h4"] == ["结论"] and o["strong"] == ["做得好"]          # Markdown 只渲染标题/列表/粗体，用 DOM 节点
+    assert o["stale"] is True and "已缓存" in o["text"]
+    assert o["posts2"][-1] == {"deal_id": "d1", "refresh": True}

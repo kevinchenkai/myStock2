@@ -3,18 +3,24 @@
 - 只通过 `core.db.connect_ro` 打开数据库（`mode=ro`），**不使用任何写连接**；
 - 统一路由 `GET /api/v/<view_id>`：返回 `{status, header（新鲜度）, data, ...}`；
 - 只允许回环地址监听，且校验 Host 头（防 DNS 重绑定）；
+- **唯一的 POST**：`POST /api/review/deal`（复盘卡「AI 评价」的请求/刷新）。它**不写库、不调模型**，只校验后拉起受控 CLI
+  `mystock2 review deal`（独立进程，持有 `review` 写权限，把评价写进缓存表）；Web 进程本身仍只有只读连接；
 - 库不存在/未迁移/个别数据缺失都返回业务状态（status=unavailable），页面显示原因，不崩溃；
 - 前端是原生 JS 静态文件，无 CDN；严格的 CSP 禁止外部资源与内联脚本。
 """
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
+import subprocess
+import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlparse
 
 from flask import Flask, Response, jsonify, request, send_file
 from flask.json.provider import DefaultJSONProvider
@@ -23,6 +29,7 @@ from mystock2.core import db as dbmod
 from mystock2.core.config import REPO_ROOT, Config, ConfigError, is_loopback
 from mystock2.core.money import to_db
 from mystock2.core.timeutil import iso_utc, utc_now
+from mystock2.replay import review_cache
 from mystock2.web import names, registry
 from mystock2.web.common import ViewUnavailable, build_header
 
@@ -130,7 +137,57 @@ def create_app(config: Config, *, extra_views_dirs: list[Path] | tuple[Path, ...
             return _err(404, "no_panel", f"没有面板脚本：{view_id}")
         return send_file(entry.spec.dir / "panel.js", mimetype="application/javascript")
 
+    @app.post("/api/review/deal")
+    def api_review_deal() -> tuple[Response, int] | Response:
+        """拉起 `mystock2 review deal`（后台进程）。防跨站：必须带自定义头、同源、回环 Host。"""
+        if request.headers.get("X-MyStock2-Action") != "review":
+            return _err(403, "bad_request", "缺少请求头 X-MyStock2-Action")
+        origin = request.headers.get("Origin")
+        if origin and urlparse(origin).netloc != request.host:
+            return _err(403, "bad_origin", "只接受同源请求")
+        if request.headers.get("Sec-Fetch-Site") not in (None, "same-origin", "none"):
+            return _err(403, "bad_origin", "只接受同源请求")
+        body = request.get_json(silent=True) or {}
+        deal_id, refresh = str(body.get("deal_id") or "").strip(), bool(body.get("refresh"))
+        if not re.fullmatch(r"[A-Za-z0-9_.:\-]{1,64}", deal_id):
+            return _err(400, "bad_param", "deal_id 不合法")
+        try:
+            conn = dbmod.connect_ro(state.config.db_path)
+        except dbmod.DbError:
+            return _err(503, "db_missing", "库不存在，请先 db migrate")
+        try:
+            acct = conn.execute("SELECT account_id FROM account ORDER BY account_id LIMIT 1").fetchone()
+            account = str(body.get("account") or "").strip() or (acct["account_id"] if acct else "")
+            if not conn.execute("SELECT 1 FROM ledger_event WHERE account_id=? AND ref_deal_id=? AND event_type='FILL' LIMIT 1", (account, deal_id)).fetchone():
+                return _err(404, "no_such_deal", "找不到这笔成交")
+            last, ok = review_cache.latest(conn, deal_id), review_cache.latest_ok(conn, deal_id)
+        except sqlite3.OperationalError:
+            return _err(503, "no_review_table", "库还没有应用迁移 0013（python -m mystock2 db migrate）")
+        finally:
+            conn.close()
+        if review_cache.is_running(last, state.clock()):
+            return jsonify({"state": "running"}), 200
+        if ok is not None and not refresh:
+            return jsonify({"state": "ok"}), 200
+        argv = [sys.executable, "-m", "mystock2"] + (["--config", str(state.config.source)] if state.config.source else []) + \
+               ["review", "deal", "--deal-id", deal_id, "--account-id", account] + (["--refresh"] if refresh else [])
+        spawn = app.extensions.get("mystock2_review_spawn") or _spawn_review
+        try:
+            spawn(argv)
+        except OSError as exc:
+            return _err(500, "spawn_failed", f"无法启动后台进程：{exc}")
+        return jsonify({"state": "running"}), 202
+
     return app
+
+
+def _spawn_review(argv: list[str]) -> None:
+    """后台拉起 CLI（独立会话，Web 重启/请求结束都不影响它）；输出追加到 data/logs/review.log。"""
+    log_dir = REPO_ROOT / "data" / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    out = open(log_dir / "review.log", "ab")                       # noqa: SIM115 —— 子进程继承，随进程结束关闭
+    subprocess.Popen(argv, cwd=str(REPO_ROOT), stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
+    out.close()
 
 
 def _hostname(host: str) -> str:

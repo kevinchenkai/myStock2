@@ -70,6 +70,8 @@ TABLE_OWNERS: dict[str, str] = {
     # assistant（M9）
     "veto_packet": "assistant",
     "llm_call": "assistant",
+    # review（复盘卡 AI 评价缓存）
+    "trade_review": "review",
 }
 
 # 复合写入者：需要在**同一事务**里写多个所有者的表时使用（如 veto 导入：票据 + 调用回执）。
