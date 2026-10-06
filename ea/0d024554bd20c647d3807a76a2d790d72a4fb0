@@ -1,0 +1,23 @@
+tests/unit/test_web_ledgerdata.py
+  s_4e5dbfa251c076::t_e086c8a6c34cba 23-44
+mystock2/web/ledgerdata.py
+  s_4e5dbfa251c076::t_15d71702327131 108-112,119
+mystock2/web/rowcells.py
+  s_4e5dbfa251c076::t_505807ef328a93 73-75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "ea0d024554bd20c647d3807a76a2d790d72a4fb0",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
