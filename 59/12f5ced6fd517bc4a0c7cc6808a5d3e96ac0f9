@@ -1,0 +1,23 @@
+mystock2/cli/ops.py
+  s_4e5dbfa251c076::t_992aed3691d4ad 194-196
+mystock2/scoreboard/providers.py
+  s_4e5dbfa251c076::t_992aed3691d4ad 9,16,18-19,43-49,51,66-96
+tests/unit/test_scoreboard.py
+  s_4e5dbfa251c076::t_422134e4c37672 468-502
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "5912f5ced6fd517bc4a0c7cc6808a5d3e96ac0f9",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
