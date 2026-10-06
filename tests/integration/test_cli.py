@@ -50,3 +50,11 @@ def test_universe_check_template_and_bare_code(tmp_path):
 def test_missing_config_file_gives_clean_error(tmp_path):
     r = run("config-show", cfg=tmp_path / "nope.yaml")
     assert r.returncode == 1 and "配置文件不存在" in r.stderr
+
+
+def test_forecast_run_forward_tag_is_refused_for_a_historical_range(tmp_path):
+    """审核 P1-1：历史区间只能是 rebuilt；--tag forward 只允许单日（再由写入层校验生成时间）。"""
+    cfg = make_cfg(tmp_path)
+    run("db", "migrate", cfg=cfg)
+    r = run("forecast", "run", "--start", "2025-03-03", "--end", "2025-03-07", "--codes", "US.NVDA", "--tag", "forward", cfg=cfg)
+    assert r.returncode == 2 and "rebuilt" in r.stderr

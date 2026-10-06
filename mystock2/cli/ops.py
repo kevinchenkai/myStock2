@@ -777,6 +777,9 @@ def cmd_forecast_run(args) -> int:
     cfg = load_config(args.config)
     codes = args.codes.split(",") if args.codes else [e.code for e in load_universe(Path(args.local_dir or REPO_ROOT / "config" / "local") / "universe.yaml", ()).entries]
     start, end = date.fromisoformat(args.start), date.fromisoformat(args.end)
+    if args.tag == "forward" and start != end:
+        print("--tag forward 只用于最近一个已收盘交易日（--start 与 --end 相同）；历史区间只能是 rebuilt（事后重建）", file=sys.stderr)
+        return 2
     params = None                                                          # 基线参数取默认（预测留档不依赖协议文件）；lgbm 同
     now = _now(args)
     stats: dict[str, dict] = {}

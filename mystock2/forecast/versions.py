@@ -35,6 +35,11 @@ def record_prediction(conn: sqlite3.Connection, code: str, pred: Prediction, par
         frozen_at=available_at, deadline_at=available_at))]
     if source_tag == "forward" and not input_snapshot_ids:
         problems.append("forward_requires_evidence")
+    if source_tag == "forward":                      # 前向＝当时生成（审核 P1-1）：输入截止不早于 T 日收盘，生成早于目标日开盘
+        if ensure_utc(input_cutoff_at) < cal.session(market, pred.as_of_session).close_utc:
+            problems.append("forward_cutoff_before_as_of_close")
+        if ensure_utc(generated_at) >= cal.session(market, target).open_utc:
+            problems.append("forward_generated_after_target_open（事后生成的预测只能标 rebuilt）")
     if problems:
         raise VersionError("拒绝写入预测版本：" + "; ".join(problems))
     fields = prediction_fields(pred)

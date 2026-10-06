@@ -213,3 +213,21 @@ def test_bad_tick_config_rejected(tmp_path):
         parse_bands('[{"tick":"0.01"},{"lt":"1","tick":"0.1"}]')                # 兜底项必须在最后
     with pytest.raises(ValueError):
         put_rule(inst, "HK.00700", "2026-01-01", lot_size=100, tick_json='[{"lt":"1","tick":"0.01"},{"lt":"0.5","tick":"0.001"}]', source="x")
+
+
+def test_p1_1_forward_tag_requires_generation_before_target_open(tmp_path):
+    """审核 P1-1：事后（目标日开盘之后）生成的预测不得标 forward；输入截止早于 T 日收盘的也不行。rebuilt 不受影响。"""
+    m, f, i, path = writers(tmp_path)
+    dbars = synth_bars(CODE, 330, date(2026, 3, 4), seed=5)
+    recv = datetime(2026, 3, 4, 22, 0, tzinfo=UTC)
+    put_daily(m, dbars, source="s", received_at=recv, quality="ok")
+    much_later = datetime(2026, 10, 5, 12, 0, tzinfo=UTC)
+    with pytest.raises(VersionError, match="forward_generated_after_target_open"):
+        generate(m, f, CODE, date(2026, 3, 4), input_cutoff_at=much_later, now=much_later, params=P, source_tag="forward")
+    assert generate(m, f, CODE, date(2026, 3, 4), input_cutoff_at=much_later, now=much_later, params=P, source_tag="rebuilt")
+    bars = to_bars(dbars)
+    pred = predict(bars, P)
+    sid = m.execute("SELECT snapshot_id FROM evidence_snapshot LIMIT 1").fetchone()["snapshot_id"]
+    early = datetime(2026, 3, 4, 15, 0, tzinfo=UTC)                                   # 美股 T 日还没收盘
+    with pytest.raises(VersionError, match="forward_cutoff_before_as_of_close"):
+        record_prediction(f, CODE, pred, P, [sid], input_cutoff_at=early, generated_at=recv, available_at=recv, source_tag="forward")
