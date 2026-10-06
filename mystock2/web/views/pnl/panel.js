@@ -13,7 +13,6 @@ MS.registerPanel("pnl", function (root, d, ctx) {
   if (!d.summary.length) root.appendChild(MS.card("盈亏", MS.note("没有成交，无盈亏可算。")));
   root.appendChild(MS.card("按标的", MS.table([
     { key: "code", label: "标的" }, { key: "realized_exact", label: "精确", num: true }, { key: "realized_estimated", label: "估算", num: true },
-    { key: "unavailable_qty", label: "无成本证据卖出股数", num: true }, { key: "unavailable_net_proceeds", label: "其净收入（非盈亏）", num: true },
     { key: "fees_total", label: "费用合计", num: true }, { key: "buys", label: "买入笔数", num: true }, { key: "sells", label: "卖出笔数", num: true }
   ], d.by_code, { empty: "没有成交" })));
   root.appendChild(MS.card("逐笔卖出", MS.table([

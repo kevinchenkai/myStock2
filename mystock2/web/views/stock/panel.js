@@ -101,7 +101,6 @@ MS.registerPanel("stock", function (root, d, ctx) {
       var s = t.summary;
       tKids.push(MS.kv([
         ["已实现盈亏 · 精确（费用后）", s.realized_exact], ["已实现盈亏 · 估算（费用后）", s.realized_estimated],
-        ["无成本证据的卖出股数", s.has_unavailable ? { text: s.unavailable_qty.text + " 股", tag: "不可用" } : s.unavailable_qty],
         ["费用合计（已计入盈亏）", s.fees_total], ["买入 / 卖出笔数", s.buys + " / " + s.sells]
       ]));
     } else tKids.push(MS.note("账本里没有该标的的成交或开账持仓，无盈亏可算。"));
