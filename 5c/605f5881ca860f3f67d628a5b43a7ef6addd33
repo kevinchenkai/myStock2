@@ -1,0 +1,19 @@
+docs/records/code-review-20261005_claude_20261005.md
+  s_4e5dbfa251c076::t_b07a4e6f4a55a5 1-149
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "5c605f5881ca860f3f67d628a5b43a7ef6addd33",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
