@@ -10,7 +10,7 @@ MS.registerPanel("scoreboard", function (root, d) {
   }
   function n(v) { return v === null || v === undefined ? { text: "不可用", na: true } : String(v); }
 
-  root.appendChild(h("div", { class: "state", role: "note" }, [h("strong", { text: "请注意　" }), d.banner]));
+  root.appendChild(h("div", { class: "notice", role: "note" }, [h("strong", { text: "请注意　" }), d.banner]));
 
   var p = d.protocol;
   var pilot = p.pilot.value;

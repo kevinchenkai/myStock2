@@ -50,7 +50,7 @@ MS.registerPanel("replay", function (root, d) {
   ]));
 
   var r = d.rounds;
-  var rk = [h("p", { class: "state", text: "诊断口径：诊断回合不是账本收益，与「盈亏」视图的移动平均成本口径不同，不可相加或直接比较。" }),
+  var rk = [h("p", { class: "notice", text: "诊断口径：诊断回合不是账本收益，与「盈亏」视图的移动平均成本口径不同，不可相加或直接比较。" }),
     MS.table([
       { key: "tag", label: "类型", render: function (x) { return { text: x.tag, tag: "诊断" }; } },
       { key: "code", label: "标的" }, { key: "open_date", label: "开仓日" }, { key: "close_date", label: "平仓日" },

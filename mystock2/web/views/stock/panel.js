@@ -38,7 +38,7 @@ MS.registerPanel("stock", function (root, d, ctx) {
       ["收盘日", q.session_date + (q.stale ? "（陈旧：应有 " + q.expected_session + "）" : "")],
       ["当日最低 – 最高", q.day_range ? q.day_range.low.text + " – " + q.day_range.high.text : na()]
     ]));
-    if (q.stale) qKids.push(h("p", { class: "state", text: "行情陈旧：最新有行情的收盘日（" + q.session_date + "）早于应有的最近收盘日（" + q.expected_session + "）。" }));
+    if (q.stale) qKids.push(h("p", { class: "notice", text: "行情陈旧：最新有行情的收盘日（" + q.session_date + "）早于应有的最近收盘日（" + q.expected_session + "）。" }));
   }
   if (r52 && r52.status === "ok") {
     var rows = [];
@@ -153,7 +153,7 @@ MS.registerPanel("stock", function (root, d, ctx) {
   // ⑦ 资金流向
   section("资金流向（最近 20 个交易日）", d.flows, function (b) {
     var kids = [];
-    if (b.stale) kids.push(h("p", { class: "state", text: "资金流向陈旧：最新记录日 " + b.latest + " 早于应有的最近收盘日 " + (b.expected_session || "未知") + "。" }));
+    if (b.stale) kids.push(h("p", { class: "notice", text: "资金流向陈旧：最新记录日 " + b.latest + " 早于应有的最近收盘日 " + (b.expected_session || "未知") + "。" }));
     kids.push(MS.table([
       { key: "date", label: "日期" }, { key: "in_flow", label: "净流入合计", num: true }, { key: "main_in_flow", label: "主力净流入", num: true },
       { key: "super_in_flow", label: "超大单", num: true }, { key: "big_in_flow", label: "大单", num: true }, { key: "mid_in_flow", label: "中单", num: true },
@@ -168,7 +168,7 @@ MS.registerPanel("stock", function (root, d, ctx) {
 
   // ⑧ 预测（只显示事后重建）
   section("预测区间（事后重建，非前向证据）", d.forecast, function (b) {
-    var kids = [h("p", { class: "state", text: "事后重建（rebuilt）：用历史数据在事后重新生成，不是前向、也不是当时可得的预测，不能当作晋级证据；预测区间不是成交保证，不构成投资建议。这里不显示任何前向 AI 操作单。" })];
+    var kids = [h("p", { class: "notice", text: "事后重建（rebuilt）：用历史数据在事后重新生成，不是前向、也不是当时可得的预测，不能当作晋级证据；预测区间不是成交保证，不构成投资建议。这里不显示任何前向 AI 操作单。" })];
     kids.push(MS.table([
       { key: "model", label: "模型", render: function (x) { return { text: x.model, title: x.model_version }; } },
       { key: "as_of", label: "数据截至" }, { key: "target", label: "目标日" },

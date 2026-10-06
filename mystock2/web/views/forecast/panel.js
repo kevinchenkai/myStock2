@@ -12,7 +12,7 @@ MS.registerPanel("forecast", function (root, d, ctx) {
   function tagInfo(tag) { return d.provenance.filter(function (p) { return p.tag === tag; })[0]; }
 
   // ---- 固定文案与来源
-  root.appendChild(h("div", { class: "state", role: "note" }, [h("strong", { text: "请注意　" }), d.banner]));
+  root.appendChild(h("div", { class: "notice", role: "note" }, [h("strong", { text: "请注意　" }), d.banner]));
   var cur = tagInfo(d.source);
   var span = cur.first_as_of ? cur.first_as_of + " ～ " + cur.last_as_of : NA;
   root.appendChild(MS.card("样本来源与留档", [
@@ -24,7 +24,7 @@ MS.registerPanel("forecast", function (root, d, ctx) {
       ["最新预测 as_of", d.freshness.latest_prediction ? d.freshness.latest_prediction.as_of : NA],
       ["最新预测 generated_at", d.freshness.latest_prediction ? MS.fmtTime(d.freshness.latest_prediction.generated_at) : NA],
       ["最新行情日", d.freshness.latest_quote_date || NA]
-    ]),
+    ], { stats: true }),
     MS.table([
       { key: "label", label: "来源" }, { key: "count", label: "预测条数（两模型合计）", num: true },
       { key: "codes", label: "标的数", num: true },
