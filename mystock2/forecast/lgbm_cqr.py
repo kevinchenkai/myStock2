@@ -19,7 +19,7 @@ import numpy as np
 
 from mystock2.forecast.baseline import Bar, ForecastUnavailable, Prediction
 
-MODEL_VERSION = "lgbm-cqr-v1"
+MODEL_VERSION = "lgbm-cqr-v2"     # v2：校准分数取第 ⌈(n+1)·level⌉ 小（v1 经 np.quantile 多取一名，区间偏宽；审核 F-02/Q2）
 FEATURE_VERSION = "f-v1-16"
 FEATURE_COLS = ["ret_1d", "ret_5d", "ret_10d", "vol_5d", "vol_20d", "atr_14", "ma5_dev", "ma10_dev", "ma20_dev", "close_pos_in_range",
                 "day_range_rel", "gap", "dist_hi_20", "dist_lo_20", "vol_ratio_5", "vol_ratio_20"]
@@ -109,6 +109,13 @@ def conformal_level(n: int, level: float) -> float:
     return min(1.0, math.ceil((n + 1) * level) / n)
 
 
+def conformal_score(scores: np.ndarray, level: float) -> float:
+    """校准分数的第 k 小值，k＝⌈(n+1)·level⌉（超过 n 时取最大值，即上限 1 的情形）。"""
+    n = len(scores)
+    k = min(n, math.ceil((n + 1) * level))
+    return float(np.sort(scores)[k - 1])
+
+
 def _fit(X, y, alpha: float, p: LGBMParams):
     import lightgbm as lgb  # 缺依赖明确报 ImportError，不静默回退
     params = {"objective": "quantile", "alpha": alpha, "learning_rate": p.learning_rate, "num_leaves": p.num_leaves, "min_data_in_leaf": p.min_data_in_leaf,
@@ -149,9 +156,8 @@ def predict(bars: list[Bar], params: LGBMParams | None = None) -> Prediction:
     # 单侧 CQR：把低/高分位分别平移到校准段覆盖率达标
     s_lo = m_lo.predict(Xcal) - yl[cal_idx]               # >0 表示 y 低于预测低分位
     s_hi = yh[cal_idx] - m_hi.predict(Xcal)               # >0 表示 y 高于预测高分位
-    n = len(cal_idx)
-    adj_lo = float(np.quantile(s_lo, conformal_level(n, 1 - p.alpha_low), method="higher"))
-    adj_hi = float(np.quantile(s_hi, conformal_level(n, p.alpha_high), method="higher"))
+    adj_lo = conformal_score(s_lo, 1 - p.alpha_low)
+    adj_hi = conformal_score(s_hi, p.alpha_high)
     y_low = float(m_lo.predict(X[T:T + 1])[0]) - adj_lo
     y_high = float(m_hi.predict(X[T:T + 1])[0]) + adj_hi
     if not (np.isfinite(y_low) and np.isfinite(y_high)) or y_low > y_high:

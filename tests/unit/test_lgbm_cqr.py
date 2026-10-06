@@ -7,7 +7,14 @@ import pytest
 from mystock2.forecast import baseline, lgbm_cqr
 from mystock2.forecast.baseline import Bar, ForecastUnavailable
 from mystock2.forecast.evaluate import EvalResult, improvement, meets_gate, pinball, rolling_eval
-from mystock2.forecast.lgbm_cqr import FEATURE_COLS, LGBMParams, build_features, build_labels, conformal_level
+from mystock2.forecast.lgbm_cqr import (
+    FEATURE_COLS,
+    LGBMParams,
+    build_features,
+    build_labels,
+    conformal_level,
+    conformal_score,
+)
 from tests.unit.market_helpers import synth_bars
 
 CODE = "US.NVDA"
@@ -98,3 +105,11 @@ def test_gate_logic_and_improvement_sign():
     assert not meets_gate({"A": 0.2, "B": -0.05, "C": -0.05})["pass"]                         # 平均够但改善的标的不够
     assert not meets_gate({"A": 0.04, "B": 0.04, "C": 0.04})["pass"]                          # 每个都改善但不到 5%
     assert meets_gate({"A": 0.06, "B": 0.07, "C": 0.05})["pass"]
+
+
+def test_f02_conformal_score_takes_the_kth_smallest_not_one_more():
+    """审核 F-02：n=100、level=0.9 → 取第 ⌈101×0.9⌉＝91 小（v1 用 np.quantile(…, 0.91, 'higher') 取到第 92 小）。"""
+    s = np.arange(100, dtype=float)[::-1]          # 第 k 小＝k−1
+    assert conformal_score(s, 0.9) == 90.0
+    assert conformal_score(np.arange(10, dtype=float), 0.99) == 9.0     # k 超过 n：取最大
+    assert conformal_score(np.arange(99, dtype=float), 0.9) == 89.0     # ⌈100×0.9⌉＝90 → 第 90 小
