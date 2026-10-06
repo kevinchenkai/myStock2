@@ -226,6 +226,24 @@ def _link(conn, source_record_id: str | None, event_id: str) -> None:
             resolve_pending(conn, r["pending_id"], "posted", event_id, "auto: 后续采集已入账")
 
 
+def link_source(conn: sqlite3.Connection, src: SourceDraft, event_id: str, received_at=None) -> None:
+    """把一条来源证据挂到已入账的事件上（如成对入账时的第二条来源：预扣税行之于税事件），并结清它此前的待匹配项。"""
+    with atomic(conn):
+        _link(conn, record_source(conn, src, received_at), event_id)
+
+
+def booked_keys_for_source(conn: sqlite3.Connection, source: str, source_id: str) -> set[str]:
+    """该来源身份（不论内容哈希）已链接到的、当前仍有效的业务键。用于发现「同一来源被换了个键再入账」。"""
+    rows = conn.execute("SELECT DISTINCT e.business_key FROM source_record s JOIN source_link l ON l.source_record_id=s.source_record_id "
+                        "JOIN ledger_event e ON e.event_id=l.event_id WHERE s.source=? AND s.source_id=?", (source, source_id)).fetchall()
+    out = set()
+    for r in rows:
+        last = conn.execute("SELECT event_type FROM ledger_event WHERE business_key=? ORDER BY event_version DESC LIMIT 1", (r["business_key"],)).fetchone()
+        if last is not None and last["event_type"] != "REVERSAL":
+            out.add(r["business_key"])
+    return out
+
+
 # ------------------------------------------------------------------ 写入
 _COLS = (
     "event_id", "business_key", "event_version", "account_id", "event_type", "event_at", "received_at", "market", "code",

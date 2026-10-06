@@ -276,3 +276,57 @@ def test_fee_titles_changing_language_do_not_double_book_and_negative_or_repeate
     api.fees["O1"] = [{"item": "佣金", "amount": 1.99, "currency": "USD"}, {"item": "平台使用费", "amount": 1.0, "currency": "USD"}]
     changed = collect_order_fees(led, api, account_id=ACCT, acc_id=1, **NOSLEEP)
     assert changed.inserted == 0 and changed.conflicts and total() == D("-2.59")
+
+
+def _div(fid, amt, ctype="现金分红", day="2026-09-10", code="SYN"):
+    return {"cashflow_id": fid, "clearing_date": day, "currency": "USD", "cashflow_type": ctype, "cashflow_amount": amt,
+            "cashflow_remark": f"SYNTH CORP COM({code}) dividend, USD 0.91 per share"}
+
+
+DIVMAP = {"现金分红": "DIVIDEND", "非美国居民预扣税": "DIVIDEND_WHT", "资金调整": "ACCOUNT_FEE", "存入": "DEPOSIT"}
+
+
+def test_withholding_refund_negative_dividend_and_ambiguous_pairs_go_pending(led):
+    """审核 P1-3：正数预扣税（退税/冲回）不能被 abs() 当成扣税；负数股息、多笔股息配一笔税都进待匹配（变异 M7 的分支）。"""
+    api = FakeApi()
+    d1, d2, d3 = date(2026, 9, 10), date(2026, 9, 11), date(2026, 9, 14)
+    api.flows[d1] = [_div("C1", 100), _div("C2", 5, "非美国居民预扣税")]
+    api.flows[d2] = [_div("C3", -100, day="2026-09-11")]
+    api.flows[d3] = [_div("C4", 50, day="2026-09-14"), _div("C5", 60, day="2026-09-14"), _div("C6", -9, "非美国居民预扣税", day="2026-09-14")]
+    rep = collect_cash_flows(led, api, account_id=ACCT, acc_id=1, days=[d1, d2, d3], type_map=DIVMAP, **NOSLEEP)
+    assert rep.inserted == 0 and rep.pending == 6 and not rep.conflicts
+    assert project(led, ACCT).cash == {}
+
+
+def test_withholding_that_arrived_first_is_resolved_when_the_pair_is_posted(led):
+    """审核 L-03：预扣税先单独到（进待匹配），之后与股息成对入账：税的待匹配项必须结清，否则对账一直 ok=False。"""
+    api = FakeApi()
+    d = date(2026, 9, 10)
+    api.flows[d] = [_div("C2", -4.19, "非美国居民预扣税")]
+    assert collect_cash_flows(led, api, account_id=ACCT, acc_id=1, days=[d], type_map=DIVMAP, **NOSLEEP).pending == 1
+    api.flows[d] = [_div("C1", 41.86), _div("C2", -4.19, "非美国居民预扣税")]
+    rep = collect_cash_flows(led, api, account_id=ACCT, acc_id=1, days=[d], type_map=DIVMAP, **NOSLEEP)
+    assert rep.inserted == 3 and open_pending(led) == [] and project(led, ACCT).cash == {"USD": D("37.67")}
+
+
+def test_remapping_a_flow_type_and_replaying_does_not_book_it_twice(led):
+    """审核 P1-6：同一流水号先按 ACCOUNT_FEE 入账，改映射为 WITHDRAW 后重放：报冲突，不换个键再记一遍。"""
+    api = FakeApi()
+    d = date(2026, 4, 1)
+    api.flows[d] = [{"cashflow_id": "Z1", "clearing_date": "2026-04-01", "currency": "USD", "cashflow_type": "资金调整", "cashflow_amount": -50, "cashflow_remark": ""}]
+    assert collect_cash_flows(led, api, account_id=ACCT, acc_id=1, days=[d], type_map=DIVMAP, **NOSLEEP).inserted == 1
+    rep = collect_cash_flows(led, api, account_id=ACCT, acc_id=1, days=[d], type_map={**DIVMAP, "资金调整": "WITHDRAW"}, **NOSLEEP)
+    assert rep.inserted == 0 and rep.conflicts and "更正" in rep.conflicts[0]
+    assert project(led, ACCT).cash == {"USD": D("-50")}
+
+
+def test_missing_ids_bad_amounts_and_bad_codes_only_affect_their_own_row(led):
+    """审核 C-01/C-02：流水号 'N/A' 视为缺号（进待匹配，不当真号互相吞掉）；金额 'N/A'、备注解析出非法代码只让该行进待匹配，后面的日期照常处理。"""
+    api = FakeApi()
+    d1, d2 = date(2026, 4, 1), date(2026, 4, 2)
+    dep = {"clearing_date": "2026-04-01", "currency": "USD", "cashflow_type": "存入", "cashflow_remark": ""}
+    api.flows[d1] = [{**dep, "cashflow_id": "N/A", "cashflow_amount": 5000}, {**dep, "cashflow_id": "N/A", "cashflow_amount": 5000},
+                     {**dep, "cashflow_id": "B1", "cashflow_amount": "N/A"}, _div("B2", 10, day="2026-04-01", code="ABC.WS")]
+    api.flows[d2] = [{**dep, "clearing_date": "2026-04-02", "cashflow_id": "OK1", "cashflow_amount": 100}]
+    rep = collect_cash_flows(led, api, account_id=ACCT, acc_id=1, days=[d1, d2], type_map=DIVMAP, **NOSLEEP)
+    assert rep.inserted == 1 and rep.pending == 4 and project(led, ACCT).cash == {"USD": D("100")}

@@ -28,9 +28,11 @@ from mystock2.ledger.events import (
     LedgerConflict,
     LedgerError,
     SourceDraft,
+    booked_keys_for_source,
     ensure_account,
     fill_key,
     flow_key,
+    link_source,
     post_dividend,
     post_event,
     queue_pending,
@@ -346,11 +348,53 @@ def _fill_time(ledger, account_id: str, deal_id: str) -> str:
     return ledger.execute("SELECT event_at FROM ledger_event WHERE account_id=? AND business_key=?", (account_id, fill_key(account_id, deal_id))).fetchone()["event_at"]
 
 
+_MISSING_IDS = {"", "N/A", "NONE", "NAN", "NULL"}
+CASHFLOW_RULES = ("DEPOSIT", "WITHDRAW", "INTEREST", "TAX", "RECON_ONLY", "DIVIDEND", "DIVIDEND_WHT", "ACCOUNT_FEE", "EXTERNAL")
+
+
+def _flow_id(f: dict) -> str | None:
+    """流水号；futu 缺值给字符串 'N/A'（或 NaN）：一律视为缺号（进待匹配），不当成真号（审核 C-02）。"""
+    v = f.get("cashflow_id")
+    if v is None or (isinstance(v, float) and v != v):
+        return None
+    s = str(v).strip()
+    return None if s.upper() in _MISSING_IDS else s
+
+
+def _flow_src(f: dict) -> SourceDraft:
+    return SourceDraft("futu", f"cashflow:{_flow_id(f) or f.get('cashflow_id')}", {k: str(v) for k, v in f.items()})
+
+
+def _rebooked(ledger, f: dict, key_ok: Callable[[str], bool]) -> str | None:
+    """同一流水号已按别的业务键入账（映射改过后重放）：返回冲突说明；否则 None（审核 P1-6）。"""
+    fid = _flow_id(f)
+    if fid is None:
+        return None
+    other = sorted(k for k in booked_keys_for_source(ledger, "futu", f"cashflow:{fid}") if not key_ok(k))
+    if other:
+        return f"{fid}: 该流水已按 {other} 入账，现映射给出不同的入账方式；改映射后不能重放入账，请走更正流程"
+    return None
+
+
 def collect_cash_flows(ledger, api: TradeApi, *, account_id: str, acc_id: int, days: list[date], type_map: CashflowMap, sleep=time.sleep,
                        min_interval: float = 3.1) -> CollectReport:
-    """逐日取资金流水（官方：证券账户逐 clearing_date 查询）。入账方式由显式 `type_map` 决定；未知类型进待匹配队列。"""
+    """逐日取资金流水（官方：证券账户逐 clearing_date 查询）。入账方式由显式 `type_map` 决定；未知类型进待匹配队列。
+
+    - 单行解析失败（金额 'N/A'、备注解析出非法代码等）只让该行进待匹配，不中断其后的日期（审核 C-01）；
+    - 同一流水号已按别的业务键入账（改映射后重放）→ 冲突，不再入账（审核 P1-6）；
+    - 股息与预扣税：预扣税必须为负才配对（正数＝退税/冲回，不猜，进待匹配，审核 P1-3）；负数股息（冲回）进待匹配；
+      成对入账后预扣税行的来源也挂到税事件上，它此前的待匹配项随之结清（审核 L-03）。
+    """
+    bad = sorted({r for r in type_map.values() if r not in CASHFLOW_RULES})
+    if bad:
+        raise ValueError(f"type_map 中的非法入账方式：{bad}")
     rep = CollectReport("cash_flows")
     ensure_account(ledger, account_id, "futu", "REAL")
+
+    def pend(f: dict, reason: str) -> None:
+        queue_pending(ledger, _flow_src(f), reason)
+        rep.pending += 1
+
     for d in days:
         sleep(min_interval)
         try:
@@ -362,90 +406,98 @@ def collect_cash_flows(ledger, api: TradeApi, *, account_id: str, acc_id: int, d
         divs: dict[tuple[str, str], dict] = {}                      # (标的, 币种) → {"gross": [f…], "wht": [f…]}
         for f in flows:
             rep.rows += 1
-            ctype = str(f.get("cashflow_type"))
-            rule = type_map.get(ctype)
-            if rule in ("DIVIDEND", "DIVIDEND_WHT"):
-                ccy = str(f.get("currency", "")).upper()
-                code = dividend_code(str(f.get("cashflow_remark", "")), ccy)
-                if code is None:
-                    queue_pending(ledger, SourceDraft("futu", f"cashflow:{f.get('cashflow_id')}", {k: str(v) for k, v in f.items()}),
-                                  f"{ctype}：无法从备注确定标的/币种（未核实格式，不猜）")
-                    rep.pending += 1
-                else:
-                    divs.setdefault((code, ccy), {"gross": [], "wht": []})["gross" if rule == "DIVIDEND" else "wht"].append(f)
-                continue
-            if rule == "ACCOUNT_FEE":                                   # ADR/公司行动/过户等账户级费用：无对应成交 → ADJUST(INVESTMENT)，计入业绩（不是外部流水）
-                ccy = str(f.get("currency", "")).upper()
-                amount = dec(str(f["cashflow_amount"]))
-                src = SourceDraft("futu", f"cashflow:{f.get('cashflow_id')}", {k: str(v) for k, v in f.items()})
-                try:
-                    res = post_event(ledger, EventDraft(flow_key(account_id, str(f.get("cashflow_id")) if f.get("cashflow_id") else None, "acctfee"), account_id, "ADJUST",
-                                                        f"{f.get('clearing_date', d)}T00:00:00Z", ccy, cash_delta=str(amount), adjust_class="INVESTMENT",
-                                                        note=f"futu {ctype} {str(f.get('cashflow_remark', ''))[:80]}".strip()), source=src)
-                    rep.inserted += res.status == "inserted"
-                    rep.duplicate += res.status == "duplicate"
-                except IdentityInsufficient:
-                    queue_pending(ledger, src, "资金流水缺少流水号")
-                    rep.pending += 1
-                except LedgerError as exc:
-                    rep.conflicts.append(f"{f.get('cashflow_id')}: {exc}")
-                continue
-            ccy = str(f.get("currency", "")).upper()
-            amount = dec(str(f["cashflow_amount"]))          # 官方：正＝流入，负＝流出
-            src = SourceDraft("futu", f"cashflow:{f.get('cashflow_id')}", {k: str(v) for k, v in f.items()})
-            if rule is None:
-                queue_pending(ledger, src, f"未映射的资金流水类型：{ctype}")
-                rep.pending += 1
-                continue
-            if rule == "EXTERNAL":                                       # 方向由金额符号决定：正＝转入（DEPOSIT），负＝转出（WITHDRAW）；类型含义须已由负责人确认
-                rule = "DEPOSIT" if amount > 0 else "WITHDRAW"
-            if rule == "RECON_ONLY":                             # 成交/换汇等已由其他来源记账：只用于对账
-                key = f"{ccy}:{ctype}"
-                rep.recon_only[key] = rep.recon_only.get(key, Decimal(0)) + amount
-                continue
-            if rule not in ("DEPOSIT", "WITHDRAW", "INTEREST", "TAX"):
-                raise ValueError(f"type_map 中的非法入账方式：{rule}")
-            if (rule == "DEPOSIT" and amount <= 0) or (rule == "WITHDRAW" and amount >= 0):
-                queue_pending(ledger, src, f"{ctype} 的金额方向与映射 {rule} 不符")
-                rep.pending += 1
-                continue
             try:
-                kind = {"DEPOSIT": "deposit", "WITHDRAW": "withdraw", "INTEREST": "interest", "TAX": "tax"}[rule]
-                res = post_event(ledger, EventDraft(flow_key(account_id, str(f.get("cashflow_id")) if f.get("cashflow_id") else None, kind), account_id, rule,
-                                                    f"{f.get('clearing_date', d)}T00:00:00Z", ccy, cash_delta=str(amount),
-                                                    ref_event_key=f"futu_cashflow:{f.get('cashflow_id')}" if rule == "TAX" else None, note=f"futu {ctype}"), source=src)
-                rep.inserted += res.status == "inserted"
-                rep.duplicate += res.status == "duplicate"
-            except IdentityInsufficient:
-                queue_pending(ledger, src, "资金流水缺少流水号")
-                rep.pending += 1
-            except LedgerError as exc:
-                rep.conflicts.append(f"{f.get('cashflow_id')}: {exc}")
+                _one_flow(ledger, f, d, account_id, type_map, rep, divs, pend)
+            except (LedgerError, CodeError, ArithmeticError, KeyError, TypeError, ValueError) as exc:
+                pend(f, f"资金流水无法解析：{type(exc).__name__}: {exc}")
         for (code, ccy), g in divs.items():
-            grosses, whts = g["gross"], g["wht"]
-            if not grosses:                                          # 只有预扣税、没有股息：不入账，进待匹配
-                for w_ in whts:
-                    queue_pending(ledger, SourceDraft("futu", f"cashflow:{w_.get('cashflow_id')}", {k: str(v) for k, v in w_.items()}), "预扣税没有同日同标的股息总额")
-                    rep.pending += 1
-                continue
-            if len(whts) > 1 or (whts and len(grosses) > 1):         # 无法唯一配对：不猜，全部进待匹配
-                for f_ in grosses + whts:
-                    queue_pending(ledger, SourceDraft("futu", f"cashflow:{f_.get('cashflow_id')}", {k: str(v) for k, v in f_.items()}), "同日同标的多笔股息/预扣税，无法唯一配对")
-                    rep.pending += 1
-                continue
-            wht = whts[0] if whts else None
-            for gross in grosses:                                    # 同日同标的两笔股息（如港股 F/D 与 S/D）各自成组
-                at = f"{gross.get('clearing_date', d)}T00:00:00Z"
-                src = SourceDraft("futu", f"cashflow:{gross.get('cashflow_id')}", {k: str(v) for k, v in gross.items()})
-                try:
-                    res = post_dividend(ledger, account_id, f"{gross.get('clearing_date', d)}:{code}:{gross.get('cashflow_id')}", code, ccy, accrual_at=at,
-                                        gross=str(dec(str(gross["cashflow_amount"]))), payment_at=at,
-                                        withholding_tax=str(abs(dec(str(wht["cashflow_amount"])))) if wht else None, source=src)
-                    rep.inserted += sum(r.status == "inserted" for r in res)
-                    rep.duplicate += sum(r.status == "duplicate" for r in res)
-                except LedgerError as exc:
-                    rep.conflicts.append(f"dividend {code} {at}: {exc}")
+            _post_dividends(ledger, account_id, code, ccy, g["gross"], g["wht"], d, rep, pend)
     return rep
+
+
+def _one_flow(ledger, f: dict, d: date, account_id: str, type_map: CashflowMap, rep: CollectReport, divs: dict, pend) -> None:
+    ctype = str(f.get("cashflow_type"))
+    rule = type_map.get(ctype)
+    fid = _flow_id(f)
+    if rule in ("DIVIDEND", "DIVIDEND_WHT"):
+        ccy = str(f.get("currency", "")).upper()
+        code = dividend_code(str(f.get("cashflow_remark", "")), ccy)
+        if code is None:
+            pend(f, f"{ctype}：无法从备注确定标的/币种（未核实格式，不猜）")
+            return
+        market_of(code)                                              # 解析出不合法的代码（如 ABC.WS）→ 该行进待匹配
+        dec(str(f["cashflow_amount"]))
+        divs.setdefault((code, ccy), {"gross": [], "wht": []})["gross" if rule == "DIVIDEND" else "wht"].append(f)
+        return
+    ccy = str(f.get("currency", "")).upper()
+    if rule is None:
+        pend(f, f"未映射的资金流水类型：{ctype}")
+        return
+    amount = dec(str(f["cashflow_amount"]))                          # 官方：正＝流入，负＝流出
+    src = _flow_src(f)
+    if rule == "ACCOUNT_FEE":                                       # ADR/公司行动/过户等账户级费用：无对应成交 → ADJUST(INVESTMENT)，计入业绩（不是外部流水）
+        kind, etype, extra = "acctfee", "ADJUST", {"adjust_class": "INVESTMENT", "note": f"futu {ctype} {str(f.get('cashflow_remark', ''))[:80]}".strip()}
+    else:
+        if rule == "EXTERNAL":                                       # 方向由金额符号决定：正＝转入（DEPOSIT），负＝转出（WITHDRAW）；类型含义须已由负责人确认
+            rule = "DEPOSIT" if amount > 0 else "WITHDRAW"
+        if rule == "RECON_ONLY":                                     # 成交/换汇等已由其他来源记账：只用于对账
+            key = f"{ccy}:{ctype}"
+            rep.recon_only[key] = rep.recon_only.get(key, Decimal(0)) + amount
+            return
+        if (rule == "DEPOSIT" and amount <= 0) or (rule == "WITHDRAW" and amount >= 0):
+            pend(f, f"{ctype} 的金额方向与映射 {rule} 不符")
+            return
+        kind, etype = {"DEPOSIT": "deposit", "WITHDRAW": "withdraw", "INTEREST": "interest", "TAX": "tax"}[rule], rule
+        extra = {"ref_event_key": f"futu_cashflow:{fid}" if rule == "TAX" else None, "note": f"futu {ctype}"}
+    try:
+        key = flow_key(account_id, fid, kind)
+    except IdentityInsufficient:
+        pend(f, "资金流水缺少流水号")
+        return
+    clash = _rebooked(ledger, f, lambda k: k == key)
+    if clash:
+        rep.conflicts.append(clash)
+        return
+    try:
+        res = post_event(ledger, EventDraft(key, account_id, etype, f"{f.get('clearing_date', d)}T00:00:00Z", ccy, cash_delta=str(amount), **extra), source=src)
+        rep.inserted += res.status == "inserted"
+        rep.duplicate += res.status == "duplicate"
+    except LedgerConflict as exc:
+        rep.conflicts.append(f"{fid}: {exc}")
+
+
+def _post_dividends(ledger, account_id: str, code: str, ccy: str, grosses: list[dict], whts: list[dict], d: date, rep: CollectReport, pend) -> None:
+    if not grosses:                                                  # 只有预扣税、没有股息：不入账，进待匹配
+        for w_ in whts:
+            pend(w_, "预扣税没有同日同标的股息总额")
+        return
+    if any(dec(str(g["cashflow_amount"])) <= 0 for g in grosses) or any(dec(str(w["cashflow_amount"])) >= 0 for w in whts):
+        for f_ in grosses + whts:                                    # 股息冲回（负）或预扣税退回（正）：方向不猜，整组进待匹配
+            pend(f_, "股息为负或预扣税为正（冲回/退税）：需人工核对，不按常规股息入账")
+        return
+    if len(whts) > 1 or (whts and len(grosses) > 1):                 # 无法唯一配对：不猜，全部进待匹配
+        for f_ in grosses + whts:
+            pend(f_, "同日同标的多笔股息/预扣税，无法唯一配对")
+        return
+    wht = whts[0] if whts else None
+    for gross in grosses:                                            # 同日同标的两笔股息（如港股 F/D 与 S/D）各自成组
+        at = f"{gross.get('clearing_date', d)}T00:00:00Z"
+        group = f"{gross.get('clearing_date', d)}:{code}:{_flow_id(gross) or gross.get('cashflow_id')}"
+        prefix = f"div:{account_id}:{group}:"
+        clash = _rebooked(ledger, gross, lambda k, p=prefix: k.startswith(p)) or (_rebooked(ledger, wht, lambda k, p=prefix: k.startswith(p)) if wht else None)
+        if clash:
+            rep.conflicts.append(clash)
+            continue
+        try:
+            res = post_dividend(ledger, account_id, group, code, ccy, accrual_at=at, gross=str(dec(str(gross["cashflow_amount"]))), payment_at=at,
+                                withholding_tax=str(-dec(str(wht["cashflow_amount"]))) if wht else None, source=_flow_src(gross))
+            rep.inserted += sum(r.status == "inserted" for r in res)
+            rep.duplicate += sum(r.status == "duplicate" for r in res)
+            if wht:
+                tax = next(r for r in res if r.event_id.startswith(prefix + "tax#"))
+                link_source(ledger, _flow_src(wht), tax.event_id)    # 预扣税行的证据挂到税事件；它先前的待匹配项随之结清
+        except LedgerError as exc:
+            rep.conflicts.append(f"dividend {code} {at}: {exc}")
 
 
 class FileCashflowApi:
