@@ -75,8 +75,10 @@ def collect_daily(conn: sqlite3.Connection, sources: list[QuoteSource], code: st
             counts = put_daily(conn, final, source=src.name, received_at=now, quality="ok") if final else {}
             if partial:
                 put_daily(conn, partial, source=src.name, received_at=now, quality="partial")
-            _log(conn, run_id, code, "daily", src.name, "partial" if (partial or invalid) else "ok", rows=len(keep),
-                 detail=f"final={len(final)} partial={len(partial)} dropped_non_session={dropped} rejected_invalid_ohlc={invalid} {counts}", at=now)
+            suspect = counts.pop("suspect_dates", []) if counts else []
+            warn = f" 疑似供应商回溯拆股调整（新旧收盘价成整数倍，需人工核对）：{suspect}" if suspect else ""
+            _log(conn, run_id, code, "daily", src.name, "partial" if (partial or invalid or suspect) else "ok", rows=len(keep),
+                 detail=f"final={len(final)} partial={len(partial)} dropped_non_session={dropped} rejected_invalid_ohlc={invalid} {counts}{warn}", at=now)
         attempts.append((src.name, "ok"))
         return {"status": "partial" if (partial or invalid) else "ok", "rejected_invalid_ohlc": invalid, "source": src.name, "rows": len(keep), "attempts": attempts}
     return {"status": "failed", "source": None, "rows": 0, "attempts": attempts}

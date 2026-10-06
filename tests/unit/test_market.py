@@ -36,8 +36,8 @@ def bar(d="2026-03-03", o="10", h="11", lo="9", c="10.5", adj="10.5"):
 
 # ------------------------------------------------------------ 日线存储
 def test_put_daily_idempotent_and_versioned(mk):
-    assert put_daily(mk, [bar()], source="s1") == {"inserted": 1, "new_version": 0, "duplicate": 0}
-    assert put_daily(mk, [bar()], source="s1") == {"inserted": 0, "new_version": 0, "duplicate": 1}
+    assert put_daily(mk, [bar()], source="s1") == {"inserted": 1, "new_version": 0, "duplicate": 0, "suspect_rescale": 0}
+    assert put_daily(mk, [bar()], source="s1") == {"inserted": 0, "new_version": 0, "duplicate": 1, "suspect_rescale": 0}
     assert put_daily(mk, [bar(c="10.6", h="11.5")], source="s1")["new_version"] == 1      # 修订追加新版本
     rows = mk.execute("SELECT version FROM quote_daily ORDER BY version").fetchall()
     assert [r["version"] for r in rows] == [1, 2]                                         # 旧版本保留
@@ -239,3 +239,25 @@ def test_read_only_uri_escapes_question_marks_and_hashes(tmp_path):
     with pytest.raises(sqlite3.OperationalError):
         ro.execute("CREATE TABLE u(x)")
     assert sorted(x.name for x in tmp_path.iterdir()) == ["a?b#c"]
+
+
+
+def test_vendor_retroactive_split_rescale_is_flagged_not_silently_accepted(mk):
+    """审核 Q1（负责人选「先加检测告警」）：同一交易日的新版本收盘价恰为旧版本的整数倍分之一（如拆股后供应商回溯把历史价减半）：
+    照常追加新版本（只追加），但计数并在采集回执里标 partial＋说明，数据状态页会列为问题；普通修订不误报。"""
+    from decimal import Decimal as D
+
+    from mystock2.market.bars import rescale_factor
+
+    assert rescale_factor(D("200"), D("100.2")) == 2 and rescale_factor(D("90"), D("30")) == 3
+    assert rescale_factor(D("100"), D("101")) is None and rescale_factor(D("100"), D("140")) is None
+    c = put_daily(mk, [bar(c="10.6", h="11.5")], source="s1")
+    assert c["suspect_rescale"] == 0
+    halved = DailyBar(CODE, date(2026, 3, 3), "5", "5.5", "4.5", "5.3", "5.3", "2000")
+    c = put_daily(mk, [halved], source="s1")
+    assert c["new_version"] == 1 and c["suspect_rescale"] == 1 and c["suspect_dates"] == ["2026-03-03"]
+    r = collect_daily(mk, [FakeSource("yf", [DailyBar(CODE, date(2026, 3, 3), "10", "11", "9", "10.6", "10.6", "1000")])], CODE,
+                      date(2026, 3, 3), date(2026, 3, 3), now=datetime(2026, 3, 10, tzinfo=timezone.utc))
+    assert r["status"] == "ok"
+    log = mk.execute("SELECT status, detail FROM collection_log WHERE kind='daily' ORDER BY attempted_at DESC LIMIT 1").fetchone()
+    assert log["status"] == "partial" and "回溯拆股调整" in log["detail"]

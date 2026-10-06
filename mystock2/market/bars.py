@@ -11,6 +11,7 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import date
+from decimal import Decimal
 
 from mystock2.core import calendars as cal
 from mystock2.core.db import atomic
@@ -60,9 +61,24 @@ def _hash(d: dict) -> str:
     return hashlib.sha256(json.dumps(d, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
+RESCALE_TOLERANCE = Decimal("0.005")
+
+
+def rescale_factor(old_close: Decimal, new_close: Decimal) -> int | None:
+    """新旧收盘价之比（大比小）恰好接近 ≥2 的整数时返回该整数：典型是供应商**回溯按拆股/合股调整**了历史价
+    （yfinance 的开高低收即使 auto_adjust=False 也按拆股回溯调整）。账本按拆股生效时刻调整股数，
+    两种口径混用会让估值出现断层——检测到就告警，交人工核对（审核 Q1，负责人 2026-10-06 选「先加检测告警」）。"""
+    if old_close <= 0 or new_close <= 0:
+        return None
+    r = max(old_close, new_close) / min(old_close, new_close)
+    k = int(r.to_integral_value())
+    return k if k >= 2 and abs(r - k) / k <= RESCALE_TOLERANCE else None
+
+
 def put_daily(conn: sqlite3.Connection, bars: list[DailyBar], *, source: str, received_at=None, quality: str = "ok") -> dict[str, int]:
-    """幂等写入日线；返回 {'inserted','new_version','duplicate'} 计数。"""
-    counts = {"inserted": 0, "new_version": 0, "duplicate": 0}
+    """幂等写入日线；返回 {'inserted','new_version','duplicate','suspect_rescale'} 计数（后者见 rescale_factor；
+    疑似回溯调整的日期另记在 counts['suspect_dates']）。新版本照常追加（只追加，不改旧行），只是告警。"""
+    counts: dict = {"inserted": 0, "new_version": 0, "duplicate": 0, "suspect_rescale": 0}
     received = iso_utc(received_at or utc_now())
     with atomic(conn):
         for b in bars:
@@ -75,11 +91,14 @@ def put_daily(conn: sqlite3.Connection, bars: list[DailyBar], *, source: str, re
                       "adj_close": to_db(b.adj_close) if b.adj_close is not None else None,
                       "volume": to_db(b.volume) if b.volume is not None else None, "quality": quality}
             h = _hash(fields)
-            last = conn.execute("SELECT version, content_hash FROM quote_daily WHERE code=? AND session_date=? ORDER BY version DESC LIMIT 1",
+            last = conn.execute("SELECT version, content_hash, close FROM quote_daily WHERE code=? AND session_date=? ORDER BY version DESC LIMIT 1",
                                 (b.code, fields["session_date"])).fetchone()
             if last and last["content_hash"] == h:
                 counts["duplicate"] += 1
                 continue
+            if last and rescale_factor(dec(last["close"]), dec(b.close)):
+                counts["suspect_rescale"] += 1
+                counts.setdefault("suspect_dates", []).append(fields["session_date"])
             version = (last["version"] + 1) if last else 1
             conn.execute(
                 "INSERT INTO quote_daily(code, session_date, version, source, open, high, low, close, adj_close, volume, event_at, received_at, quality, content_hash) "
