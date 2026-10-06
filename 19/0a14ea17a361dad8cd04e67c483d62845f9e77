@@ -1,0 +1,83 @@
+config.example.yaml
+  s_97d138eaf84b50::t_6a360aca6afbd2 44-50
+docs/records/trade-review-ai_claude_20261006.md
+  s_97d138eaf84b50::t_6a360aca6afbd2 1-69
+docs/OPEN_ITEMS.md
+  s_97d138eaf84b50::t_6a360aca6afbd2 79
+mystock2/cli/ops.py
+  s_97d138eaf84b50::t_2032990e947a70 841-853,856-861
+mystock2/replay/review_payload.py
+  s_97d138eaf84b50::t_951305eb1d1fc2 121-125
+  s_97d138eaf84b50::t_6afa5d96046591 160-169
+  s_97d138eaf84b50::t_a0f7454f08d6cc 78-79
+  s_97d138eaf84b50::t_60a2faceeddfad 36-38
+  s_97d138eaf84b50::t_a97c67520c57d6 1-35,39-77,80-120,126-159,170-216
+mystock2/replay/review_cache.py
+  s_97d138eaf84b50::t_b088622a43893c 1-47
+mystock2/web/views/trade_review/panel.js
+  s_97d138eaf84b50::t_beb4d8b702b49c 2
+  s_97d138eaf84b50::t_0ae482f04aaec2 1,3-98
+tests/test_import_boundaries.py
+  s_97d138eaf84b50::t_6c8941b672796c 18
+mystock2/review/service.py
+  s_97d138eaf84b50::t_b088622a43893c 1-17,19-35,37-39,41-74
+  s_97d138eaf84b50::t_6afa5d96046591 18,36,40
+mystock2/web/views/trade_review/view.yaml
+  s_97d138eaf84b50::t_6afa5d96046591 1-15
+tests/unit/test_trade_review.py
+  s_97d138eaf84b50::t_e61fe04c955829 254,264,266
+  s_97d138eaf84b50::t_78b3695727b8c0 267-277,279,281
+  s_97d138eaf84b50::t_3bba1f7f25418d 146,239-243
+  s_97d138eaf84b50::t_9e93ff14c131f5 1-145,147-238,244-253,255-263,265,278,280,282-297
+mystock2/web/static/app.js
+  s_97d138eaf84b50::t_0ae482f04aaec2 243-252
+AGENTS.md
+  s_97d138eaf84b50::t_6a360aca6afbd2 12,24
+tests/integration/test_web_readonly.py
+  s_97d138eaf84b50::t_f9850377cdb7f0 58-60,66-69
+mystock2/review/codex_runner.py
+  s_97d138eaf84b50::t_b088622a43893c 1-98
+mystock2/web/app.py
+  s_97d138eaf84b50::t_e4f29990b484e8 6-7,14,16-17,23,32,140-180,184-190
+  s_97d138eaf84b50::t_63125fd07b5d44 191-192
+mystock2/web/static/app.css
+  s_97d138eaf84b50::t_0ae482f04aaec2 296-305
+config/views.yaml
+  s_97d138eaf84b50::t_e4f29990b484e8 35-36
+migrations/0013_trade_review.sql
+  s_97d138eaf84b50::t_68a22d2e9951f7 1-22
+tests/unit/test_web_framework.py
+  s_97d138eaf84b50::t_f0e7d19d464b86 160
+  s_97d138eaf84b50::t_77b1b45043f0a7 15,107
+mystock2/review/__init__.py
+  s_97d138eaf84b50::t_b088622a43893c 1
+mystock2/web/views/trade_review/query.py
+  s_97d138eaf84b50::t_6afa5d96046591 1-33,35-37,40-49
+  s_97d138eaf84b50::t_36427c48b49519 34,38-39
+docs/README.md
+  s_97d138eaf84b50::t_6a360aca6afbd2 20
+mystock2/web/views/replay/panel.js
+  s_97d138eaf84b50::t_0ae482f04aaec2 13-15,24
+tests/unit/test_web_frontend.py
+  s_97d138eaf84b50::t_1f7b51225f2221 502-553
+mystock2/core/db.py
+  s_97d138eaf84b50::t_68a22d2e9951f7 73-74
+docs/records/real-data-phase-changelog_claude_20261005.md
+  s_97d138eaf84b50::t_6a360aca6afbd2 120-123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "190a14ea17a361dad8cd04e67c483d62845f9e77",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
