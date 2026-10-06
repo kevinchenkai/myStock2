@@ -1,0 +1,29 @@
+mystock2/web/series.py
+  s_4e5dbfa251c076::t_2dcbff54f05d78 12,49-51,53,81-84
+tests/unit/test_ledger_fees_settlement_reconcile.py
+  s_4e5dbfa251c076::t_e3b6f42624bd9d 185-195
+mystock2/ledger/opening.py
+  s_4e5dbfa251c076::t_42f4ba2a0a8260 80,91,95
+  s_4e5dbfa251c076::t_df1cd87195a964 96
+mystock2/web/views/equity_trend/query.py
+  s_4e5dbfa251c076::t_42f4ba2a0a8260 16,80
+  s_4e5dbfa251c076::t_70bebffffe97e4 86
+tests/unit/test_web_series.py
+  s_4e5dbfa251c076::t_a5090f44bb44f7 8,137-159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "d3edb392351638e7eeac3002398f4be33a0ff193",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
