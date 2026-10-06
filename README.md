@@ -4,7 +4,7 @@
 
 让 Web 随时看清自己的账户，让 AI 每天给出下一交易日的**操作单**，并在同口径下公平地检验：**AI 指导的操作，是否比我凭直觉的操作赚得更多**。
 
-> **状态（2026-10-05）：实施方案 v1.0 已定稿，进入实施（M0a 预审、M1 地基）。** 系统**不自动下单**，不构成投资建议。
+> **状态（2026-10-05）：实施方案 v1.2；M1–M9 在合成数据上完成，真实数据首跑、历史回填与例行更新已上线；正式前向比较尚未启动（等待 D3–D6、D12–D15）。** 系统**不自动下单**，不构成投资建议。
 
 ## 四个子系统
 
@@ -23,7 +23,8 @@ conda activate mk                        # 若默认环境已是 mk 则不需要
 cp config.example.yaml config.yaml       # 私有配置，已被 .gitignore；Web 开发期端口 8889
 python -m mystock2 db migrate            # 建库（data/mystock2.db，已被忽略）
 python -m mystock2 universe check --file config/universe.example.yaml
-python -m pytest -q && python -m ruff check . && python scripts/check_docs.py
+python -m pytest -q && python scripts/check_docs.py
+/opt/anaconda3/envs/mk2/bin/python -m ruff check .   # ruff 不在 mk 里（mk 也没有 hypothesis，属性测试会自动跳过）
 ```
 
 ## 与 V1 的关系
@@ -37,7 +38,7 @@ python -m pytest -q && python -m ruff check . && python scripts/check_docs.py
 | [docs/V2项目 idea.md](docs/V2项目%20idea.md) | 项目负责人的原始想法 |
 | [docs/PROJECT.md](docs/PROJECT.md) | 立项书（一页） |
 | [docs/prd/](docs/prd/) | Codex、Claude 各自的 V2 项目书（输入材料，非现行规格） |
-| [docs/plans/](docs/plans/) | **现行实施方案**（评审中） |
+| [docs/plans/](docs/plans/) | **现行实施方案**（v1.2） |
 | [docs/README.md](docs/README.md) | 全量文档索引 |
 | [AGENTS.md](AGENTS.md) / [CLAUDE.md](CLAUDE.md) | 给 Codex／Claude 的项目约定 |
 | [docs/OPEN_ITEMS.md](docs/OPEN_ITEMS.md) | 跨轮次唯一待办与待决事项 |

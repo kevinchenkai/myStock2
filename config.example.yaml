@@ -9,6 +9,10 @@ futu:
   # 交易密码只通过环境变量 MYSTOCK2_FUTU_TRADE_PWD 注入；此处出现非空 trade_pwd 会被拒绝。
   # 交易环境：REAL（实盘）/ SIMULATE（模拟）。历史成交仅支持 REAL。
   trd_env: REAL
+  # 券商主体（futu.SecurityFirm 的名字，如 FUTUSECURITIES）：collect futu 必填，**须由负责人确认，不硬编码、不猜**（D10）。
+  # security_firm: FUTUSECURITIES
+  # 两次富途查询之间的最小间隔（秒；与 V1 共享接口额度，默认 3.2）
+  # min_interval: 3.2
 
 collect:
   markets:
@@ -17,6 +21,10 @@ collect:
 
 db:
   path: "data/mystock2.db"
+
+# 标的名单（只用于给持仓标「核心/交易」角色）；默认 config/local/universe.yaml
+# universe:
+#   path: config/local/universe.yaml
 
 # Web：只允许监听回环地址。开发期用 8889（V1 占用 8888）；切换日后改 8888（实施方案 §3.7）。
 web:

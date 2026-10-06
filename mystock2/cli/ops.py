@@ -911,11 +911,11 @@ def register(sub) -> None:
     cq.add_argument("--hourly", action="store_true", help="同时采集小时线（须每天运行以从首日归档）")
     cq.add_argument("--local-dir", help="本地私有配置目录（默认 config/local/）")
     cq.set_defaults(fn=cmd_collect_quotes)
-    cf = cl.add_parser("futu", help="富途只读采集（需授权；未经真实验证）")
+    cf = cl.add_parser("futu", help="富途只读采集（需授权；只读查询）")
     for k, kw in (("--account-id", {"required": True}), ("--acc-id", {"required": True, "type": int}), ("--start", {"required": True}), ("--end", {"required": True}),
                   ("--what", {"default": "deals,fees,snapshot"}), ("--assume-market-currency", {"action": "store_true", "help": "订单费用接口无币种字段：按成交市场币种入账（2026-10-05 首跑核实：港股印花税 0.1%、美股佣金 0.99 与市场币种一致）"}),
                   ("--cashflow-file", {"help": "JSONL：离线重放原始资金流水（不连 OpenD）"}),
-                  ("--cashflow-map", {"help": "YAML：资金流水类型→入账方式（DEPOSIT/WITHDRAW/INTEREST/TAX/RECON_ONLY/DIVIDEND/DIVIDEND_WHT）"})):
+                  ("--cashflow-map", {"help": "YAML：资金流水类型→入账方式（DEPOSIT/WITHDRAW/INTEREST/TAX/RECON_ONLY/DIVIDEND/DIVIDEND_WHT/ACCOUNT_FEE/EXTERNAL）"})):
         cf.add_argument(k, **kw)
     cf.set_defaults(fn=cmd_collect_futu)
     v1 = sub.add_parser("v1", help="V1 数据").add_subparsers(dest="v1cmd", required=True)

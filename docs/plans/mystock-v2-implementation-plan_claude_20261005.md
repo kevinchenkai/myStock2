@@ -2,7 +2,7 @@
 
 | 项 | 内容 |
 | --- | --- |
-| 版本 | **1.1**（在 v1.0 定稿基础上吸收 M0a 预审结论，见 §14；v1.0＝v0.8 内容，负责人 2026-10-05 批准；v0.8 的负责人决定未送评审；修订依据见 [评审记录](plan-review-log_claude_20261005.md)） |
+| 版本 | **1.2**（v1.1 之后吸收实施与真实数据阶段的偏差、2026-10-05 全仓代码审核的语义修订，见 §15；v1.1 吸收 M0a 预审结论，见 §14；v1.0＝v0.8 内容，负责人 2026-10-05 批准；v0.8 的负责人决定未送评审；修订依据见 [评审记录](plan-review-log_claude_20261005.md)） |
 | 日期 | 2026-10-05（America/Los_Angeles） |
 | 执笔 | Claude |
 | 基线 | `main` @ `504d3fc`（v0.7.1）；本方案所在提交见 Git |
@@ -100,15 +100,17 @@
 | 目标 | **V2 将替代 V1**（§3.7 切换计划）。V2 为新仓库；**V1 代码已由负责人锁定只读**，V1 在 V2 完成前继续在 8888 端口运行。开发期间**V2 不修改 V1 代码、不写入 V1 数据库、不重启 V1**；切换动作见 §3.7，须另行明确授权 |
 | 数据 | V2 自建数据库 `data/mystock2.db`。V1 `data/mystock.db` 通过**一次性、只读**导入器进入 V2 账本（`collectors/v1_import`），导入前后做校验；导入器只开 `mode=ro` 连接 |
 | 代码复用 | **负责人决定：V1 成熟代码可借用，也可全新生成，逐模块择优**。借用＝**拷贝＋重写测试**，不 `import` V1，文件头注明来源提交 SHA；候选：`code_map`、Futu/yfinance 采集客户端的分段与重试逻辑、交易日历、LightGBM+CQR 预测器（M8）、`lightweight-charts` 前端资源。全新生成者须通过本方案的账本不变量与 §8 测试（V1 的口径缺陷——费用、浮点、重撮合、账户维度——**不得被借用代码带入**）。每个模块的「借用/重写」选择与理由登记在 `docs/records/` 的模块来源表 |
-| 环境 | 新 conda 环境（默认 `mk2`、Python 3.11，D9），不污染 V1 的 `mk` |
+| 环境 | **与 V1 共用 conda 环境 `mk`（Python 3.10；负责人 2026-10-05 决定，D9 关闭）**；代码兼容 3.10–3.11。`ruff` 与 `hypothesis` 只在 `mk2` 环境里有（见 §15） |
 | 并行期 | V1 在 8888 继续运行，`update.sh` 仍可由用户照常运行；**V2 开发期 Web 默认监听 8889（`config.yaml` 的 `web.port`，仅回环）**，避免与 V1 冲突；V2 采集独立进行，二者互不依赖。对账期可对比两边持仓数。**V1 与 V2 共用同一富途账户与 OpenD**，接口额度（如历史成交每 30 秒 ≤10 次）与连接数是共享资源：M0 核验并发影响，V2 采集默认错峰、限频 |
 | 跨通道去重 | 同一笔成交可能经 V1 导入、Futu 直采、CSV 三条通道到达；规范事件键与原始来源证据**分开保存**（§6），避免重复记账 |
 
 ### 3.2 技术栈
 
-Python 3.11 · Flask（只读 Web）· SQLite（WAL，Web 用 `mode=ro` URI 连接）· Decimal 全程 · pytest · 前端沿用静态 JS＋`lightweight-charts`（本地 vendor，不走 CDN）· 配置 YAML · 命令行 `python -m mystock2 <子命令>`（或薄 shell 封装）。LLM 层仅 JSON schema 校验的文件通道（M9）。不引入 React/FastAPI/PostgreSQL/消息队列。
+Python 3.10（与 V1 共用 `mk`）· Flask（只读 Web）· SQLite（WAL，Web 用 `mode=ro` URI 连接）· Decimal 全程 · pytest · 前端为零依赖的静态原生 JS 与自绘 SVG 图表（**未引入 `lightweight-charts`**，不走 CDN）· 配置 YAML · 命令行 `python -m mystock2 <子命令>`（或薄 shell 封装）。LLM 层仅 JSON schema 校验的文件通道（M9）。不引入 React/FastAPI/PostgreSQL/消息队列。
 
 ### 3.3 目录布局
+
+v1.2 注：下表是方案阶段的规划，实际模块以代码为准（如 `ledger/` 为 events/projection/opening/pnl/fees/settlement/reconcile，`market/` 为 bars/fx/evidence，`coach/` 为 decide/tickets/intents，`cli/` 为 ops/update；`csv_import`、`ids`、`sessions` 未实现）。
 
 ```text
 mystock2/                  # Python 包
@@ -391,7 +393,7 @@ V1 只读导入器：`orders/deals/positions/account_funds` → `source_record` 
 | `ledger_event` | M2a | 规范业务事件，只追加；业务键＝券商实体＋账户＋环境＋成交/流水身份；`event_type`：`OPENING_POSITION/OPENING_CASH/FILL/FEE/DIVIDEND_ACCRUAL/DIVIDEND_PAYMENT/DIVIDEND_SHORTFALL/DEPOSIT/WITHDRAW/FX/INTEREST/TAX/ADJUST/REVERSAL`（拆股见 `corporate_action`）；`group_id/leg_id`；`qty_delta/cash_delta` 十进制字符串；`ref_order_id/ref_deal_id`；`corrects_event_id`；`event_at/received_at`（即发生时间与接收时间；全文统一用 `event_at`）；`status`（含「待匹配」）；`version` 与 `business_key` |
 | `fee_profile` | M2a | 市场、方向、聚合层级（订单/成交/账期）、最低/比例/固定/封顶/税、舍入、生效期、来源；**数值私有** |
 | `account_snapshot` | M2a | 券商快照（持仓、逐币种现金、可用/冻结）带精确时间，只追加，供对账 |
-| `settlement_state` | M2a | 应收应付、结算日期、冻结现金、订单预留、可卖库存（经济现金≠可交易现金） |
+| `settlement_state` | M2a | 应收应付、结算日期、冻结现金、订单预留、可卖库存（经济现金≠可交易现金）。**v1.2 注：实现为派生计算（`ledger/settlement.py`），不是表** |
 | `quote_daily` / `quote_hourly` / `fx_rate` | M4 | 原始价与复权价分列；bar 起止、完成状态；来源与质量状态；缺失显式 |
 | `evidence_snapshot` | M4 | 不可变输入快照＋哈希；`event_at/available_at/received_at`；时间可信度；修订追加新版本 |
 | `security_rule` | M4 | lot/tick 档位、有效期、来源；未知≠精确 |
@@ -623,7 +625,7 @@ LG-01…08（账本）、LN-01…07（视图）、CO-01…06（教练）、RP-01
 | D6 | 时间止损 `max_hold_days` 与亏损承受；到期退出是否覆盖最低获利 | 无默认数值；**默认到期退出覆盖 `min_gain`**（R14） | — | M6 | M6 |
 | D7 | LLM 通道：仅人工，还是同时开 API；预算上限、脱敏范围 | 首期仅人工通道，API 关闭 | — | M9 | M9 |
 | D8 | 公网报告：是否继续发布；是否改为私有＋白名单公开 | 默认不发布；如需，仅白名单 | — | M10 | — |
-| D9 | Python 版本与环境名；是否引入 hypothesis/ruff | Python 3.11、conda 环境 `mk2` | M1 | — | — |
+| D9 | Python 版本与环境名；是否引入 hypothesis/ruff | **已关闭（v1.2）：与 V1 共用 `mk`、Python 3.10**；ruff/hypothesis 在 `mk2` | M1 | — | — |
 | D10 | 富途账户范围：仅实盘？是否含模拟盘？是否多账户 | 单账户实盘（历史成交仅支持实盘）；`account_id` 预留 | — | M2a | — |
 | D11 | 评审通过的标准 | 双审对修订版均无 must-fix 且负责人确认（§12.5） | M0a | — | — |
 | **D12** | **是否愿意在正式观察期内事前记录结构化人类计划**（动作/限价/数量/有效期；先看该人类线自己的状态；含明确的「不交易」记录；AI 单有密封期） | 愿意；每个计划日最小记录。**只阻塞「以 `human_plan` 为对照的正式比较」**；答「否」是明确的范围选择，转入描述性分支（人类比较仅限描述），AI 与买入持有等合格比较照常进行 | — | — | M6（仅 human_plan 比较） |
@@ -735,6 +737,25 @@ LG-01…08（账本）、LN-01…07（视图）、CO-01…06（教练）、RP-01
 
 **M0a 退出**：预审回执已入库；D16 的输入（功能对照表、模块来源表）已就绪，待负责人确认取舍。M0b（V1 库 schema/行数、备份演练）仍需授权。
 
+## 15 实施与真实数据阶段的偏差、全仓审核的语义修订（v1.2，2026-10-05）
+
+依据：[真实数据阶段改动记录](../records/real-data-phase-changelog_claude_20261005.md)（§3 的 13 条偏差逐条见该文）、[全仓代码审核](../records/code-review-20261005_claude_20261005.md)。下列是**实施中发现的事实与语义修订**，不改变方案方向；标「待负责人确认」的是实现选择，负责人可改。
+
+| # | 修订 | 落点 |
+| --- | --- | --- |
+| 1 | 环境：与 V1 共用 `mk`（Python 3.10），D9 关闭；前端未引入 `lightweight-charts`，图表为自绘 SVG | §3.1、§3.2 |
+| 2 | 成本口径：富途 `cost_price` 是摊薄成本（可为负），`average_cost` 才是平均成本；开账成本证据只用平均成本，跨拆股时按因子换回开账时的每股成本 | §6；迁移 0008 |
+| 3 | 开账：新增**倒推开账**（`ledger open --at`）；真实开账点 2024-10-20；V1 日快照不用于开账/对账；对账可登记既知残差基线（`reconcile.known_cash_diffs`） | §6；FR-5/FR-6 |
+| 4 | 事后重建（rebuilt）的预测不密封；**forward 只给当时生成的预测**：输入截止不早于 T 日收盘、生成早于目标日开盘，CLI 的 `--tag forward` 只接受单日 | §6A.2；WP4.6 |
+| 5 | **冻结组**：每次成功冻结登记全部成员（含内容未变、沿用旧行的单，`ticket_group`，迁移 0010）；选择单元是「截止前最后一个冻结组」——部分否决或部分刷新不得让未改的单（含卖单）失效 | §6A.3 |
+| 6 | **首次揭示按（市场、目标日）判定，不按批次**：在任一批次看过该目标日的 AI 单，都是 `seen_ai=1` | §6A.2 |
+| 7 | 出单方（教练、买入持有、人类计划）定量与引擎预留**共用同一最坏成本函数**（含税、滑点、逐笔计费上限）；费用倍数敏感性下引擎仍按整单拒绝（是否改为截断：待负责人确认） | §6A.4；ADR 0002 |
+| 8 | 人类计划按**整组**累计预算，顺序为「卖单在前、买单按代码字母序」（待负责人确认），超出部分按 `human_plan.constraint_handling` 截断或作废 | §6A.2 |
+| 9 | 数据日收盘到目标日开盘之间生效拆股的标的：教练不出可执行单（`split_pending`），不换算价位 | §6A.5 |
+| 10 | `--allow-drift` 下产生的单据（`protocol_version` 带 `+drift`）与人类计划（备注 `[drift]`）使记分牌整次标 pilot；记分牌只评到已收盘的交易日 | §6A.7 |
+| 11 | `human_actual`：非交易日（周末夜盘等）的现金事件归到下一个交易日，与持仓同一切分 | §6A.9 |
+| 12 | 例行更新（`mystock2 update` + launchd，多时间点、增量检查、锁）是新增的运行方式；不完整的成功（未跑富途/缺映射）不让后续时间点跳过 | §9；[日常更新指南](../guides/daily-update_claude_20261005.md) |
+
 ---
 
 ## 附录 A 目标与里程碑对照
@@ -765,3 +786,4 @@ LG-01…08（账本）、LN-01…07（视图）、CO-01…06（教练）、RP-01
 | 0.8 | 2026-10-05 | **项目负责人决定**（非评审意见）：V2 替代 V1；V1 代码锁定只读，可借用或全新生成；V2 完成后 V1 切 8887、V2 用 8888，V1 过渡数天。新增 §3.7 替代与端口切换计划（开发期 V2 用 8889；五项切换条件；授权边界）、M10 扩为「近实时、切换与交接」（WP10.3–10.6）、WP0a.5 与 D16 功能对照表；D0 关闭；代码复用改为逐模块借用或重写（须守账本不变量）。**此次改动未送评审** |
 | 1.0 | 2026-10-05 | 负责人批准定稿，内容同 v0.8；进入实施 |
 | 1.1 | 2026-10-05 | 吸收 M0a 预审结论（§14）：E11 前半不成立、E8 措辞修正、名单硬编码位置、富途接口限制、tick/结算/除息规则核实状态、yfinance 默认值等；均为事实修订，无方向变化 |
+| 1.2 | 2026-10-05 | 吸收实施与真实数据阶段的偏差、全仓代码审核的语义修订（§15）：环境、成本口径、倒推开账、forward 守卫、冻结组、跨批次揭示、共用成本函数、人类计划整组预算、拆股日不出单、漂移标记、`human_actual` 切分、例行更新。#7、#8 的实现选择待负责人确认；无方向变化 |

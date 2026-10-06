@@ -9,7 +9,8 @@ dependencies:
       - PyYAML>=6.0
       - Flask>=3.0
       - yfinance==1.7.0   # 与 V1 同版本；公开接口，个人研究用途，不保证实时
-      # dev
+      # dev（注：负责人本机的 mk 目前没有 hypothesis 与 ruff——属性测试在 mk 里自动跳过，ruff 在 mk2 里运行；
+      #     是否在 mk 安装由负责人决定，见 docs/records/code-review-20261005_claude_20261005.md Q6）
       - pytest>=8
       - hypothesis>=6
       - ruff>=0.5

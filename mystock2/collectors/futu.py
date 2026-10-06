@@ -1,4 +1,4 @@
-"""富途采集器（实施方案 WP2.3/2.7）。**按官方文档与 V1 经验编写，尚未对真实 OpenD/账户验证**（需负责人授权后首跑）。
+"""富途采集器（实施方案 WP2.3/2.7）。按官方文档与 V1 经验编写；2026-10-05 已在负责人授权下对真实 OpenD 首跑核对（见 docs/records/first-real-run）。
 
 - 通过 `TradeApi` 协议注入：单测用假实现；真实实现 `FutuTradeApi` 惰性导入 `futu`，**只读查询**，**显式 acc_id 与 security_firm**（不硬编码），仅实盘。
 - 历史成交：自选 80 天窗口分段（官方未规定窗口；这是工程选择）、限频间隔可配（与 V1 共享额度，须错峰）、单个市场/窗口失败只记 partial 与可重试范围。
@@ -43,7 +43,8 @@ WINDOW_DAYS = 80                    # 工程选择：官方默认窗口 90 天�
 FEE_BATCH = 400                     # order_fee_query 每次最多 400 个订单（官方文档，未实测）
 PRICE_Q, QTY_Q = Decimal("0.0001"), Decimal("0.000001")
 
-# 资金流水的入账方式（必须显式映射；值：DEPOSIT / WITHDRAW / INTEREST / TAX / RECON_ONLY / DIVIDEND / DIVIDEND_WHT）。未映射的类型进待匹配队列。
+# 资金流水的入账方式（必须显式映射；值见 CASHFLOW_RULES：DEPOSIT / WITHDRAW / INTEREST / TAX / RECON_ONLY / DIVIDEND / DIVIDEND_WHT /
+# ACCOUNT_FEE / EXTERNAL）。未映射的类型进待匹配队列。改映射后重放不会以新键再入账（已入账的流水号报冲突）。
 # DIVIDEND＝股息总额、DIVIDEND_WHT＝同日同标的预扣税（成对入账为 post_dividend 情形①；接口无除息日：应收与支付同日，是已声明的局限）。
 _DIV_CODE = re.compile(r"\(([A-Z0-9.]+)\)\s*dividend", re.I)                       # 美股新格式：「… COM(MSFT) dividend, USD 0.91 per share」
 _DIV_CODE_OLD = re.compile(r"^([A-Z][A-Z0-9.]*)\s+[\d.]+\s+SHARES\b")                  # 美股旧格式：「TSM 1.00000000 SHARES DIVIDENDS …」
@@ -536,7 +537,7 @@ class FileCashflowApi:
 
 # ---------------------------------------------------------------- 真实实现（已于 2026-10-05 首跑核实：见 docs/records/first-real-run）
 class FutuTradeApi:
-    """富途 OpenAPI 的只读封装。**未经真实验证**；方法与字段名按官方文档/V1 经验编写，首跑须在负责人授权下核对。"""
+    """富途 OpenAPI 的只读封装。方法与字段名按官方文档/V1 经验编写，2026-10-05 首跑核对过；卖空/成交状态等字段未在真实数据中出现过。"""
 
     def __init__(self, host: str, port: int, security_firm: str):
         self.host, self.port, self.security_firm = host, port, security_firm

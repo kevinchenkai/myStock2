@@ -54,7 +54,7 @@ python -m mystock2 web                                                          
 
 - 对账基线：美元现金有已登记的既知残差 −13.84（FR-6），写在本机 `config.yaml` 的 `reconcile.known_cash_diffs`。对账输出仍在 `baseline_cash_diffs` 列出它；只有**偏离基线**（超过容差 0.01）、持仓不一致、待匹配或不完整 FX 组才算失败。查清并入账后删掉该基线。
 - 对账不一致时先看 `data/logs` 与「数据状态」页，**不要**继续生成操作单。
-- 资金流水里出现未映射的新类型会进待匹配队列（`ledger status` 可见数量）；确认含义后把类型加进 `config/local/futu_cashflow_map.yaml`（`DIVIDEND`/`DIVIDEND_WHT`/`ACCOUNT_FEE`/`WITHDRAW`/`DEPOSIT`/`INTEREST`/`TAX`/`RECON_ONLY`），再用 `--lookback` 重放。
+- 资金流水里出现未映射的新类型会进待匹配队列（`ledger status` 可见数量）；确认含义后把类型加进 `config/local/futu_cashflow_map.yaml`（`DIVIDEND`/`DIVIDEND_WHT`/`ACCOUNT_FEE`/`EXTERNAL`/`WITHDRAW`/`DEPOSIT`/`INTEREST`/`TAX`/`RECON_ONLY`），再用 `--lookback` 重放（显式给 `--lookback` 的运行不会被增量检查跳过）。**已入账的类型改映射不会重放出第二笔**：同一流水号会报冲突，需要走更正流程。
 
 ## 重建（删库重来）
 

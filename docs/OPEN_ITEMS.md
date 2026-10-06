@@ -2,7 +2,7 @@
 
 > **跨轮次的唯一待办来源。** 开新一轮前先读这里；一轮结束时把没做完的登记进来。约定见 [COLLABORATION.md](COLLABORATION.md) §4。
 > 关闭一项时标记完成并写明关闭它的提交／文档，**不要删行**。
-> 最后更新：2026-10-05（方案 v1.0 定稿；负责人确认 D0；gpt-6.1 七轮、grok-4.7 两轮评审已处置）。
+> 最后更新：2026-10-05（方案 v1.2；全仓代码审核与 Web UI 升级见 [审核报告](records/code-review-20261005_claude_20261005.md)）。
 
 | 状态 | 含义 |
 | --- | --- |
@@ -26,7 +26,7 @@
 | D6 | 时间止损 `max_hold_days` 与亏损承受；到期退出是否覆盖最低获利（默认覆盖） | 待答复 |
 | D7 | LLM 通道：仅人工，还是同时开 API；预算上限、脱敏范围 | 待答复 |
 | D8 | 公网报告：是否继续发布；是否改为私有＋白名单公开 | 待答复 |
-| D9 | Python 版本与环境名（默认 3.11、`mk2`）；是否引入 hypothesis/ruff | 待答复 |
+| D9 | Python 版本与环境名（默认 3.11、`mk2`）；是否引入 hypothesis/ruff | ✅ 已关闭（负责人 2026-10-05：与 V1 共用 `mk`、Python 3.10；ruff/hypothesis 目前只在 `mk2`，是否装进 `mk` 见审核报告 Q6） |
 | D10 | 富途账户范围：仅实盘？含模拟盘？多账户？**券商主体/账户类型**（资金流水接口不支持 moomoo US；V1 硬编码 FUTUSECURITIES） | 待答复 |
 | D11 | 评审通过的标准 | ✅ 已关闭：负责人 2026-10-05 批准第一版定稿（评审收敛情况见评审记录；最后修正未再送审，已如实登记） |
 | D12 | **是否愿意在正式观察期内事前记录结构化人类计划**（只阻塞 human_plan 对照的正式比较；答「否」转描述性分支） | 待答复 |
@@ -39,7 +39,7 @@
 
 | 编号 | 事项 | 状态 |
 | --- | --- | --- |
-| RV-01 | gpt-6.1 评审（七轮；末轮余 1 项机械性 must-fix，v0.7.1 已修，未再送审，[原文](plans/plan-review_gpt_r7_20261005.md)）：第一轮（[原文](plans/plan-review_gpt_20261005.md)）、第二轮（[原文](plans/plan-review_gpt_r2_20261005.md)）、第三、四轮（[原文](plans/plan-review_gpt_r3_20261005.md)、[原文](plans/plan-review_gpt_r4_20261005.md)）仍「不通过」但 must-fix 逐轮收敛 16→11→1→1→0，v0.2–v0.5.1 已逐条处置（[评审记录](plans/plan-review-log_claude_20261005.md)）；第五轮（[原文](plans/plan-review_gpt_r5_20261005.md)，限定范围）结论「通过」、无新增 must-fix | 进行中 |
+| RV-01 | ✅ 已关闭（方案已获负责人批准定稿；下述为历史）gpt-6.1 评审（七轮；末轮余 1 项机械性 must-fix，v0.7.1 已修，未再送审，[原文](plans/plan-review_gpt_r7_20261005.md)）：第一轮（[原文](plans/plan-review_gpt_20261005.md)）、第二轮（[原文](plans/plan-review_gpt_r2_20261005.md)）、第三、四轮（[原文](plans/plan-review_gpt_r3_20261005.md)、[原文](plans/plan-review_gpt_r4_20261005.md)）仍「不通过」但 must-fix 逐轮收敛 16→11→1→1→0，v0.2–v0.5.1 已逐条处置（[评审记录](plans/plan-review-log_claude_20261005.md)）；第五轮（[原文](plans/plan-review_gpt_r5_20261005.md)，限定范围）结论「通过」、无新增 must-fix | ✅ 已关闭 |
 | RV-02 | grok-4.7 评审（经 `cursor-agent`）：首轮（[原文](plans/plan-review_grok_20261005.md)）「有条件通过」→ 确认轮（[原文](plans/plan-review_grok_r2_20261005.md)）「**通过**」，无阻塞 must-fix | ✅ 已关闭（对象为 v0.6；v0.7/v0.7.1 的改动未经 grok 复核，若负责人要求可补一轮） |
 
 ## 实施进度
@@ -49,21 +49,23 @@
 | M0a | 只读预审（V1 源码与官方文档）、V1 功能对照表（D16 输入）：[审计](records/v1-audit_claude_20261005.md)、[功能对照](records/v1-feature-parity_claude_20261005.md)、[模块来源](records/module-sources_claude_20261005.md) | ✅ 已完成（方案 v1.1 §14 已吸收；官方文档部分经摘要读取，引用前须复核） |
 | M1 | 地基（包骨架、core、迁移器、边界测试） | ✅ 已完成（回执 [m1-foundation](records/m1-foundation_claude_20261005.md)） |
 | M0b | V1 库只读核对与一次性导入 | ✅ 已完成（负责人 2026-10-05 授权；回执 [first-real-run](records/first-real-run_claude_20261005.md)） |
-| M2a | 账本（最小前向包）：核心逻辑与合成测试完成，回执 [m2a-ledger-core](records/m2a-ledger-core_claude_20261005.md)；Futu 采集与真实对账待授权与 M0a | 进行中 |
+| M2a | 账本（最小前向包）：核心逻辑与合成测试完成，回执 [m2a-ledger-core](records/m2a-ledger-core_claude_20261005.md)；Futu 采集与真实对账已在首跑完成（[首跑回执](records/first-real-run_claude_20261005.md)） | ✅ 已完成 |
 | M4 | 行情与预测基线：回执 [m4-market-baseline](records/m4-market-baseline_claude_20261005.md) | ✅ 已完成（合成数据＋公开行情冒烟） |
-| M5 | 记分牌：引擎/指标/统计/持久化完成，回执 [m5-scoreboard](records/m5-scoreboard_claude_20261005.md)；页面与 CLI 待 M3/M6 | 核心完成 |
+| M5 | 记分牌：引擎/指标/统计/持久化完成，回执 [m5-scoreboard](records/m5-scoreboard_claude_20261005.md)；页面（M3b）与 CLI（`scoreboard run`）已有 | 核心完成（等比较批次） |
 | M6 | 教练：核心/密封/暴露/冻结/选择规则与记分牌接入完成（合成端到端），回执 [m6-coach](records/m6-coach_claude_20261005.md)；**合格前向计时待 D1–D6/D12–D15 与真实账户授权** | 核心完成，待启动 |
 | M7 | 复盘：卡片/回合/行为指标完成，回执 [m7-replay](records/m7-replay_claude_20261005.md)；「不操作」反事实待真实数据 | ✅ 已完成（合成数据） |
 | M9 | LLM 否决（人工通道）：回执 [m9-llm-veto](records/m9-llm-veto_claude_20261005.md)；API 通道（D7）未做 | ✅ 已完成（合成数据） |
-| M2b | V1 历史导入器：回执 [m2b-v1-import](records/m2b-v1-import_claude_20261005.md)；**真实导入待 M0b 授权** | 代码完成，待授权 |
-| M3 | 透视（Web）：框架＋六个视图完成，回执 [m3-web-views](records/m3-web-views_claude_20261005.md)；LN-07（K 线/资金流向/公司资料）未做 | ✅ 已完成（合成数据） |
+| M2b | V1 历史导入器：回执 [m2b-v1-import](records/m2b-v1-import_claude_20261005.md)；真实导入已在 M0b 授权下完成 | ✅ 已完成 |
+| M3 | 透视（Web）：框架＋六个视图完成，回执 [m3-web-views](records/m3-web-views_claude_20261005.md)；LN-07 中资金流向与公司资料已在股票详情展示存量（M3d），K 线与持续采集未做 | ✅ 已完成 |
+| M3c/M3d/M3e | 预测效果视图、标的中文名与股票详情、全表翻页/券商订单/财务统计：回执 [m3c](records/m3c-forecast-view_claude_20261005.md)、[m3d](records/m3d-names-stock-detail_claude_20261005.md)、[m3e](records/m3e-pagination-orders-finance_claude_20261005.md) | ✅ 已完成 |
+| UPD | 例行更新 `mystock2 update` + launchd 多时间点：[日常更新指南](guides/daily-update_claude_20261005.md) | ✅ 已上线（2026-10-05） |
 | M3-a | `snapshot_position` 成本口径 | ✅ 已核实并修正（真实首跑 2026-10-05）：富途 `cost_price` 是**摊薄成本**（可为负），`average_cost` 才是平均成本；迁移 0008 新增 `average_cost`/`diluted_cost` 两列，`cost_basis` 保留为历史列；开账成本证据只用平均成本，且要求开账后该标的无成交 |
 | M3-b | 盈亏成本口径（移动平均；无证据/估算/精确三类按比例消耗；见 `ledger/pnl.py` 头注释）需负责人确认 | 待确认 |
 | M8 | LightGBM+CQR 候选线：预测器与评估框架完成；探索性评估未过门槛（+0.57%，3/6），**不晋级**；回执 [m8-lgbm-cqr](records/m8-lgbm-cqr_claude_20261005.md) | 完成（负结果） |
 | M10 | 交接文档：[真实数据启动指南](guides/real-data-startup_claude_20261005.md)、[切换运行手册](guides/cutover-runbook_claude_20261005.md)；**`quoted` 近实时、公开导出白名单（D8）、切换执行均未做** | 文档完成，执行待决定/授权 |
 | M3b | 操作单（密封）/记分牌/复盘/数据状态视图：回执 [m3b-web-ops-views](records/m3b-web-ops-views_claude_20261005.md)；复盘「对照」栏、记分牌下钻/敏感性并列/经济增量表未做 | ✅ 已完成（合成数据） |
 | CR-1 | 代码评审第 1 轮（gpt 26 条＋grok 独有项）：[处置记录](records/code-review-disposition_claude_r1_20261005.md) | ✅ 已处置（局限已登记） |
-| CLI | 新增：`collect quotes/futu`、`v1 import`、`ledger open/reconcile/status`、`batch`、`protocol`、`coach`、`intent`、`veto`、`scoreboard`、`replay` | ✅ |
+| CLI | 新增：`collect quotes/futu`、`v1 import`、`ledger open/reconcile/status`、`batch`、`protocol`、`coach`、`intent`、`veto`、`scoreboard`、`replay`、`forecast run`、`update` | ✅ |
 
 ## 代码评审遗留（来自 [CR-1 处置记录](records/code-review-disposition_claude_r1_20261005.md)）
 
