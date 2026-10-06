@@ -79,6 +79,20 @@ def check_protocol(b: "Batch", loc: "Local", allow_drift: bool) -> list[str]:
     return []
 
 
+DRIFT_SUFFIX, DRIFT_NOTE = "+drift", "[drift]"
+
+
+def _pv(loc: "Local", drift: list[str]) -> str:
+    """写进单据的协议版本：漂移放行（--allow-drift）下产生的单据带 +drift 后缀，记分牌据此把整次 run 标 pilot（审核 P1-14）。"""
+    return str(loc.protocol.get("protocol_version", "pilot")) + (DRIFT_SUFFIX if drift else "")
+
+
+def drift_records(conn, batch_id: str) -> bool:
+    """批次里是否有在协议漂移放行下产生的单据或人类计划（这类记录不得进入正式比较）。"""
+    return bool(conn.execute("SELECT 1 FROM ticket WHERE batch_id=? AND protocol_version LIKE ? LIMIT 1", (batch_id, "%" + DRIFT_SUFFIX)).fetchone()
+                or conn.execute("SELECT 1 FROM intent WHERE batch_id=? AND note LIKE ? LIMIT 1", (batch_id, DRIFT_NOTE + "%")).fetchone())
+
+
 # ------------------------------------------------------------------ 本地私有配置
 @dataclass
 class Local:
@@ -375,7 +389,7 @@ def cmd_coach_run(args) -> int:
                                 params=params, fee_rules=loc.fee_rules, trade_equity=equity, split_pending=split_pending)
                 ids = freeze_tickets(cw, batch_id=b.batch_id, line_id=b.lines[kind], kind="line_sim", market=market, target_session=target, stage=args.stage,
                                      drafts=drafts, state_ref_type="line_state", state_ref=state.hash(), strategy_version=params.version,
-                                     protocol_version=loc.protocol.get("protocol_version", "pilot"), generated_at=now, now=_now(args), deadline_at=deadline)   # 冻结时间取提交时的真实时钟
+                                     protocol_version=_pv(loc, drift), generated_at=now, now=_now(args), deadline_at=deadline)   # 冻结时间取提交时的真实时钟
                 n_total += len(ids)
             run.note(tickets=n_total, pilot=bool(missing or b.pilot or drift), missing=missing, drift=bool(drift))
             # 密封：只输出回执与计数，不输出动作/限价/数量
@@ -437,7 +451,7 @@ def cmd_intent_add(args) -> int:
     loc = load_local(args.local_dir)
     ro = _conn_ro(cfg)
     b = load_batch(ro, args.batch)
-    check_protocol(b, loc, getattr(args, "allow_drift", False))
+    drift = check_protocol(b, loc, getattr(args, "allow_drift", False))
     market, target = b.market, date.fromisoformat(args.target)
     st, _ = state_at_open(ro, loc, b, "human_plan", target)
     now = _now(args)
@@ -449,7 +463,8 @@ def cmd_intent_add(args) -> int:
     with _opener(cfg, "coach") as w:
         res = record_intent(w, batch_id=b.batch_id, line_id=b.lines["human_plan"], market=market, code=args.code, target_session=target, action=args.action.upper(),
                             limit_price=args.limit, qty=args.qty, state=st, state_hash=st.hash(), now=now, deadline_at=cal.project_deadline(market, target),
-                            constraint_handling=handling, rule=rule, fee_rules=loc.fee_rules, note=args.note)
+                            constraint_handling=handling, rule=rule, fee_rules=loc.fee_rules,
+                            note=(DRIFT_NOTE + " " + (args.note or "")).strip() if drift else args.note)
     print(f"intent={res.intent_id} qty={res.qty} truncated={res.truncated} seen_ai={int(res.seen_ai)} late_record={int(res.late_record)} notes={list(res.notes)}")
     return 0
 
@@ -460,7 +475,7 @@ def cmd_human_plan_freeze(args) -> int:
     loc = load_local(args.local_dir)
     ro = _conn_ro(cfg)
     b = load_batch(ro, args.batch)
-    check_protocol(b, loc, getattr(args, "allow_drift", False))
+    drift = check_protocol(b, loc, getattr(args, "allow_drift", False))
     target = date.fromisoformat(args.target)
     deadline = cal.project_deadline(b.market, target)
     st, _ = state_at_open(ro, loc, b, "human_plan", target)
@@ -469,7 +484,7 @@ def cmd_human_plan_freeze(args) -> int:
     now = _now(args)
     with _opener(cfg, "coach") as w:
         ids = freeze_tickets(w, batch_id=b.batch_id, line_id=b.lines["human_plan"], kind="line_sim", market=b.market, target_session=target, stage="human_plan",
-                             drafts=drafts, state_ref_type="line_state", state_ref=st.hash(), strategy_version="human", protocol_version=loc.protocol.get("protocol_version", "pilot"),
+                             drafts=drafts, state_ref_type="line_state", state_ref=st.hash(), strategy_version="human", protocol_version=_pv(loc, drift),
                              generated_at=min(now, deadline), now=now, deadline_at=deadline)
     print(f"human_plan_tickets={len(ids)} plan_missing={sum(1 for p in plan.values() if 'plan_missing' in p['flags'])}")
     return 0
@@ -482,6 +497,8 @@ def cmd_scoreboard_run(args) -> int:
     ro = _conn_ro(cfg)
     b = load_batch(ro, args.batch)
     drift = check_protocol(b, loc, getattr(args, "allow_drift", False))
+    if drift_records(ro, b.batch_id):                      # 漂移期产生的单据/计划混在批次里：整次 run 只能是 pilot，即使本次运行没有漂移
+        drift = drift + ["drift_records"]
     end = date.fromisoformat(args.end)
     weights = {c: Decimal(1) / len(b.codes) for c in b.codes} if b.codes else {}       # 默认：交易仓标的等权（协议可预注册覆盖）
     for c, w in ((loc.protocol.get("buyhold") or {}).get("weights") or {}).items():
@@ -570,7 +587,7 @@ def cmd_veto_import(args) -> int:
         print(f"未知输入包：{args.pack}", file=sys.stderr)
         return 2
     b = load_batch(ro, row["batch_id"])
-    check_protocol(b, loc, getattr(args, "allow_drift", False))
+    drift = check_protocol(b, loc, getattr(args, "allow_drift", False))
     target = date.fromisoformat(row["target_session"])
     st, _ = state_at_open(ro, loc, b, "ai_veto", target)
     text = Path(args.response).read_text(encoding="utf-8")
@@ -578,7 +595,7 @@ def cmd_veto_import(args) -> int:
     with _opener(cfg, "veto") as vw:
         res = import_veto(vw, ro, pack_id=args.pack, response_text=text, provider="manual", model_id=args.model_id, prompt_version=args.prompt_version or PROMPT_VERSION,
                           now=now, deadline_at=cal.project_deadline(b.market, target), strategy_version=loc.strategy_params().version,
-                          protocol_version=loc.protocol.get("protocol_version", "pilot"), state_ref=st.hash())
+                          protocol_version=_pv(loc, drift), state_ref=st.hash())
     print(f"status={res.status} reason={res.reason} tickets={len(res.tickets)}")
     return 0 if res.status == "applied" else 1
 

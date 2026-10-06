@@ -248,6 +248,14 @@ def test_f01_protocol_drift_after_batch_creation_is_refused_and_unfrozen_batches
     assert r.returncode == 1 and "不一致" in r.stderr
     r = cli(env, "coach", "run", "--batch", "F1", "--market", "US", "--stage", "close", "--as-of", T.isoformat(), "--now", NOW_CLOSE, "--allow-drift", *loc)
     assert r.returncode == 0 and "pilot=True" in r.stdout                                                   # 调试允许，但结果标 pilot
+    # 审核 P1-14：漂移期冻结的单据带 +drift；把协议改回后，记分牌仍因批次里混有漂移记录而整次标 pilot
+    pv = {r["protocol_version"] for r in dbmod.connect_ro(env["db"]).execute("SELECT protocol_version FROM ticket WHERE batch_id='F1'")}
+    assert pv and all(v.endswith("+drift") for v in pv)
+    fees.write_text(fees.read_text(encoding="utf-8").replace("'0.002'", "'0.001'"), encoding="utf-8")
+    r = cli(env, "scoreboard", "run", "--batch", "F1", "--end", TARGET.isoformat(), *loc)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout[r.stdout.index("{"):])
+    assert out["pilot"] is True and out["drift"] is True
 
 
 def test_f09_batch_create_validates_positions_and_includes_other_equity_in_e0(env):
