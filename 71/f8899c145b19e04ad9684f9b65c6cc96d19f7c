@@ -1,0 +1,34 @@
+tests/unit/test_ledger_events.py
+  s_4e5dbfa251c076::t_444e5926988387 342-358,360-366,368-384
+  s_4e5dbfa251c076::t_842da46bd774ee 359,367
+mystock2/ledger/pnl.py
+  s_4e5dbfa251c076::t_4aa412dfd8ad15 235-239,243,249,273-274,277-278
+mystock2/cli/ops.py
+  s_4e5dbfa251c076::t_a9ee26e88b8946 744-745,756-760
+mystock2/core/db.py
+  s_4e5dbfa251c076::t_842da46bd774ee 135
+tests/integration/test_cli.py
+  s_4e5dbfa251c076::t_d86432ce23a1a2 61-83
+tests/unit/test_ledger_pnl.py
+  s_4e5dbfa251c076::t_2443607c8a6cc5 169-180
+migrations/0011_append_only_guards.sql
+  s_4e5dbfa251c076::t_f0655e8ec51d3e 1-6
+mystock2/ledger/events.py
+  s_4e5dbfa251c076::t_842da46bd774ee 284-288,355-359
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "71f8899c145b19e04ad9684f9b65c6cc96d19f7c",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
