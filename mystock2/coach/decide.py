@@ -18,7 +18,7 @@ from typing import Protocol
 from mystock2.core.money import floor_to_lots
 from mystock2.instruments.security_rule import RuleUnknown, SecurityRule
 from mystock2.instruments.universe import UniverseEntry
-from mystock2.ledger.fees import FeeRule, estimate, select_rule
+from mystock2.ledger.fees import FeeRule, estimate, max_buy_cost, possible_fills_bound, select_rule
 
 BUY, SELL, HOLD, SKIP = "BUY", "SELL", "HOLD", "SKIP"
 
@@ -177,9 +177,13 @@ def decide(state: StateView, *, market: str, target_session: date, universe: lis
         budget = min(params.budget_slice * trade_equity, state.tradable_cash() - reserved, headroom)
         cap_by_lots = max(Decimal(0), Decimal(e.max_lots) * lot - held)     # max_lots 是总持仓手数上限（含已有）
         qty = int(floor_to_lots(min(budget / limit, cap_by_lots), lot))
-        while qty > 0:                                                  # 把预估费用也放进预算
-            fee = estimate(select_rule(fee_rules, market, BUY, day), [(Decimal(qty), limit)]).fee
-            if Decimal(qty) * limit + fee <= min(budget, state.tradable_cash() - reserved):
+        buy_rule = select_rule(fee_rules, market, BUY, day)
+        bars_bound = possible_fills_bound(market, target_session)
+
+        def need_of(n: int, rule=buy_rule, px=limit, bound=bars_bound) -> Decimal:   # 与记分牌引擎预留同一口径（费用＋税＋滑点＋逐笔费上限，审核 P1-10）
+            return max_buy_cost(rule, n, px, slippage_bps=params.slippage_bps, possible_fills=bound)
+        while qty > 0:
+            if need_of(qty) <= min(budget, state.tradable_cash() - reserved):
                 break
             qty -= lot
         if qty <= 0:
@@ -191,7 +195,7 @@ def decide(state: StateView, *, market: str, target_session: date, universe: lis
         if width < params.k * c_rt:
             out.append(TicketDraft(code, SKIP, reason_codes=("no_edge",), uncertainty={**unc, "width": str(width), "c_rt": str(c_rt)}, model_ref=pred.prediction_id))
             continue
-        need = Decimal(qty) * limit + estimate(select_rule(fee_rules, market, BUY, day), [(Decimal(qty), limit)]).fee
+        need = need_of(qty)
         reserved += need
         out.append(TicketDraft(code, BUY, limit, qty, lot, need, ("edge_ok", "buy_target"), uncertainty={**unc, "width": str(width), "c_rt": str(c_rt)},
                                model_ref=pred.prediction_id))

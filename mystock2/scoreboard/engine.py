@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import Protocol
 
 from mystock2.core import calendars as cal
-from mystock2.ledger.fees import FeeRule, estimate, select_rule
+from mystock2.ledger.fees import FeeRule, estimate, max_buy_cost, select_rule
 from mystock2.ledger.settlement import SettlementRule, settle_date
 from mystock2.scoreboard.matcher import match_order
 from mystock2.scoreboard.types import BUY, SELL, DayResult, ExecProtocol, HBar, LineState, Lot, SimFill, SimOrder
@@ -117,12 +117,9 @@ def _simulate_day(md, market, day, state: LineState, orders: list[SimOrder], pro
             if px is None:
                 res.rejected.append((o, "no_price"))
                 continue
-            px = px * (1 + protocol.slippage_bps / Decimal(10000))          # 按最坏成交价（含滑点）预留
             rule = select_rule(fee_rules, market, BUY, day.isoformat())
-            fee_res, tax_res = _fee(rule, [(Decimal(o.qty), px)], protocol)
-            if rule.basis == "fill":                                          # 逐笔计费：每个可能的成交 bar 都可能再收最低费与固定费
-                fee_res += (rule.min_fee + rule.flat_fee) * max(0, len(bars) - 1) * protocol.fee_multiplier
-            need = Decimal(o.qty) * px + fee_res + tax_res
+            # 按最坏成交价（含滑点）＋费用与税（×倍数）预留；逐笔计费时每个可能成交的 bar 都可能再收最低费与固定费（与出单方同一函数）
+            need = max_buy_cost(rule, o.qty, px, slippage_bps=protocol.slippage_bps, fee_multiplier=protocol.fee_multiplier, possible_fills=len(bars))
             if need > tradable - reserved:
                 res.rejected.append((o, "cash_insufficient"))
                 continue

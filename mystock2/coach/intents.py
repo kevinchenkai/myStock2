@@ -12,14 +12,13 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
 
 from mystock2.coach.decide import BUY, HOLD, SELL, SKIP, StateView, TicketDraft
 from mystock2.core.db import atomic
 from mystock2.core.money import dec, floor_to_lots, to_db
 from mystock2.core.timeutil import ensure_utc, iso_utc, utc_now
 from mystock2.instruments.security_rule import SecurityRule
-from mystock2.ledger.fees import FeeRule, estimate, select_rule
+from mystock2.ledger.fees import FeeRule, max_buy_cost, possible_fills_bound, select_rule
 
 ACTIONS = ("BUY", "SELL", "HOLD", "NO_TRADE")
 
@@ -107,8 +106,10 @@ def record_intent(conn: sqlite3.Connection, *, batch_id: str, line_id: str, mark
         else:
             rule_fee = select_rule(fee_rules, market, BUY, target_session.isoformat())
 
-            def need(n):
-                return Decimal(n) * px + estimate(rule_fee, [(Decimal(n), px)]).fee
+            bars_bound = possible_fills_bound(market, target_session)
+
+            def need(n):                                             # 与记分牌引擎预留同一口径（含税与逐笔费上限，审核 P1-10）
+                return max_buy_cost(rule_fee, n, px, possible_fills=bars_bound)
             if need(q) > state.tradable_cash():
                 if constraint_handling == "reject":
                     raise IntentRejected("超预算：该人类线可交易现金不足")

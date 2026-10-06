@@ -433,3 +433,35 @@ def test_f25_human_actual_applies_splits_via_ledger_projection(tmp_path):
     res = human_actual_series(conn, md, account_id=ACCT, market="US", currency="USD", codes={CODE}, budget=D(0), d0=DAYS[0], sessions=[DAYS[1], DAYS[2]])
     before, after = res
     assert before.equity == D(10) * 20 and after.equity == D(20) * 10 and after.positions == {CODE: D(20)}     # 价格减半、数量翻倍：权益不变
+
+
+def test_p1_10_sizing_and_engine_reservation_share_one_cost_function():
+    """审核 P1-10：出单方定量（教练、买入持有、人类计划）与引擎预留必须同口径（含买入税、逐笔计费上限）；
+    否则「出单方认为可行」的单被引擎整单以现金不足拒绝，买入持有还会静默空仓。"""
+    from mystock2.coach.decide import Prediction, StrategyParams, decide
+    from mystock2.instruments.security_rule import SecurityRule, parse_bands
+    from mystock2.instruments.universe import validate_universe
+
+    taxed = [FeeRule("syn", "US", "ANY", "order", "USD", pct_fee=Decimal("0"), min_fee=Decimal("3"), tax_pct=Decimal("0.001"))]
+    per_fill = [FeeRule("syn", "US", "ANY", "fill", "USD", pct_fee=Decimal("0"), min_fee=Decimal("1"))]
+    md = FakeMD()
+    md.flat(CODE, DAYS, 10)
+    settle = SettlementRule("US", 1)
+    # 买入持有：预算 10005、整手 100、价 10：含 0.1% 税后 1000 股要 10013 → 只能买 900 股，不能空仓
+    prov = BuyHoldProvider(md, market="US", weights={CODE: Decimal(1)}, first_day=DAYS[0], lot_sizes={CODE: 100}, fee_rules=taxed, protocol=PROTO)
+    r = run_line(md, market="US", currency="USD", initial=LineState("USD", Decimal("10005")), sessions=DAYS[:2], provider=prov, protocol=PROTO,
+                 fee_rules=taxed, settlement=settle, lot_sizes={CODE: 100})
+    assert not r.results[0].rejected and r.results[-1].positions.get(CODE) == Decimal(900)
+    uni = validate_universe({"instruments": [{"code": CODE, "tier": "trade", "max_weight": "1", "max_lots": 1000}]}).entries
+    params = StrategyParams(k=Decimal("0.1"), q_buy=Decimal("0.5"), q_sell=Decimal("0.8"), max_hold_days=5, exit_q=Decimal("0.3"),
+                            budget_slice=Decimal("1"), allow_add=False)
+    pred = {CODE: Prediction("p", Decimal(10), Decimal("9.5"), Decimal("10.5"), 250)}
+    for cash, fees, lot in ((Decimal("10005"), taxed, 100), (Decimal("993"), per_fill, 1)):
+        rule = SecurityRule(CODE, "2026-01-01", None, lot, parse_bands('[{"tick":"0.01"}]'), "合成", True)
+        (t,) = decide(LineState("USD", cash), market="US", target_session=DAYS[0], universe=uni, predictions=pred, rules={CODE: rule}, params=params,
+                      fee_rules=fees, trade_equity=cash)
+        assert t.action == BUY and t.reserved_cash <= cash
+        x = run_line(md, market="US", currency="USD", initial=LineState("USD", cash), sessions=DAYS[:1],
+                     provider=lambda s, d, t=t: [SimOrder("ai", CODE, t.action, t.qty, t.limit_price)], protocol=PROTO, fee_rules=fees,
+                     settlement=settle, lot_sizes={CODE: lot}).results[0]
+        assert not x.rejected, x.rejected

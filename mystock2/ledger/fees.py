@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from decimal import ROUND_HALF_EVEN, Decimal
 from pathlib import Path
@@ -58,6 +59,27 @@ def estimate(rule: FeeRule, fills: list[tuple[Decimal, Decimal]]) -> FeeEstimate
         parts = [_one(rule, abs(q) * p) for q, p in fills]
         return FeeEstimate(sum((x.fee for x in parts), Decimal(0)), sum((x.tax for x in parts), Decimal(0)))
     raise ValueError(f"不支持的计费层级：{rule.basis}")
+
+
+def max_buy_cost(rule: FeeRule, qty, px: Decimal, *, slippage_bps: Decimal = Decimal(0), fee_multiplier: Decimal = Decimal(1),
+                 possible_fills: int = 1) -> Decimal:
+    """买入的最坏现金需求——出单方定量与记分牌引擎预留**共用同一口径**（审核 P1-10）：
+    按含滑点的成交价；佣金与税（如港股双边印花税）都乘费用倍数；逐笔计费时，每多一个可能成交的 bar 再加一次最低费与固定费。"""
+    q = Decimal(qty)
+    p = px * (1 + slippage_bps / Decimal(10000))
+    e = estimate(rule, [(q, p)])
+    need = q * p + (e.fee + e.tax) * fee_multiplier
+    if rule.basis == "fill":
+        need += (rule.min_fee + rule.flat_fee) * max(0, possible_fills - 1) * fee_multiplier
+    return need
+
+
+def possible_fills_bound(market: str, day) -> int:
+    """一个交易日里可能成交的小时 bar 数的上界（定量时还不知道实际 bar 数）：按开收盘跨度向上取整再加 1，宁多勿少。"""
+    from mystock2.core import calendars as cal
+
+    s = cal.session(market, day)
+    return math.ceil((s.close_utc - s.open_utc).total_seconds() / 3600) + 1
 
 
 def select_rule(rules: list[FeeRule], market: str, side: str, on_date: str) -> FeeRule:

@@ -14,7 +14,7 @@ from mystock2.core import calendars as cal
 from mystock2.core.db import atomic
 from mystock2.core.money import floor_to_lots, to_db
 from mystock2.core.timeutil import iso_utc, utc_now
-from mystock2.ledger.fees import FeeRule, estimate, select_rule
+from mystock2.ledger.fees import FeeRule, max_buy_cost, select_rule
 from mystock2.scoreboard.engine import LineRun, MarketData, ProviderUnknown
 from mystock2.scoreboard.metrics import summarize
 from mystock2.scoreboard.types import BUY, ExecProtocol, LineState, SimOrder
@@ -98,9 +98,9 @@ class BuyHoldProvider:
             alloc = budget * w
             rule = select_rule(self.fee_rules, self.market, BUY, day.isoformat())
             qty = int(floor_to_lots(alloc / px, lot))
-            while qty > 0:
-                fee = estimate(rule, [(Decimal(qty), px)]).fee * self.protocol.fee_multiplier
-                if Decimal(qty) * px + fee <= alloc:
+            while qty > 0:                                            # 与引擎预留同口径（含税、滑点、逐笔费上限），否则建仓单会被整单拒绝而静默空仓
+                if max_buy_cost(rule, qty, px, slippage_bps=self.protocol.slippage_bps, fee_multiplier=self.protocol.fee_multiplier,
+                                possible_fills=len(bars)) <= alloc:
                     break
                 qty -= lot
             if qty > 0:
