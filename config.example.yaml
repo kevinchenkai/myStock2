@@ -28,3 +28,8 @@ update:
   account_id: main        # 账本里的账户占位名（须与导入时的 --account-id 一致）
   acc_id: 0               # 富途 acc_id（真实值只写本机 config.yaml）
   lookback_days: 10
+
+# 对账既知残差基线（账本 − 券商，按币种；默认不设）。只对「偏离基线」报警，基线本身仍在对账输出里列出。
+# reconcile:
+#   known_cash_diffs:
+#     USD: "-13.84"

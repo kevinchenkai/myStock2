@@ -21,6 +21,7 @@ class ReconcileReport:
     snapshot_id: str
     position_diffs: list[dict] = field(default_factory=list)
     cash_diffs: list[dict] = field(default_factory=list)
+    baseline_cash_diffs: list[dict] = field(default_factory=list)   # 已登记的既知残差：照列不隐藏，但不算新差异
     open_pending: int = 0
     incomplete_fx_groups: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
@@ -31,7 +32,10 @@ class ReconcileReport:
 
 
 def reconcile(conn: sqlite3.Connection, account_id: str, snapshot_id: str,
-              cash_tolerance: dict[str, Decimal] | Decimal = DEFAULT_CASH_TOLERANCE) -> ReconcileReport:
+              cash_tolerance: dict[str, Decimal] | Decimal = DEFAULT_CASH_TOLERANCE,
+              known_cash_diffs: dict[str, Decimal] | None = None) -> ReconcileReport:
+    """known_cash_diffs：币种 → 已登记的既知差额（账本 − 券商）。差额与基线之差在容差内视为「无新差异」，
+    仍记入 baseline_cash_diffs；一旦偏离基线（哪怕只多 0.02）就进 cash_diffs 并使 ok=False。"""
     snap = conn.execute("SELECT * FROM account_snapshot WHERE snapshot_id=? AND account_id=?", (snapshot_id, account_id)).fetchone()
     if not snap:
         raise ValueError(f"快照不存在：{snapshot_id}")
@@ -49,8 +53,12 @@ def reconcile(conn: sqlite3.Connection, account_id: str, snapshot_id: str,
     for ccy in sorted(set(scash) | set(proj.cash)):
         a, b = proj.cash.get(ccy, Decimal(0)), scash.get(ccy, Decimal(0))
         tol = cash_tolerance.get(ccy, DEFAULT_CASH_TOLERANCE) if isinstance(cash_tolerance, dict) else cash_tolerance
-        if abs(a - b) > tol:
-            rep.cash_diffs.append({"currency": ccy, "ledger": str(a), "broker": str(b), "diff": str(a - b), "tolerance": str(tol)})
+        base = (known_cash_diffs or {}).get(ccy)
+        if base is not None and abs(a - b) > tol and abs((a - b) - base) <= tol:
+            rep.baseline_cash_diffs.append({"currency": ccy, "ledger": str(a), "broker": str(b), "diff": str(a - b), "baseline": str(base), "tolerance": str(tol)})
+        elif abs(a - b - (base or Decimal(0))) > tol:
+            rep.cash_diffs.append({"currency": ccy, "ledger": str(a), "broker": str(b), "diff": str(a - b), "tolerance": str(tol),
+                                   **({"baseline": str(base)} if base is not None else {})})
     rep.open_pending = len(open_pending(conn))
     rep.incomplete_fx_groups = incomplete_fx_groups(conn, account_id)
     return rep

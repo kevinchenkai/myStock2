@@ -120,6 +120,21 @@ def test_reconcile_cash_within_tolerance_and_snapshot_time_cutoff(tmp_path):
     assert not reconcile(conn, ACCT, s, cash_tolerance=D("0.001")).ok
 
 
+def test_reconcile_known_cash_diff_baseline_is_listed_but_only_drift_fails(tmp_path):
+    conn = make_db(tmp_path)
+    opening.record_opening(conn, ACCT, T0, {}, {"USD": "1000"})
+    s = snap(conn, D2, {}, {"USD": "1013.84"})                                  # 账本 1000，券商 1013.84：差 −13.84
+    assert not reconcile(conn, ACCT, s).ok                                      # 无基线：照常失败
+    rep = reconcile(conn, ACCT, s, known_cash_diffs={"USD": D("-13.84")})
+    assert rep.ok and not rep.cash_diffs                                        # 基线内：不算新差异
+    assert rep.baseline_cash_diffs and rep.baseline_cash_diffs[0]["diff"] == "-13.84"   # 但仍列出，不隐藏
+    drift = snap(conn, D3, {}, {"USD": "1013.90"})                              # 又多漂了 0.06
+    rep = reconcile(conn, ACCT, drift, known_cash_diffs={"USD": D("-13.84")})
+    assert not rep.ok and rep.cash_diffs[0]["baseline"] == "-13.84"
+    other = snap(conn, D3, {}, {"USD": "1013.84", "HKD": "5"})                  # 基线只豁免所登记的币种
+    assert {d["currency"] for d in reconcile(conn, ACCT, other, known_cash_diffs={"USD": D("-13.84")}).cash_diffs} == {"HKD"}
+
+
 def test_reconcile_lists_pending_and_incomplete_fx_never_hides_them(tmp_path):
     conn = make_db(tmp_path)
     opening.record_opening(conn, ACCT, T0, {}, {"USD": "100"})

@@ -734,8 +734,10 @@ def cmd_ledger(args) -> int:
         if sn is None:
             print("找不到快照", file=sys.stderr)
             return 2
-        rep = reconcile(ro, args.account_id, sn["snapshot_id"])
+        known = {str(k): dec(v) for k, v in ((cfg.raw.get("reconcile") or {}).get("known_cash_diffs") or {}).items()}
+        rep = reconcile(ro, args.account_id, sn["snapshot_id"], known_cash_diffs=known)
         print(json.dumps({"snapshot": sn["snapshot_id"], "ok": rep.ok, "position_diffs": rep.position_diffs, "cash_diffs": rep.cash_diffs,
+                          "baseline_cash_diffs": rep.baseline_cash_diffs,
                           "open_pending": rep.open_pending, "incomplete_fx_groups": rep.incomplete_fx_groups, "warnings": rep.warnings}, ensure_ascii=False, indent=2))
         return 0 if rep.ok else 1
     p = project(ro, args.account_id)
