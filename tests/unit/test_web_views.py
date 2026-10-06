@@ -482,3 +482,29 @@ def test_p1_8_trade_after_the_snapshot_is_not_reported_as_unreconciled(tmp_path)
     assert nv["qty"]["text"] == "91" and nv["broker_qty"]["text"] == "90" and nv["qty_match"] is True and nv["changed_since_snapshot"] is True
     pos = get_view(c, "stock", code="US.NVDA")[1]["data"]["position"]
     assert pos["qty_match"] is True and pos["changed_since_snapshot"] is True
+
+
+@pytest.mark.parametrize("dirty", ["close", "fx", "cost"])
+def test_w03_single_dirty_value_degrades_one_cell_not_the_whole_page(tmp_path, dirty):
+    """审核 W-03：库里一条脏值（收盘价 'N/A'、汇率 0、快照成本 'N/A'）只让对应格「不可用」，页面不 500、不编数。"""
+    from mystock2.core import db as dbmod
+
+    db = build_demo_db(tmp_path)
+    raw = dbmod.connect_migrator(db)
+    if dirty == "close":
+        raw.execute("INSERT INTO quote_daily(code, session_date, version, source, open, high, low, close, adj_close, volume, event_at, received_at, quality, content_hash) "
+                    "VALUES ('US.NVDA','2026-03-10',9,'synthetic','N/A','N/A','N/A','N/A',NULL,NULL,'2026-03-10T21:00:00.000000Z','2026-03-11T05:00:00.000000Z','ok','x')")
+    elif dirty == "fx":
+        raw.execute("INSERT INTO fx_rate(pair, rate_date, version, source, rate, event_at, received_at, content_hash) "
+                    "VALUES ('CNYUSD','2026-03-10',1,'synthetic','0','2026-03-10T21:00:00Z','2026-03-11T05:00:00Z','x')")
+    else:
+        sid = raw.execute("SELECT snapshot_id FROM account_snapshot ORDER BY captured_at DESC LIMIT 1").fetchone()[0]
+        raw.execute("INSERT INTO snapshot_position(snapshot_id, market, code, qty, average_cost) VALUES (?, 'US', 'US.AMD', '5', 'N/A')", (sid,))
+    raw.commit()
+    raw.close()
+    c = make_app(tmp_path, db).test_client()
+    for vid in ("account_overview", "holdings", "trades", "pnl", "equity_trend", "fx", "data_status", "replay"):
+        assert get_view(c, vid)[0] == 200, (dirty, vid)
+    if dirty == "close":
+        nv = by(get_view(c, "holdings")[1]["data"]["rows"], "code", "US.NVDA")
+        assert "N/A" not in str(nv["price"]) and nv["price"]["tag"].startswith("陈旧")      # 退回上一个有效收盘价，并标陈旧

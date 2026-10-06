@@ -161,7 +161,10 @@ def _build_samples(preds: list[dict], quotes: dict, tag: str) -> dict[str, dict]
                 unscorable += 1
                 continue
             yl, yh = lab
-            y_low, y_high = dec(p["y_low"]), dec(p["y_high"])
+            y_low, y_high = C.dec_or_none(p["y_low"]), C.dec_or_none(p["y_high"])
+            if y_low is None or y_high is None:
+                unscorable += 1
+                continue
             samples[(p["code"], p["as_of"])] = {
                 "code": p["code"], "as_of": p["as_of"], "target": p["target"], "y_low": y_low, "y_high": y_high, "act_low": yl, "act_high": yh,
                 "breach_low": yl < y_low, "breach_high": yh > y_high, "width": y_high - y_low,
@@ -323,7 +326,10 @@ def _level_cells(p: dict | None, base_close: Decimal | None, ccy: str, why_missi
         return {"low": C.na_cell(why_missing), "high": C.na_cell(why_missing)}
     out = {}
     for key, field in (("low", "low_price"), ("high", "high_price")):
-        px = dec(p[field])
+        px = C.dec_or_none(p[field])
+        if px is None:
+            out[key] = C.na_cell("留档价位无效")
+            continue
         cell = dict(C.price_cell(px, ccy), text=f"{C.fmt_decimal(px, 2)} {ccy}")             # 展示 2 位小数；v 保留留档精度
         if base_close is not None and base_close > 0:
             rel = px / base_close - ONE

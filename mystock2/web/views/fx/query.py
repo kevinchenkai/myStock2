@@ -8,7 +8,6 @@ from __future__ import annotations
 from datetime import date, timedelta
 from decimal import Decimal
 
-from mystock2.core.money import dec
 from mystock2.market.fx import FxUnavailable
 from mystock2.web import common as C
 from mystock2.web.fxpath import describe_legs, resolve
@@ -45,7 +44,10 @@ def run(conn, params):
     by_date: dict[str, dict] = {}
     for r in raw:                                       # 同一日取最后收到的一条（含反向币对）
         inv = r["pair"] != pair
-        rate = (Decimal(1) / dec(r["rate"])) if inv else dec(r["rate"])
+        raw_rate = C.dec_or_none(r["rate"], positive=True)
+        if raw_rate is None:                             # 无效汇率（0、N/A）：该日当缺口，不让整页 500
+            continue
+        rate = (Decimal(1) / raw_rate) if inv else raw_rate
         by_date[r["rate_date"]] = {"date": r["rate_date"], "rate": rate, "source": r["source"], "inverse": inv, "received_at": r["received_at"],
                                    "event_at": r["event_at"]}
     history = [by_date[k] for k in sorted(by_date)]

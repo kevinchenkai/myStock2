@@ -30,6 +30,20 @@ class ViewUnavailable(Exception):
         self.code, self.message = code, message
 
 
+def dec_or_none(v: Any, *, positive: bool = False) -> Decimal | None:
+    """库里的数值文本 → Decimal；无法解析（如 'N/A'）、非有限、或要求为正却不为正 → None。
+    读取层用它把单条脏值降级为该格「不可用」，而不是让整页 500（审核 W-03）；不猜、不补零。"""
+    if v is None or str(v).strip() == "":
+        return None
+    try:
+        d = dec(str(v))
+    except (ValueError, ArithmeticError):
+        return None
+    if not d.is_finite() or (positive and d <= 0):
+        return None
+    return d
+
+
 def now_of(params: dict) -> datetime:
     """框架注入的当前时间（便于测试固定时钟）；直接调用 run 时回退到系统时间。"""
     return params.get("_now") or utc_now()

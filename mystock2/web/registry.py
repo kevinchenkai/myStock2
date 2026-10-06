@@ -24,9 +24,11 @@ BUILTIN_VIEWS_DIR = Path(__file__).resolve().parent / "views"
 FORBIDDEN_IMPORTS = (
     "mystock2.forecast", "mystock2.collectors", "mystock2.assistant", "yfinance", "futu", "requests", "urllib.request",
     "http.client", "socket", "subprocess", "sqlite3.dbapi2", "ftplib", "smtplib",
+    "importlib", "ctypes", "multiprocessing", "os", "shutil",                 # 动态导入／绕过静态检查的途径（审核 W-01）
 )
-FORBIDDEN_NAMES = ("connect_writer", "connect_migrator", "migrate")
-FORBIDDEN_CALLS = ("utc_now",)       # 取当前时间必须经 params["_now"]（common.now_of），保持纯函数、可固定时钟
+FORBIDDEN_NAMES = ("connect_writer", "connect_migrator", "migrate", "__import__")
+# 取当前时间必须经 params["_now"]（common.now_of），保持纯函数、可固定时钟；连接只能用框架传入的只读连接
+FORBIDDEN_CALLS = ("utc_now", "now", "utcnow", "connect", "exec", "eval", "compile", "open")
 
 DATA_MODES = ("daily", "cached", "realtime")
 
@@ -134,13 +136,13 @@ def lint_query_source(path: Path) -> list[str]:
             problems.append(f"禁止引用 {node.id}")
         if isinstance(node, ast.Attribute) and node.attr in FORBIDDEN_NAMES:
             problems.append(f"禁止引用 {node.attr}")
-        if isinstance(node, ast.alias) and node.name.split(".")[-1] in FORBIDDEN_NAMES:
-            problems.append(f"禁止导入 {node.name}")
+        if isinstance(node, ast.alias) and node.name.split(".")[-1] in FORBIDDEN_NAMES + FORBIDDEN_CALLS:
+            problems.append(f"禁止导入 {node.name}")                          # 含 `utc_now as clock` 这类改名导入
         if isinstance(node, ast.Call):
             fn = node.func
             name = fn.id if isinstance(fn, ast.Name) else fn.attr if isinstance(fn, ast.Attribute) else ""
             if name in FORBIDDEN_CALLS:
-                problems.append(f"禁止直接调用 {name}()：当前时间请用 common.now_of(params)")
+                problems.append(f"禁止直接调用 {name}()：当前时间请用 common.now_of(params)；数据库只用框架传入的只读连接")
     return sorted(set(problems))
 
 
@@ -214,6 +216,9 @@ def discover_views(dirs: list[Path]) -> tuple[dict[str, ViewSpec], list[ViewProb
             except ViewError as exc:
                 problems.append(ViewProblem(folder.name, str(exc)))
                 continue
+            except Exception as exc:  # noqa: BLE001 — 坏的 view.yaml（语法错、order 非数字…）不得拖垮整个应用（审核 W-02）
+                problems.append(ViewProblem(folder.name, f"视图定义无法读取：{type(exc).__name__}: {exc}"))
+                continue
             if spec.id in found:
                 problems.append(ViewProblem(spec.id, f"视图 id 重复（{found[spec.id].dir} 与 {folder}）；保留先发现者"))
                 continue
@@ -261,7 +266,15 @@ def apply_config(specs: dict[str, ViewSpec], cfg: dict) -> tuple[list[ViewEntry]
         for k in defaults:
             if k not in specs[vid].params:
                 problems.append(ViewProblem(vid, f"views.yaml 为未声明的参数 {k} 给了默认值，已忽略"))
-        defaults = {k: v for k, v in defaults.items() if k in specs[vid].params}
+        checked = {}
+        for k, v in defaults.items():
+            if k not in specs[vid].params:
+                continue
+            try:                                                   # 配置里的默认值同样要过类型/范围/可选值校验（审核 P3）
+                checked[k] = specs[vid].params[k].coerce(v)
+            except (ViewError, ValueError, TypeError) as exc:
+                problems.append(ViewProblem(vid, f"views.yaml 中参数 {k} 的默认值不合法（{exc}），已忽略"))
+        defaults = checked
         entries[vid] = ViewEntry(specs[vid], bool(it.get("enabled", True)), bool(it.get("hidden", False)), defaults, pos)
         pos += 1
     rest = sorted((s for s in specs.values() if s.id not in entries), key=lambda s: (s.order, s.id))

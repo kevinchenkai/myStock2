@@ -219,3 +219,32 @@ def test_json_never_uses_float_for_money(tmp_path):
     body = get_view(make_app(tmp_path).test_client(), "account_overview")[1]
     cell = body["data"]["currencies"][0]["cash"]
     assert isinstance(cell["v"], str) and cell["ccy"] in ("USD", "HKD")
+
+
+def test_w01_lint_catches_dynamic_imports_aliases_and_own_connections(tmp_path):
+    """审核 W-01：动态导入、改名导入取时钟、自己开连接都要被静态检查拒绝。"""
+    cases = {
+        "dyn": "import importlib\nm = importlib.import_module('mystock2.forecast')\n",
+        "dunder": "m = __import__('socket')\n",
+        "alias": "from mystock2.core.timeutil import utc_now as clock\nx = clock()\n",
+        "conn": "import sqlite3\nc = sqlite3.connect('x.db')\n",
+        "dt": "from datetime import datetime\nx = datetime.now()\n",
+        "osmod": "import os\n",
+    }
+    for vid, src in cases.items():
+        p = tmp_path / f"{vid}.py"
+        p.write_text(src + "def run(conn, params):\n    return {}\n", encoding="utf-8")
+        assert registry.lint_query_source(p), vid
+
+
+def test_w02_broken_view_yaml_is_a_problem_not_a_crash(tmp_path):
+    extra = tmp_path / "extra"
+    write_view(extra, "bad_yaml", "def run(conn, params):\n    return {}\n")
+    (extra / "bad_yaml" / "view.yaml").write_text("id: bad_yaml\ntitle: [unclosed\n", encoding="utf-8")
+    write_view(extra, "bad_order", "def run(conn, params):\n    return {}\n")
+    (extra / "bad_order" / "view.yaml").write_text("id: bad_order\ntitle: x\norder: abc\n", encoding="utf-8")
+    js = make_app(tmp_path, extra_views_dirs=[extra]).test_client().get("/api/views").get_json()
+    assert {p["view"] for p in js["problems"]} >= {"bad_yaml", "bad_order"}
+    cfg = {"views": [{"id": "fx", "params": {"days": "not-a-number"}}]}
+    ordered, probs = registry.apply_config(registry.discover_views([registry.BUILTIN_VIEWS_DIR])[0], cfg)
+    assert any("不合法" in p.message for p in probs) and next(e for e in ordered if e.spec.id == "fx").defaults == {}

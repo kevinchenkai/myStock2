@@ -12,6 +12,7 @@ from mystock2.core.money import dec
 from mystock2.core.timeutil import ensure_utc
 from mystock2.ledger.pnl import BUY, OPENING, SELL, SPLIT, TradeEvent
 from mystock2.ledger.projection import effective_events
+from mystock2.web.common import dec_or_none
 
 
 @dataclass
@@ -55,11 +56,11 @@ def _opening_cost_evidence(conn, account_id, op, events, t0) -> dict[str, Decima
         cap = ensure_utc(s["captured_at"])
         for r in conn.execute("SELECT code, average_cost FROM snapshot_position WHERE snapshot_id=? AND average_cost IS NOT NULL", (s["snapshot_id"],)):
             code = r["code"]
-            if code in out or dec(r["average_cost"]) <= 0:
+            if code in out or dec_or_none(r["average_cost"], positive=True) is None:     # 无效/非正的成本＝没有证据（不猜）
                 continue
             if any(t0 < t <= cap for t in fill_times.get(code, ())):
                 continue
-            cost = dec(r["average_cost"])
+            cost = dec_or_none(r["average_cost"], positive=True)
             for eff, num, den in splits.get(code, ()):
                 if t0 < eff <= cap:
                     cost = cost * Decimal(num) / Decimal(den)

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from mystock2.core.money import dec
 from mystock2.instruments.code_map import currency_of
 from mystock2.ledger.pnl import QUALITY_TEXT
 from mystock2.web import common as C
@@ -21,10 +20,10 @@ FEE_KIND_TEXT = {"commission": "佣金", "platform": "平台费", "tax": "税费
 def cost_cells(code: str, qty: Decimal, px, sp, cp) -> dict:
     """三类成本并列、互不覆盖。px＝valuation.Price；sp＝最近快照的持仓行（可为 None）；cp＝ledger.pnl 的 CodePnl（可为 None）。"""
     ccy = currency_of(code)
-    broker_cost = C.price_cell(dec(sp["average_cost"]), ccy, tag="券商平均成本") if sp is not None and sp["average_cost"] is not None else \
+    broker_cost = C.price_cell(C.dec_or_none(sp["average_cost"]), ccy, tag="券商平均成本") if sp is not None and C.dec_or_none(sp["average_cost"]) is not None else \
         C.na_cell("最近快照没有该标的的平均成本" if sp is not None else "没有快照")
-    diluted = C.price_cell(dec(sp["diluted_cost"]), ccy, tag="券商摊薄成本", title="摊薄成本把已实现盈亏摊入持仓，可为负；它不是持仓的平均成本") \
-        if sp is not None and sp["diluted_cost"] is not None else C.na_cell("最近快照没有摊薄成本")
+    diluted = C.price_cell(C.dec_or_none(sp["diluted_cost"]), ccy, tag="券商摊薄成本", title="摊薄成本把已实现盈亏摊入持仓，可为负；它不是持仓的平均成本") \
+        if sp is not None and C.dec_or_none(sp["diluted_cost"]) is not None else C.na_cell("最近快照没有摊薄成本")
     if cp is None or cp.avg_cost is None:
         local = C.na_cell("没有可追溯的成本证据（开账持仓无成本，且之后无买入）" if cp is not None or qty else "无持仓")
         unreal = C.na_cell("本地成本不可用")
