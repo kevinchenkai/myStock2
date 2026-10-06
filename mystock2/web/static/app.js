@@ -241,7 +241,7 @@
   }
   MS.openStock = openStock;
   /* 在弹窗里显示一块已构造好的内容（复盘卡等）：MS.openDialog(标题, 节点, 触发元素)。 */
-  MS.openDialog = function (titleText, node, opener) { var sh = openShell(titleText, opener); sh.body.textContent = ""; sh.body.appendChild(node); };
+  MS.openDialog = function (titleText, node, opener) { var sh = openShell(titleText, opener || document.activeElement); sh.body.textContent = ""; sh.body.appendChild(node); };
 
   function init() {
     var btn = $("theme-btn");

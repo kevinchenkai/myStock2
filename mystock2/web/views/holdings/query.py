@@ -43,8 +43,8 @@ def _order_cell(st):
     if st is None:
         return C.text_cell("无已冻结的 AI 单")
     if st["state"] == "revealed":
-        return C.text_cell(f"已揭示（目标日 {st['target']}）", title="内容请到「操作单」视图查看")
-    return C.text_cell(f"已密封（目标日 {st['target']}）", title="揭示前不显示动作；揭示只能经命令行写入暴露日志")
+        return C.text_cell(f"已揭示 · 目标日 {st['target']}", title="内容请到「操作单」视图查看")
+    return C.text_cell(f"已密封 · 目标日 {st['target']}", title="揭示前不显示动作；揭示只能经命令行写入暴露日志")
 
 
 def run(conn, params):

@@ -3,7 +3,7 @@ MS.registerPanel("tickets", function (root, d) {
   var o = d.orders;
   if (o) {
     var okv = [["订单总数", String(o.total)]].concat(o.by_status.map(function (x) { return [x.text, String(x.count)]; }));
-    root.appendChild(MS.card("我的订单（券商，实际操作；含已撤/失败）", [
+    root.appendChild(MS.card("我的订单", [
       MS.kv(okv, { stats: true }),
       MS.table([
         { key: "created_at", label: "下单时间", render: function (r) { return { text: MS.fmtTime(r.created_at), title: r.time_trust === "assumed_local_tz" ? "交易所本地时间按市场补时区（推断）" : null }; } },
@@ -46,7 +46,7 @@ MS.registerPanel("tickets", function (root, d) {
         { key: "reasons", label: "原因码", render: function (r) { return r.reasons.join("、") || "—"; } },
         { key: "effective", label: "状态", render: function (r) { return { text: r.effective.text, tag: r.status === "frozen" ? null : r.status_text }; } },
         { key: "deadline_at", label: "截止", render: function (r) { return MS.fmtTime(r.deadline_at); } },
-        { key: "state_ref", label: "状态哈希（线内状态）" },
+        { key: "state_ref", label: "状态哈希", hint: "线内状态" },
         { key: "frozen_hash", label: "单据哈希", render: function (r) { return r.frozen_hash.slice(0, 16); } },
         { key: "version_count", label: "版本数", num: true }
       ], m.rows, { empty: "该目标日没有 AI 单" }));
@@ -66,5 +66,5 @@ MS.registerPanel("tickets", function (root, d) {
     }
     root.appendChild(MS.card(title, body));
   });
-  root.appendChild(MS.card("live_guidance（真实账户指导单）", [MS.kv([["状态", d.live_guidance.text]]), MS.note(d.live_guidance.note)]));
+  root.appendChild(MS.card("live_guidance 真实账户指导单", [MS.kv([["状态", d.live_guidance.text]]), MS.note(d.live_guidance.note)]));
 });

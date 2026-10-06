@@ -489,3 +489,13 @@ def test_text_and_direction_colors_meet_contrast_in_every_theme(scope):
             assert ratio(fg, bg) >= 4.5, (scope, fg, bg, round(ratio(fg, bg), 2))
     for fg, bg in (("--buy-fg", "--buy-bg"), ("--sell-fg", "--sell-bg"), ("--warn-fg", "--warn-bg"), ("--info-fg", "--info-bg"), ("--accent-fg", "--accent")):
         assert ratio(fg, bg) >= 4.5, (scope, fg, bg)
+
+
+def test_replay_card_opens_in_a_popup_and_columns_use_hints_instead_of_parentheses():
+    panel = (STATIC.parent / "views" / "replay" / "panel.js").read_text(encoding="utf-8")
+    assert "MS.openDialog(" in panel and "detailHost" not in panel               # 复盘卡点击后弹窗，不再追加在表格下方
+    app = (STATIC / "app.js").read_text(encoding="utf-8")
+    assert "MS.openDialog" in app and "function openShell" in app                # 股票详情与复盘卡共用弹窗外壳
+    ui = (STATIC / "ui.js").read_text(encoding="utf-8")
+    assert "c.hint" in ui                                                         # 列的补充说明放进表头 tooltip
+    assert "执行质量（区间位置）" not in panel

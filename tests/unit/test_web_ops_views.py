@@ -212,12 +212,12 @@ def test_holdings_order_column_shows_only_state_never_the_action(tmp_path):
     text = raw(c, "holdings")
     assert_no_sealed_content(text, keys=False)               # 持仓行本身有「qty」（账本数量）这个键，不是操作单字段
     rows = {r["code"]: r for r in json.loads(text)["data"]["rows"]}
-    assert rows["US.NVDA"]["order"]["text"] == f"已密封（目标日 {TARGET}）"
+    assert rows["US.NVDA"]["order"]["text"] == f"已密封 · 目标日 {TARGET}"
     assert rows["HK.00700"]["order"]["text"] == "无已冻结的 AI 单"                          # 港股没有单
     add_reveal(db)
     text = raw(c, "holdings")
     rows = {r["code"]: r for r in json.loads(text)["data"]["rows"]}
-    assert rows["US.NVDA"]["order"]["text"] == f"已揭示（目标日 {TARGET}）"
+    assert rows["US.NVDA"]["order"]["text"] == f"已揭示 · 目标日 {TARGET}"
     for v in (SENT_LIMIT, SENT_QTY, "124.5", "555", "BUY", "买入"):                       # 即使已揭示，持仓页也只显示状态
         assert v not in text
 

@@ -101,7 +101,7 @@ MS.registerPanel("stock", function (root, d, ctx) {
       var s = t.summary;
       tKids.push(MS.kv([
         ["已实现盈亏 · 精确（费用后）", s.realized_exact], ["已实现盈亏 · 估算（费用后）", s.realized_estimated],
-        ["无成本证据的卖出股数（盈亏不可用）", s.has_unavailable ? { text: s.unavailable_qty.text + " 股", tag: "不可用" } : s.unavailable_qty],
+        ["无成本证据的卖出股数", s.has_unavailable ? { text: s.unavailable_qty.text + " 股", tag: "不可用" } : s.unavailable_qty],
         ["费用合计（已计入盈亏）", s.fees_total], ["买入 / 卖出笔数", s.buys + " / " + s.sells]
       ]));
     } else tKids.push(MS.note("账本里没有该标的的成交或开账持仓，无盈亏可算。"));
@@ -111,7 +111,7 @@ MS.registerPanel("stock", function (root, d, ctx) {
       { key: "side", label: "方向" }, { key: "qty", label: "数量", num: true }, { key: "price", label: "成交价", num: true },
       { key: "notional", label: "成交额", num: true }, { key: "fee", label: "费用", num: true },
       { key: "net_cashflow", label: "成交净现金流", num: true },
-      { key: "realized", label: "已实现盈亏（卖出）", num: true }, { key: "quality_text", label: "口径" }
+      { key: "realized", label: "已实现盈亏", num: true }, { key: "quality_text", label: "口径" }
     ], t.rows, { empty: "没有该标的的成交", market: false }));
     (t.warnings || []).forEach(function (w) { if (w === "no_opening") tKids.push(MS.note("未登记开账点：全部成交按开账后处理，结果可能不完整。")); });
   }
@@ -172,11 +172,11 @@ MS.registerPanel("stock", function (root, d, ctx) {
     kids.push(MS.table([
       { key: "model", label: "模型", render: function (x) { return { text: x.model, title: x.model_version }; } },
       { key: "as_of", label: "数据截至" }, { key: "target", label: "目标日" },
-      { key: "range", label: "预测区间（最低 – 最高）", num: true, render: function (x) {
+      { key: "range", label: "预测区间", num: true, render: function (x) {
         if (x.sealed) return { text: "已密封", title: x.note, tag: "密封" };
         return { text: x.low.text + " – " + x.high.text, subs: [{ text: "相对 T 日收盘 " + x.rel_low.text, dir: x.rel_low.dir }, { text: x.rel_high.text, dir: x.rel_high.dir }] };
       } },
-      { key: "actual", label: "目标日实际（最低 – 最高）", num: true, render: function (x) { return x.actual ? x.actual.low.text + " – " + x.actual.high.text : { text: x.sealed ? "已密封" : "未结算", na: true }; } },
+      { key: "actual", label: "目标日实际", num: true, render: function (x) { return x.actual ? x.actual.low.text + " – " + x.actual.high.text : { text: x.sealed ? "已密封" : "未结算", na: true }; } },
       { key: "generated_at", label: "重建时刻", render: function (x) { return MS.fmtTime(x.generated_at); } },
       { key: "tag", label: "来源标签" }
     ], b.rows, { sortable: false }));

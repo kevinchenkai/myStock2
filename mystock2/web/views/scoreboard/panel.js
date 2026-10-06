@@ -58,7 +58,7 @@ MS.registerPanel("scoreboard", function (root, d) {
     host.appendChild(MS.legend(series.map(function (s) { return { name: s.name, color: s.color, dash: s.dash }; })));
     var box = h("div");
     host.appendChild(box);
-    MS.lineChart(box, { xs: xs, series: series, gaps: chart.gaps, ccy: chart.currency, label: "权益曲线（" + chart.currency + "）", height: 260 });
+    MS.lineChart(box, { xs: xs, series: series, gaps: chart.gaps, ccy: chart.currency, label: "权益曲线 " + chart.currency, height: 260 });
     host.appendChild(MS.note(chart.note));
   }
 
@@ -82,11 +82,11 @@ MS.registerPanel("scoreboard", function (root, d) {
       ci: iv.lo.na ? { text: "样本不足（n=" + iv.n + "）", na: true } : { text: iv.lo.text + " ～ " + iv.hi.text + "（n=" + iv.n + "）" }, why: q.note
     };
   });
-  root.appendChild(MS.card("配对差（日度，Δ=r_A−r_B，分母固定为 E0）", [
+  root.appendChild(MS.card("配对差 · 日度 · Δ=r_A−r_B · 分母固定为 E0", [
     MS.table([
       { key: "name", label: "对比" }, { key: "paired", label: "配对日 / 计划日", num: true }, { key: "cov", label: "配对覆盖率", num: true },
       { key: "cum", label: "累计差 ΣΔ", num: true }, { key: "mean", label: "日均差", num: true },
-      { key: "exa", label: "剔除歧义日后", num: true }, { key: "ci", label: "块自助法区间（描述）", num: true }, { key: "why", label: "说明" }
+      { key: "exa", label: "剔除歧义日后", num: true }, { key: "ci", label: "块自助法区间", hint: "描述性", num: true }, { key: "why", label: "说明" }
     ], prow),
     MS.note("只在两条线同日均为 OK 的日期上配对；区间只作描述，不触发晋级。这里不给单一的胜负结论。")
   ]));
@@ -105,7 +105,7 @@ MS.registerPanel("scoreboard", function (root, d) {
   root.appendChild(MS.card("② " + ds.title, dk));
 
   // ---- 区 3：live_guidance 占位
-  root.appendChild(MS.card("③ live_guidance（真实账户指导单）", [MS.kv([["状态", d.live_guidance.text]]), MS.note(d.live_guidance.note)]));
+  root.appendChild(MS.card("③ live_guidance 真实账户指导单", [MS.kv([["状态", d.live_guidance.text]]), MS.note(d.live_guidance.note)]));
   if (d.warnings.length) root.appendChild(MS.card("提示", MS.notes(d.warnings)));
   later.forEach(function (fn) { fn(); });
 });

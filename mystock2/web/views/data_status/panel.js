@@ -15,7 +15,7 @@ MS.registerPanel("data_status", function (root, d) {
     d.calendar_warnings.length ? MS.notes(d.calendar_warnings.map(function (w) { return "交易日历提示：" + w.status + "，剩余 " + w.calendar_days_left + " 天（覆盖至 " + w.calendar_end + "）"; })) : null
   ]));
 
-  root.appendChild(MS.card("采集回执（最近成功 / 失败 / 空 / 陈旧）", [
+  root.appendChild(MS.card("采集回执", [
     MS.table([
       { key: "code", label: "标的/币对" }, { key: "kind_text", label: "种类" }, { key: "source", label: "来源" },
       { key: "state_text", label: "状态", render: stateCell },
@@ -27,7 +27,7 @@ MS.registerPanel("data_status", function (root, d) {
     MS.note("失败、空结果、陈旧一律保留并显示，不记零；超过设定小时数没有成功采集标「陈旧」。")
   ]));
 
-  root.appendChild(MS.card("行情（日线 / 小时线 / 缺口交易日）", [
+  root.appendChild(MS.card("行情", [
     MS.table([
       { key: "code", label: "标的" },
       { key: "state_text", label: "状态", render: stateCell },
@@ -46,13 +46,13 @@ MS.registerPanel("data_status", function (root, d) {
 
   if (d.fx.length) {
     root.appendChild(MS.card("汇率", MS.table([
-      { key: "pair", label: "币对" }, { key: "latest_rate_date", label: "最新汇率日" }, { key: "age_days", label: "距今（天）", num: true },
+      { key: "pair", label: "币对" }, { key: "latest_rate_date", label: "最新汇率日" }, { key: "age_days", label: "距今天数", num: true },
       { key: "source", label: "来源" }, { key: "received_at", label: "收到时间", render: function (r) { return MS.fmtTime(r.received_at); } }
     ], d.fx)));
   }
 
   var p = d.predictions;
-  root.appendChild(MS.card("预测版本（只显示数量与目标日）", [
+  root.appendChild(MS.card("预测版本", [
     MS.kv([["版本总数", String(p.total)], ["最新目标日", t(p.latest_target_session)], ["最近生成", p.latest_generated_at ? MS.fmtTime(p.latest_generated_at) : { text: "不可用", na: true }]]),
     MS.table([{ key: "model_version", label: "模型版本" }, { key: "source_tag", label: "来源标签" }, { key: "count", label: "版本数", num: true },
       { key: "latest_target_session", label: "最新目标日" }], p.by_model, { empty: "没有预测版本" }),

@@ -4,7 +4,7 @@ MS.registerPanel("pnl", function (root, d, ctx) {
     var kids = [MS.kv([
       ["已实现盈亏 · 精确（费用后）", s.realized_exact],
       ["已实现盈亏 · 估算（费用后）", s.realized_estimated],
-      ["无成本证据的卖出（盈亏不可用）", s.has_unavailable ? { text: s.unavailable_qty.text + " 股", tag: "不可用" } : s.unavailable_qty],
+      ["无成本证据的卖出", s.has_unavailable ? { text: s.unavailable_qty.text + " 股", tag: "不可用" } : s.unavailable_qty],
       ["费用合计（已计入盈亏）", s.fees_total],
       ["成交净现金流（不是盈亏）", s.trade_net_cashflow],
       ["开账日前成交（只作描述）", s.pre_opening + " 笔"]
@@ -23,7 +23,7 @@ MS.registerPanel("pnl", function (root, d, ctx) {
     { key: "realized", label: "已实现盈亏", num: true }, { key: "quality_text", label: "口径" }
   ], d.sells, { empty: "没有卖出" })));
   if (d.pre_opening.length) {
-    root.appendChild(MS.card("开账日前成交（只作描述）", [MS.table([
+    root.appendChild(MS.card("开账日前成交", [MS.table([
       { key: "at", label: "时间", render: function (r) { return MS.fmtTime(r.at); } }, { key: "code", label: "标的" }, { key: "side", label: "方向" },
       { key: "qty", label: "数量", num: true }, { key: "price", label: "价格", num: true }, { key: "pnl", label: "盈亏", num: true }
     ], d.pre_opening), MS.note("开账日前没有成本证据，这些成交不产生精确盈亏（不可用）。")]));
@@ -46,7 +46,7 @@ MS.registerPanel("pnl", function (root, d, ctx) {
       ])]));
     });
     fkids.push(MS.note(f.note));
-    root.appendChild(MS.card("财务统计（年度现金流）", fkids));
+    root.appendChild(MS.card("财务统计 · 年度现金流", fkids));
   }
   var n = (d.warnings || []).map(function (w) { return w === "no_opening" ? "未登记开账点：全部成交按开账后处理，结果可能不完整" : w.indexOf("oversold:") === 0 ? "超卖：" + w.split(":")[1] + " 的卖出超过账本可追溯库存" : w; });
   root.appendChild(MS.card("口径说明", [MS.notes(["已实现盈亏＝移动平均成本法、费用后；不含股息、利息、汇兑。",

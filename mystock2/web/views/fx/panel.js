@@ -1,7 +1,7 @@
 MS.registerPanel("fx", function (root, d) {
   var h = MS.h;
-  root.appendChild(MS.card("换算（美元 ⇄ 人民币）", [MS.table([
-    { key: "from", label: "从" }, { key: "to", label: "到" }, { key: "rate", label: "汇率（1 从 = 汇率 到）", num: true },
+  root.appendChild(MS.card("换算 · 美元 ⇄ 人民币", [MS.table([
+    { key: "from", label: "从" }, { key: "to", label: "到" }, { key: "rate", label: "汇率", hint: "1 从 = 汇率 到", num: true },
     { key: "path", label: "路径" }, { key: "rate_date", label: "汇率日期", render: function (r) { return r.rate_date || "不可用"; } },
     { key: "source", label: "来源" }, { key: "needed", label: "账户需要", render: function (r) { return r.needed ? "是" : "—"; } }
   ], d.paths), MS.note("路径可以是直接币对、反向币对或经 USD 中转；缺任一段即「不可用」。汇率是比率，用中性色，不按红涨绿跌。")]));

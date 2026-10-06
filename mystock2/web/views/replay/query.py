@@ -21,8 +21,9 @@ from mystock2.web import sealing
 
 SIDE_TEXT = {"BUY": "买入", "SELL": "卖出"}
 ACTION_TEXT = {"BUY": "买入", "SELL": "卖出", "HOLD": "持有", "SKIP": "不操作", "NO_TRADE": "不交易"}
-FLAG_TEXT = {"cost_unknown": "成本未知（期初库存无成本证据，不给盈亏）", "fees_missing": "费用缺失（费用前口径）",
-             "sold_without_inventory": "卖出时账本无库存（数据缺口）"}
+FLAG_TEXT = {"cost_unknown": "成本未知", "fees_missing": "费用缺失", "sold_without_inventory": "卖出时无库存"}
+FLAG_REASON = {"cost_unknown": "成本未知：期初库存无成本证据，不给盈亏", "fees_missing": "费用缺失：费用前口径",
+               "sold_without_inventory": "卖出时账本无库存：数据缺口"}
 INSUFFICIENT = "不足"
 
 
@@ -80,7 +81,7 @@ def _card(c, conn, kinds, now) -> dict:
     evidence += [a["text"] for a in ai] or ["成交前没有已冻结的 AI 单"]
     diagnosis = []
     if rp is not None:
-        diagnosis.append("执行质量（区间位置，越小越好）：" + C.fmt_decimal(rp, 2) + "；事后诊断，不定义最优成交价")
+        diagnosis.append("区间位置（越小越好）：" + C.fmt_decimal(rp, 2) + "，事后诊断，不定义最优成交价")
     elif c.execution:
         diagnosis.append(c.execution.get("note", "不计算"))
     diagnosis += list(c.inferences)
@@ -127,7 +128,7 @@ def _metric_row(m) -> dict:
 def _round_row(r) -> dict:
     ccy = _ccy(r.code)
     pnl = C.money_cell(r.pnl_after_fees, ccy, colored=True, sign=True) if r.pnl_after_fees is not None and ccy else \
-        C.na_cell("；".join(FLAG_TEXT.get(f, f) for f in r.flags) or "不可用")
+        C.na_cell("；".join(FLAG_REASON.get(f, f) for f in r.flags) or "不可用")
     return {
         "code": r.code, "currency": ccy, "open_date": r.open_date.isoformat(), "close_date": r.close_date.isoformat(), "qty": C.qty_cell(r.qty),
         "cost_unit": C.price_cell(r.cost_unit, ccy) if r.cost_unit is not None else C.na_cell("期初库存无成本证据"),
@@ -165,9 +166,9 @@ def run(conn, params):
         "account_id": aid, "accounts": [a["account_id"] for a in accts], "code_filter": code,
         "cards": {"title": "逐笔复盘卡", "total": len(cards), "shown": len(card_rows), "rows": card_rows,
                   "note": "数据来自账本与行情，不是重撮合；事实与推测分开；无事前意图则写「动机未记录」。「对照」（AI 单与不操作反事实）未实现。"},
-        "behavior": {"title": "行为指标（描述性）", "min_sample": MIN_SAMPLE, "rows": [_metric_row(m) for m in metrics],
+        "behavior": {"title": "行为指标", "min_sample": MIN_SAMPLE, "rows": [_metric_row(m) for m in metrics],
                      "note": f"样本 < {MIN_SAMPLE} 显示「{INSUFFICIENT}」，不显示 0，不下确定性结论。"},
-        "rounds": {"title": "诊断回合（FIFO）", "rows": [_round_row(r) for r in rounds], "tag": "诊断回合",
-                   "note": "诊断回合按先进先出配对真实成交，用于行为诊断；它不是账本收益口径（盈亏视图用移动平均成本法），两者不可相加或直接比较。"},
+        "rounds": {"title": "诊断回合 · FIFO", "rows": [_round_row(r) for r in rounds], "tag": "诊断回合",
+                   "note": "诊断回合按先进先出配对真实成交，用于行为诊断；它不是账本收益口径（盈亏视图用移动平均成本法），两者不可相加或直接比较。缺口：成本未知＝期初库存无成本证据，不给盈亏；费用缺失＝费用前口径；卖出时无库存＝账本数据缺口。"},
         "_freshness": C.freshness(srcs, ["复盘卡与回合是诊断口径，与账本/记分牌的收益口径不同，分区呈现"]),
     }

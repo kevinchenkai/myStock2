@@ -103,7 +103,7 @@ def _quotes(conn, now, gap_days: int) -> list[dict]:
             else:
                 row.update({"state": "ok", "state_text": "最新且区间内无缺口"})
         elif latest:
-            row.update({"state": "unknown", "state_text": "无法判断（缺市场或日历覆盖）"})
+            row.update({"state": "unknown", "state_text": "无法判断，缺市场或日历覆盖"})
         if hourly and market and exp:
             first_h = to_market_time(conn.execute("SELECT MIN(bar_start) AS b FROM quote_hourly WHERE code=?", (code,)).fetchone()["b"], market).date()
             start_h = max(exp - timedelta(days=gap_days), first_h)

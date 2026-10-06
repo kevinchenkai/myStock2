@@ -7,7 +7,7 @@ MS.registerPanel("trades", function (root, d) {
     { key: "qty", label: "数量", num: true },
     { key: "price", label: "成交价", num: true },
     { key: "notional", label: "成交额", num: true },
-    { key: "fee", label: "费用（归属本笔）", num: true, render: function (r) { return r.fee_detail && r.fee_detail !== "未入账" ? { text: r.fee.text, v: r.fee.v, ccy: r.fee.ccy, title: r.fee_detail, tag: null } : r.fee; } },
+    { key: "fee", label: "费用", hint: "归属本笔", num: true, render: function (r) { return r.fee_detail && r.fee_detail !== "未入账" ? { text: r.fee.text, v: r.fee.v, ccy: r.fee.ccy, title: r.fee_detail, tag: null } : r.fee; } },
     { key: "fee_detail", label: "费用构成" },
     { key: "net_cashflow", label: "成交净现金流", num: true },
     { key: "sources", label: "来源数", num: true },
