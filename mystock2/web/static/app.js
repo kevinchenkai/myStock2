@@ -185,11 +185,12 @@
     document.body.classList.remove("modal-open");
     try { if (m.opener && m.opener.focus && document.body.contains(m.opener)) m.opener.focus(); } catch (e) { /* 焦点恢复失败不影响使用 */ }
   }
-  function openStock(code, opener) {
+  /* 通用弹窗外壳：复盘卡、股票详情共用同一个弹窗槽（同一时间只开一个）；返回 {body,title,my}。 */
+  function openShell(titleText, opener) {
     closeStock();
     var my = ++stockSeq;
     var body = h("div", { class: "modal-body" }, MS.loading());
-    var title = h("h2", { id: "stock-modal-title", text: MS.codeLabel(code) });
+    var title = h("h2", { id: "stock-modal-title", text: titleText });
     var closeBtn = h("button", { type: "button", class: "btn modal-close", "aria-label": "关闭详情", text: "关闭 ✕" });
     var dialog = h("div", { class: "modal", role: "dialog", "aria-modal": "true", "aria-labelledby": "stock-modal-title" }, [h("div", { class: "modal-head" }, [title, closeBtn]), body]);
     var backdrop = h("div", { class: "modal-backdrop" }, dialog);
@@ -212,6 +213,10 @@
     document.body.classList.add("modal-open");
     stockModal = { root: backdrop, opener: opener || null, onKey: onKey };
     closeBtn.focus();
+    return { body: body, title: title, my: my };
+  }
+  function openStock(code, opener) {
+    var sh = openShell(MS.codeLabel(code), opener), body = sh.body, title = sh.title, my = sh.my;
     getJSON("/api/v/stock?code=" + encodeURIComponent(code)).then(function (payload) {
       if (my !== stockSeq) return;
       body.textContent = "";
@@ -235,6 +240,8 @@
     });
   }
   MS.openStock = openStock;
+  /* 在弹窗里显示一块已构造好的内容（复盘卡等）：MS.openDialog(标题, 节点, 触发元素)。 */
+  MS.openDialog = function (titleText, node, opener) { var sh = openShell(titleText, opener); sh.body.textContent = ""; sh.body.appendChild(node); };
 
   function init() {
     var btn = $("theme-btn");

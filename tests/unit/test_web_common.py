@@ -94,10 +94,10 @@ def test_stale_when_past_threshold_and_unknown_dominates():
     assert hdr([ok, unk])["staleness"]["label"] == "未知"
 
 
-def test_recently_collected_but_behind_the_expected_session_is_stale():
-    """审核 W-05/Q5：刚采集不等于新：事件时间落后于应有的最近收盘日时标陈旧；未知仍优先。"""
+def test_behind_the_expected_session_is_a_note_not_stale():
+    """负责人 2026-10-06 撤回审核 W-05/Q5 的「落后即陈旧」：行情落后只写进说明，页头只按采集时间判陈旧；缺时间仍是未知。"""
     h = hdr([C.source("行情", iso(NOW - timedelta(days=30)), iso(NOW - timedelta(minutes=5)), behind="行情停在 2026-02-09，应有 2026-03-10（US.NVDA）")])
-    assert h["staleness"]["label"] == "陈旧" and "停在 2026-02-09" in h["staleness"]["text"]
+    assert h["staleness"]["label"] == "新鲜" and any("停在 2026-02-09" in n for n in h["notes"])
     assert hdr([C.source("行情", None, iso(NOW), behind="x")])["staleness"]["label"] == "未知"
     assert hdr([C.source("行情", iso(NOW), iso(NOW))])["staleness"]["label"] == "新鲜"
 

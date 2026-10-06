@@ -194,13 +194,15 @@ def _age_text(seconds: float) -> str:
 
 def build_header(data_mode: str, fresh: dict | None, now: datetime, stale_after_hours: float, *, extra_notes: Iterable[str] = ()) -> dict:
     """把视图提供的来源时间折算成头部。规则：任一来源缺事件时间或采集时间 → 整体「未知」；
-    采集超过阈值，或事件时间落后于应有的最近已收盘交易日（来源带 behind）→ 「陈旧」；其余 → 「新鲜」。无来源条目也是「未知」。"""
+    采集超过阈值 → 「陈旧」；其余 → 「新鲜」。无来源条目也是「未知」。
+    来源带 behind（行情落后于应有的最近收盘日）只作为说明写进 notes，不再触发「陈旧」（负责人 2026-10-06：已停止采集的标的会让页头长期陈旧，不关心）。"""
     now = ensure_utc(now)
     fresh = fresh or {}
     notes = list(fresh.get("notes", [])) + list(extra_notes)
     entries = []
     labels = []
     ev_known, col_known = [], []
+    notes += [f"{s.get('name', '')}：{s['behind']}" for s in fresh.get("sources", []) if s.get("behind")]
     for s in fresh.get("sources", []):
         ev, col = _iso_or_none(s.get("event_at")), _iso_or_none(s.get("collected_at"))
         seconds = None
@@ -210,8 +212,6 @@ def build_header(data_mode: str, fresh: dict | None, now: datetime, stale_after_
             label, text = UNKNOWN, f"{UNKNOWN}（缺少{'事件时间' if ev is None else '采集时间'}）"
         elif seconds is not None and seconds < -300:
             label, text = UNKNOWN, f"{UNKNOWN}（采集时间晚于当前时间，时钟异常）"
-        elif s.get("behind"):
-            label, text = "陈旧", f"陈旧（{s['behind']}）"
         elif seconds is not None and seconds > stale_after_hours * 3600:
             label, text = "陈旧", f"陈旧（距采集已 {_age_text(seconds)}）"
         else:

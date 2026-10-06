@@ -367,12 +367,15 @@ def test_table_pagination_with_sort_filter_and_row_click():
     const btn = label => host.find(e=>e.tag==='button').filter(b=>b.textContent===label)[0];
     const pagerText = () => host.find(e=>e.className==='pager')[0].textContent;
     const out = {};
-    out.page1 = [body().length, firstCodes()[0], firstCodes()[49]];                 // 默认 50 条/页
+    out.page1 = [body().length, firstCodes()[0], firstCodes()[29]];                 // 默认 30 条/页
     btn('下一页 ›').click(); out.page2 = [body().length, firstCodes()[0]];
-    btn('下一页 ›').click(); out.page3 = [body().length, firstCodes()[0]];           // 末页：120−100＝20
+    btn('下一页 ›').click(); out.page3 = [body().length, firstCodes()[0]];
+    btn('下一页 ›').click(); out.page4 = [body().length, firstCodes()[0]];           // 末页：120 = 4×30
     out.nextDisabled = btn('下一页 ›').attrs.disabled === '';
+    out.pagers = host.find(e=>e.className.split(' ')[0]==='pager').length;              // 表上方、下方各一条
+    out.topFirst = host.children.indexOf(host.find(e=>e.className==='pager pager-top')[0]) < host.children.indexOf(host.find(e=>e.className==='tbl-wrap')[0]);
     const size = host.find(e=>e.tag==='select').filter(s=>s.attrs['aria-label']==='每页条数')[0];
-    size.change('20'); out.size20 = [body().length, store['mystock2.pageSize']];    // 改每页条数：回到第 1 页并记住
+    size.change('50'); out.size50 = [body().length, store['mystock2.pageSize.v2']];    // 改每页条数：回到第 1 页并记住
     btn('美股').click(); out.us = [body().length, host.find(e=>e.className==='pager')[0].textContent.includes('共 60 行')];   // 筛选后总数 60，回到第 1 页
     const th = host.find(e=>e.tag==='th').filter(t=>t.textContent.startsWith('序号'))[0];
     th.click(); out.sortedFirst = firstCodes()[0];                                   // 数值列先降序：美股最大序号 119
@@ -383,10 +386,11 @@ def test_table_pagination_with_sort_filter_and_row_click():
     assert r.returncode == 0, r.stderr
     import json
     o = json.loads(r.stdout.strip())
-    assert o["page1"] == [50, "US.00001", "HK.00050"] and o["page2"] == [50, "US.00051"] and o["page3"] == [20, "US.00101"]
+    assert o["page1"] == [30, "US.00001", "HK.00030"] and o["page2"] == [30, "US.00031"] and o["page3"] == [30, "US.00061"] and o["page4"] == [30, "US.00091"]
     assert o["nextDisabled"] is True
-    assert o["size20"] == [20, "20"]
-    assert o["us"] == [20, True]
+    assert o["pagers"] == 2 and o["topFirst"] is True
+    assert o["size50"] == [50, "50"]
+    assert o["us"] == [50, True]
     assert o["sortedFirst"] == "US.00119" and o["clicked"] == ["US.00119"]
 
 
@@ -430,7 +434,7 @@ def test_table_column_filters_intersect_reset_page_and_work_with_market_filter()
     import json
     o = json.loads(r.stdout.strip())
     assert o["options"] == ["方向：全部", "买入（80）", "卖出（40）"]
-    assert o["sell"] == [40, "40 / 120 行"] and o["both"] == [10, "10 / 120 行"] and o["reset"] == "120 行"
+    assert o["sell"] == [30, "40 / 120 行"] and o["both"] == [10, "10 / 120 行"] and o["reset"] == "120 行"
     assert o["us_buy"] == "40 / 120 行"                                              # 奇数 i（美股）且 i%3≠0：60 − 20 = 40
 
 

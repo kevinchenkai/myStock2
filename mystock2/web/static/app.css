@@ -273,6 +273,7 @@ body.modal-open { overflow: hidden; }
 /* 翻页条 */
 .pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 14px; margin: 10px 0 0; }
 .pager:empty { display: none; }
+.pager.pager-top { margin: 4px 0 8px; }
 .pager .pager-ctl { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .pager .seg-btn:disabled { opacity: .4; cursor: default; }
 .tbl tbody tr[role="button"] { cursor: pointer; }

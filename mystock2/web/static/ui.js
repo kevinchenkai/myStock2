@@ -146,9 +146,9 @@
     if (typeof a === "number" && typeof b === "number") return a - b;
     return String(a).localeCompare(String(b), "zh");
   }
-  /* 翻页：行数超过每页条数时在表下方出现翻页条（首页/上一页/页码/下一页/末页 + 每页条数）；与排序、市场筛选配合（先筛选、再排序、最后切页）。
+  /* 翻页：行数超过每页条数时在表上方和下方各出现一条翻页条（默认 30 条/页）（首页/上一页/页码/下一页/末页 + 每页条数）；与排序、市场筛选配合（先筛选、再排序、最后切页）。
      每页条数记在 localStorage（可选）。opts.pageSize 指定默认值，opts.paginate === false 关闭；opts.onRowClick(row) 给每一行绑定点击（排序/翻页重绘后仍有效）。 */
-  var PAGE_KEY = "mystock2.pageSize", PAGE_SIZES = [20, 50, 100, 200];
+  var PAGE_KEY = "mystock2.pageSize.v2", PAGE_SIZES = [30, 50, 100, 200];
   function storedPageSize(def) {
     try { var v = parseInt(window.localStorage.getItem(PAGE_KEY), 10); if (PAGE_SIZES.indexOf(v) >= 0) return v; } catch (e) { /* 无存储也能用 */ }
     return def;
@@ -158,9 +158,8 @@
     opts = opts || {};
     if (!rows || !rows.length) return h("p", { class: "muted", text: opts.empty || "（暂无数据）" });
     var host = h("div", { class: "tbl-host" });
-    var narrow = typeof window.matchMedia === "function" && window.matchMedia("(max-width: 720px)").matches;      // 手机上默认每页 20 条（卡片较高）
-    var state = { sortKey: null, dir: 1, market: storedMarket(), page: 1, filters: {}, pageSize: opts.paginate === false ? 0 : storedPageSize(opts.pageSize || (narrow ? 20 : 50)) };
-    var pagerEl = h("div", { class: "pager" });
+    var state = { sortKey: null, dir: 1, market: storedMarket(), page: 1, filters: {}, pageSize: opts.paginate === false ? 0 : storedPageSize(opts.pageSize || 30) };
+    var pagerEl = h("div", { class: "pager" }), pagerTop = h("div", { class: "pager pager-top" });
     var hasMarket = opts.market !== false && rows.length > 1 && rows.filter(function (r) { return marketOf(r); }).length * 2 >= rows.length;
     var canSort = opts.sortable !== false && rows.length > 1;
     var filterCols = (opts.filters || []).map(function (f) { return columns.filter(function (c) { return c.key === f.key; })[0]; }).filter(Boolean);
@@ -191,12 +190,13 @@
       var pages = state.pageSize ? Math.max(1, Math.ceil(all.length / state.pageSize)) : 1;
       if (state.page > pages) state.page = pages;
       if (state.pageSize && all.length > state.pageSize) shown = all.slice((state.page - 1) * state.pageSize, state.page * state.pageSize);
-      drawPager(all.length, pages);
+      drawPager(pagerTop, all.length, pages);
+      drawPager(pagerEl, all.length, pages);
       var thead = h("thead", null, h("tr", null, columns.map(function (c) {
         var active = state.sortKey === c.key;
         var th = h("th", { class: (c.num ? "num" : "") + (canSort ? " sortable" : "") + (active ? " sorted" : ""),
                            "aria-sort": active ? (state.dir === 1 ? "ascending" : "descending") : null,
-                           title: canSort ? "点击排序" : null }, c.label + (active ? (state.dir === 1 ? " ▲" : " ▼") : ""));
+                           title: c.hint || (canSort ? "点击排序" : null) }, c.label + (active ? (state.dir === 1 ? " ▲" : " ▼") : ""));
         if (canSort) th.addEventListener("click", function () { sortBy(c.key); });
         return th;
       })));
@@ -222,8 +222,8 @@
       if (selectEl) selectEl.value = state.sortKey === null ? "" : state.sortKey;
       if (dirBtn) dirBtn.textContent = state.dir === 1 ? "升序 ▲" : "降序 ▼";
     }
-    function drawPager(total, pages) {
-      pagerEl.textContent = "";
+    function drawPager(el, total, pages) {
+      el.textContent = "";
       if (!state.pageSize || total <= state.pageSize) return;          // 行数不超过每页条数：不显示翻页条
       function go(n) { return function () { state.page = Math.min(pages, Math.max(1, n)); draw(); }; }
       function btn(label, n, disabled) {
@@ -236,8 +236,8 @@
       sizeSel.addEventListener("change", function () { state.pageSize = parseInt(sizeSel.value, 10); storePageSize(state.pageSize); state.page = 1; draw(); });
       var jump = h("select", { "aria-label": "页码" }, Array.apply(null, { length: pages }).map(function (_, i) { return h("option", { value: String(i + 1), selected: i + 1 === state.page ? true : null, text: "第 " + (i + 1) + " 页" }); }));
       jump.addEventListener("change", function () { go(parseInt(jump.value, 10))(); });
-      pagerEl.appendChild(h("span", { class: "muted small", text: "第 " + from + "–" + to + " 行，共 " + total + " 行" }));
-      pagerEl.appendChild(h("span", { class: "pager-ctl" }, [btn("«", 1, state.page === 1), btn("‹ 上一页", state.page - 1, state.page === 1), jump, h("span", { class: "muted small", text: "/ " + pages + " 页" }),
+      el.appendChild(h("span", { class: "muted small", text: "第 " + from + "–" + to + " 行，共 " + total + " 行" }));
+      el.appendChild(h("span", { class: "pager-ctl" }, [btn("«", 1, state.page === 1), btn("‹ 上一页", state.page - 1, state.page === 1), jump, h("span", { class: "muted small", text: "/ " + pages + " 页" }),
         btn("下一页 ›", state.page + 1, state.page === pages), btn("»", pages, state.page === pages), sizeSel]));
     }
     function sortBy(key) {
@@ -288,6 +288,7 @@
       toolbar = h("div", { class: "tbl-toolbar" }, kids);
       host.appendChild(toolbar);
     }
+    host.appendChild(pagerTop);
     host.appendChild(wrap);
     host.appendChild(pagerEl);
     draw();
