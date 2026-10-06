@@ -1,0 +1,23 @@
+config/views.yaml
+  s_97d138eaf84b50::t_d81cfa2e37e7dc 22
+mystock2/web/views/fx/panel.js
+  s_97d138eaf84b50::t_d81cfa2e37e7dc 14
+docs/records/real-data-phase-changelog_claude_20261005.md
+  s_97d138eaf84b50::t_e4c8ce7b8d8a5b 96-99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "46439f442697891e3727268084f81c7f0c533dcb",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
