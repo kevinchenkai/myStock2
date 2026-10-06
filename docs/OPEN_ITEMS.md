@@ -61,11 +61,24 @@
 | UPD | 例行更新 `mystock2 update` + launchd 多时间点：[日常更新指南](guides/daily-update_claude_20261005.md) | ✅ 已上线（2026-10-05） |
 | M3-a | `snapshot_position` 成本口径 | ✅ 已核实并修正（真实首跑 2026-10-05）：富途 `cost_price` 是**摊薄成本**（可为负），`average_cost` 才是平均成本；迁移 0008 新增 `average_cost`/`diluted_cost` 两列，`cost_basis` 保留为历史列；开账成本证据只用平均成本，且要求开账后该标的无成交 |
 | M3-b | 盈亏成本口径（移动平均；无证据/估算/精确三类按比例消耗；见 `ledger/pnl.py` 头注释）需负责人确认 | 待确认 |
-| M8 | LightGBM+CQR 候选线：预测器与评估框架完成；探索性评估未过门槛（+0.57%，3/6），**不晋级**；回执 [m8-lgbm-cqr](records/m8-lgbm-cqr_claude_20261005.md) | 完成（负结果） |
+| M8 | LightGBM+CQR 候选线：预测器与评估框架完成；探索性评估未过门槛（+0.57%，3/6），**不晋级**；回执 [m8-lgbm-cqr](records/m8-lgbm-cqr_claude_20261005.md)。2026-10-06 起为 `lgbm-cqr-v2`（审核 F-02），历史样本需 `forecast run --model lgbm` 按区间重跑才有 | 完成（负结果）；v2 历史重跑待执行 |
 | M10 | 交接文档：[真实数据启动指南](guides/real-data-startup_claude_20261005.md)、[切换运行手册](guides/cutover-runbook_claude_20261005.md)；**`quoted` 近实时、公开导出白名单（D8）、切换执行均未做** | 文档完成，执行待决定/授权 |
 | M3b | 操作单（密封）/记分牌/复盘/数据状态视图：回执 [m3b-web-ops-views](records/m3b-web-ops-views_claude_20261005.md)；复盘「对照」栏、记分牌下钻/敏感性并列/经济增量表未做 | ✅ 已完成（合成数据） |
 | CR-1 | 代码评审第 1 轮（gpt 26 条＋grok 独有项）：[处置记录](records/code-review-disposition_claude_r1_20261005.md) | ✅ 已处置（局限已登记） |
+| CR-2 | 全仓审核（2026-10-05/06）：[审核报告](records/code-review-20261005_claude_20261005.md)；P0×4、P1×15 全部修复并有回归测试；Q1–Q8 已由负责人决定（Q6、Q8 不做）；迁移 0010–0012 已备份后应用到真实库 | ✅ 已处置（遗留见下表 CR2-*） |
+| UI-1 | Web UI 整体升级：[盘点与回执](records/webui-upgrade-20261005_claude_20261005.md)（token 化双主题、分组导航、页头、KPI 卡、表格与窄屏两列卡片、SVG 图表重绘） | ✅ 完成；K 线图、页面时区（U2，仍 UTC）未做 |
 | CLI | 新增：`collect quotes/futu`、`v1 import`、`ledger open/reconcile/status`、`batch`、`protocol`、`coach`、`intent`、`veto`、`scoreboard`、`replay`、`forecast run`、`update` | ✅ |
+
+## 全仓审核遗留（来自 [CR-2 审核报告](records/code-review-20261005_claude_20261005.md) §9.3）
+
+| 编号 | 事项 | 状态 |
+| --- | --- | --- |
+| CR2-1 | C-07 离线资金流水 JSONL 不检查覆盖区间（只在重建时用） | 待办 |
+| CR2-2 | F-03 复盘不应用拆股；F-04 手数取起点；F-05 预测输入缺口检查 | 待办（涉及口径） |
+| CR2-3 | 数据状态页：已停止采集的标的长期显示「落后」，页头随之「陈旧」；是否单列「停止跟踪」状态 | 待决定 |
+| CR2-4 | U-11：进程被 SIGKILL 时运行回执停在 running（数据状态页超过 1 小时标问题） | 已知局限 |
+| CR2-5 | 报告 §9.3 所列 P3 其余项（采集、CLI、预测、Web、测试） | 待办（低优先级） |
+| CR2-6 | 若真实库曾以 `…:N/A` 为键入账过资金流水，C-02 修复后同样流水会进待匹配：`ledger status` 看待匹配数 | 待核实 |
 
 ## 代码评审遗留（来自 [CR-1 处置记录](records/code-review-disposition_claude_r1_20261005.md)）
 
