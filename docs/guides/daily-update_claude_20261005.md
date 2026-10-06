@@ -58,11 +58,11 @@ python -m mystock2 web                                                          
 
 ## 重建（删库重来）
 
-V2 库是派生库，可随时重建（V1 数据、富途历史、行情都能重新取）：
+V2 账本是派生库，可以重建（V1 数据、富途历史、近期行情都能重新取）；但库里也有**补不回**的数据：V2 自己归档的小时线超过 60 天的部分、将来的前向记录（前向预测、操作单、人类计划、暴露日志）。所以脚本会先校验全部输入、拿例行更新的锁、把现库备份到 `backups/`，库里有前向记录时拒绝（确需重建另加 `DROP_FORWARD_RECORDS=yes`），删除的是当前配置里的 `db.path`：
 
 ```bash
-ACC_ID=<acc_id> V1_DB=data/v1_snapshot_20261005.db V1_ML_DB=data/v1_ml_snapshot_20261005.db OPEN_AT=2024-10-01T00:00:00Z \
-CASHFLOW_FILE=data/cashflow_raw_<日期>.jsonl bash scripts/rebuild_real_db.sh
+CONFIRM=yes ACC_ID=<acc_id> V1_DB=data/v1_snapshot_20261005.db V1_ML_DB=data/v1_ml_snapshot_20261005.db OPEN_AT=2024-10-20T00:00:00Z \
+CASHFLOW_FILE=data/cashflow_raw_<日期>.jsonl PY=/opt/anaconda3/envs/mk/bin/python bash scripts/rebuild_real_db.sh
 ```
 
 资金流水逐日请求约 3 秒/天，所以保留了原始 JSONL 用于离线重放（`--cashflow-file`）。重建后再跑行情与预测（见上）。
