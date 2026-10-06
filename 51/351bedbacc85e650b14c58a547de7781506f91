@@ -1,0 +1,26 @@
+mystock2/web/static/app.css
+  s_4e5dbfa251c076::t_a29bf7e76596a4 123-124,293
+  s_4e5dbfa251c076::t_2053f274fb7dc9 134-138
+mystock2/web/static/ui.js
+  s_4e5dbfa251c076::t_a29bf7e76596a4 76-79
+mystock2/web/views/account_overview/panel.js
+  s_4e5dbfa251c076::t_2053f274fb7dc9 4-8,50
+  s_4e5dbfa251c076::t_2c35851dd8a436 47
+  s_4e5dbfa251c076::t_425cc876b73f87 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "51351bedbacc85e650b14c58a547de7781506f91",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "unknown"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
