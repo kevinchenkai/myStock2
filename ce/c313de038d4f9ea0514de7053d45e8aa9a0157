@@ -1,0 +1,24 @@
+mystock2/collectors/futu.py
+  s_4e5dbfa251c076::t_226f21f4e13de9 31,35,351-378,381-390,393-397,410-412,414,418-500
+  s_4e5dbfa251c076::t_e6c8ecaa796315 501-502
+mystock2/ledger/events.py
+  s_4e5dbfa251c076::t_226f21f4e13de9 229-246
+tests/integration/test_futu_collector.py
+  s_4e5dbfa251c076::t_6e2a25195771f7 279-332
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "cec313de038d4f9ea0514de7053d45e8aa9a0157",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
