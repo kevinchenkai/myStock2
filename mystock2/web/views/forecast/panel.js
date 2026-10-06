@@ -7,6 +7,7 @@ MS.registerPanel("forecast", function (root, d, ctx) {
     var m = /^var\((--[a-z0-9-]+)\)$/.exec(name);
     return m ? getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim() || "#888888" : name;
   }
+  var secs = {}, drawChart = null;
   var NA = { text: "不可用", na: true };
   function mdl(role) { return d.models.filter(function (m) { return m.role === role; })[0]; }
   function tagInfo(tag) { return d.provenance.filter(function (p) { return p.tag === tag; })[0]; }
@@ -15,7 +16,7 @@ MS.registerPanel("forecast", function (root, d, ctx) {
   root.appendChild(h("div", { class: "notice", role: "note" }, [h("strong", { text: "请注意　" }), d.banner]));
   var cur = tagInfo(d.source);
   var span = cur.first_as_of ? cur.first_as_of + " ～ " + cur.last_as_of : NA;
-  root.appendChild(MS.card("样本来源与留档", [
+  secs.source = (MS.card("样本来源与留档", [
     MS.kv([
       ["当前统计的来源", { text: d.source_label, tag: d.source === "rebuilt" ? "不是前向证据" : null }],
       ["前向（forward）样本数", String(d.forward_count)],
@@ -63,7 +64,7 @@ MS.registerPanel("forecast", function (root, d, ctx) {
     "；LGBM 低点跌破 " + tgt(lm, "target_low") + "、高点突破 " + tgt(lm, "target_high") + "。";
   var rows = cmp.rows.concat([cmp.summary]);
   var gate = cmp.gate;
-  root.appendChild(MS.card("模型对比 · " + d.source_label + " · 描述性", [
+  secs.compare = (MS.card("模型对比 · " + d.source_label + " · 描述性", [
     h("p", { class: "muted small", text: "对次日日内最低/最高价区间的预测 vs 实际。跌破低点＝实际日内低点低于预测低点；突破高点＝实际日内高点高于预测高点（越接近名义目标越好）。平均宽度相对 T 日收盘价；pinball 为低侧＋高侧损失的样本均值（占收盘价比例，越小越好）；只在两个模型都有预测且目标日已有终值日线的共同样本上比较；样本 < " + d.min_n + " 显示「不足」。" }),
     MS.note(targets),
     MS.table(cols, rows, { empty: "该来源下没有预测样本：不可用" }),
@@ -87,10 +88,10 @@ MS.registerPanel("forecast", function (root, d, ctx) {
     kids.push(MS.note(ch.note));
     var nB = models.map(function (m) { return m.points.filter(function (p) { return p && p.breach_low; }).length + " / " + m.points.filter(function (p) { return p && p.breach_high; }).length; });
     kids.push(MS.note("窗口内突破次数（跌破低点 / 突破高点）：" + models.map(function (m, i) { return m.name + " " + nB[i]; }).join("；")));
-    root.appendChild(MS.card("预测带 vs 实际日内高低 · " + d.symbol, kids));
-    MS.bandChart(box, { dates: ch.dates, actual: ch.actual, models: models, ccy: ch.currency, label: d.symbol + " 预测带图", height: 300 });
+    secs.chart = MS.card("预测带 vs 实际日内高低 · " + d.symbol, kids);
+    drawChart = function () { MS.bandChart(box, { dates: ch.dates, actual: ch.actual, models: models, ccy: ch.currency, label: d.symbol + " 预测带图", height: 300 }); };
   } else {
-    root.appendChild(MS.card("预测带 vs 实际日内高低", h("p", { class: "muted", text: "该来源下没有可画的预测或行情：不可用。" })));
+    secs.chart = MS.card("预测带 vs 实际日内高低", h("p", { class: "muted", text: "该来源下没有可画的预测或行情：不可用。" }));
   }
 
   // ---- 最新预测
@@ -111,8 +112,12 @@ MS.registerPanel("forecast", function (root, d, ctx) {
     { key: "l", label: "LGBM 预测低–高", hint: "相对基准价", num: true, render: rangeCell("lgbm") },
     { key: "act", label: "目标日实际低／高", num: true, render: function (r) { return r.actual ? { text: r.actual.low.text.replace(/ [A-Z]+$/, "") + " ／ " + r.actual.high.text, v: r.actual.low.v } : { text: r.status === "已结算" ? "不可用" : "未发生", na: true }; } }
   ];
-  root.appendChild(MS.card("各标的最新预测", [
+  secs.latest = (MS.card("各标的最新预测", [
     h("p", { class: "muted small", text: "每个标的取最新 as_of 的预测。预测区间一律显示（含目标日未结束的前向预测，不再密封；AI 操作单仍密封）；最新预测的目标日未结束时，其下另列最近一次目标日已结束的预测供对照。同一 as_of 有多条时取最新生成的（可能是事后重建的修订值）。基准收盘价：最新预测用最新行情日收盘价，最近已结算用当时（as_of）收盘价；缺失显示「不可用」。" }),
     MS.table(lcols, d.latest, { empty: "没有预测：不可用" })
   ]));
+
+  // 顺序：各标的最新预测 → 模型对比 → 预测带 vs 实际日内高低 → 样本来源与留档（图要先挂进页面再画）
+  ["latest", "compare", "chart", "source"].forEach(function (k) { root.appendChild(secs[k]); });
+  if (drawChart) drawChart();
 });
