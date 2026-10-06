@@ -1,0 +1,22 @@
+tests/unit/test_web_forecast.py
+  s_4e5dbfa251c076::t_3e8b7ca57bf0b5 538
+  s_4e5dbfa251c076::t_5492ae40f50a07 522-537,539-543
+mystock2/web/views/forecast/query.py
+  s_4e5dbfa251c076::t_3e8b7ca57bf0b5 338,350-351,371,388,396,422-423,437,442-444,477,499
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "969cb93fae4396201e0de85c262ad9bf54b6b6fa",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
