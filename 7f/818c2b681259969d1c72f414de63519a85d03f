@@ -1,0 +1,26 @@
+mystock2/web/views/scoreboard/panel.js
+  s_4e5dbfa251c076::t_2c35851dd8a436 13
+mystock2/web/views/stock/panel.js
+  s_4e5dbfa251c076::t_2c35851dd8a436 41,156,171
+mystock2/web/views/replay/panel.js
+  s_4e5dbfa251c076::t_2c35851dd8a436 53
+mystock2/web/views/forecast/panel.js
+  s_4e5dbfa251c076::t_2053f274fb7dc9 27
+  s_4e5dbfa251c076::t_2c35851dd8a436 15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "7f818c2b681259969d1c72f414de63519a85d03f",
+  "prompts": {},
+  "sessions": {
+    "s_4e5dbfa251c076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb75dada-b75c-424b-9371-85bc9f3e57e9",
+        "model": "unknown"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
