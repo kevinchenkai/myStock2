@@ -1,0 +1,26 @@
+mystock2/collectors/quotes.py
+  s_97d138eaf84b50::t_3c672525cbef24 101-124,184,193,196-204,226
+tests/unit/test_market.py
+  s_97d138eaf84b50::t_3c672525cbef24 375-402,404-408,410-412
+  s_97d138eaf84b50::t_4f13909976c896 403,409,413
+docs/guides/daily-update_claude_20261005.md
+  s_97d138eaf84b50::t_3e4ea2d99c3a2b 73-74
+docs/records/real-data-phase-changelog_claude_20261005.md
+  s_97d138eaf84b50::t_5917f54988a20a 148-156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "7c974dbec1ecd3b2b22ec25900812ddde55fe921",
+  "prompts": {},
+  "sessions": {
+    "s_97d138eaf84b50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f643d8c3-771c-4121-87ef-0cb9b77afa71",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Kevin <kevinchenkai@126.com>"
+    }
+  }
+}
