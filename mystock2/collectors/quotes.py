@@ -98,6 +98,30 @@ def fill_zero_volume(bars: list[DailyBar], src: VolumeSource, code: str) -> tupl
     return out, filled, None, priced
 
 
+def rescue_invalid_bars(bad: list[DailyBar], src: VolumeSource, code: str, good: list[DailyBar]) -> tuple[list[DailyBar], str | None]:
+    """供应商给的日线 OHLC 无效（如收盘价 NaN）时，用补源同日整行（OHLC＋成交量）兜底；补源没有该日、或其 OHLC 也无效则仍不入库（留作缺口）。
+    复权收盘价＝补源收盘价 × 紧随其后的有效日线的 adj/close 比例（复权比例只在除息日变化，该日之后保持不变）；其后没有有效日线时比例取 1。
+    只是临时兜底：供应商之后给出正确数据时，新内容会作为新版本追加并成为最新。返回 (兜底出的日线, 补源错误)。"""
+    try:
+        fb = src.bars(code, min(b.session_date for b in bad), max(b.session_date for b in bad))
+    except Exception as exc:  # noqa: BLE001
+        return [], f"{type(exc).__name__}: {exc}"
+    later = sorted((g for g in good if g.adj_close is not None), key=lambda g: g.session_date)
+    out = []
+    for b in sorted(bad, key=lambda x: x.session_date):
+        f = fb.get(b.session_date)
+        if f is None:
+            continue
+        try:
+            _check_ohlc(f["open"], f["high"], f["low"], f["close"])
+            nxt = next((g for g in later if g.session_date > b.session_date), None)
+            ratio = dec(nxt.adj_close) / dec(nxt.close) if nxt is not None and dec(nxt.close) > 0 else dec(1)
+            out.append(DailyBar(code, b.session_date, f["open"], f["high"], f["low"], f["close"], _px(float(dec(f["close"]) * ratio)), f["volume"]))
+        except (BarError, MoneyError, ArithmeticError, ValueError, KeyError):
+            continue
+    return out, None
+
+
 def repair_zero_volume(conn: sqlite3.Connection, src: VolumeSource, codes: list[str], start: date, end: date, *,
                        run_id: str | None = None, now: datetime | None = None) -> dict:
     """历史修补：库里「最新版本是占位日线（成交量为 0/缺失，或价格是平的）」的终值日线，用补源追加一个新版本（成交量；价格是平的则价格也取补源；
@@ -157,7 +181,7 @@ def collect_daily(conn: sqlite3.Connection, sources: list[QuoteSource], code: st
             attempts.append((src.name, "error"))
             continue
         # 只保留日历内的交易日（供应商可能返回非交易日或未走完的当日 bar）
-        keep, dropped, invalid = [], 0, []
+        keep, dropped, invalid, bad = [], 0, [], []
         for b in bars:
             if not cal.is_session(market, b.session_date):
                 dropped += 1
@@ -166,8 +190,18 @@ def collect_daily(conn: sqlite3.Connection, sources: list[QuoteSource], code: st
                 _check_ohlc(b.open, b.high, b.low, b.close)
             except (BarError, MoneyError):                  # 含 NaN/非数值（退市或停牌标的常见）
                 invalid.append(b.session_date.isoformat())
+                bad.append(b)
                 continue
             keep.append(b)
+        rescue_note = ""
+        if volume_source is not None and bad:                    # 供应商缺收盘价等（如 yfinance 当日收盘价 NaN）：已收盘的交易日用补源整行兜底
+            closed = [b for b in bad if cal.session(market, b.session_date).close_utc + FINAL_BUFFER <= now]
+            if closed:
+                rescued, rescue_err = rescue_invalid_bars(closed, volume_source, code, keep)
+                keep += rescued
+                got = {b.session_date.isoformat() for b in rescued}
+                invalid = [d for d in invalid if d not in got]
+                rescue_note = f" rescued_by_{volume_source.name}={sorted(got)}" + (f" rescue_source_error={rescue_err}" if rescue_err else "")
         if not keep:
             with atomic(conn):
                 _log(conn, run_id, code, "daily", src.name, "empty", detail=f"dropped_non_session={dropped}", at=now)
@@ -189,7 +223,7 @@ def collect_daily(conn: sqlite3.Connection, sources: list[QuoteSource], code: st
             suspect = counts.pop("suspect_dates", []) if counts else []
             warn = f" 疑似供应商回溯拆股调整（新旧收盘价成整数倍，需人工核对）：{suspect}" if suspect else ""
             _log(conn, run_id, code, "daily", src.name, "partial" if (partial or invalid or suspect) else "ok", rows=len(keep),
-                 detail=f"final={len(final)} partial={len(partial)} dropped_non_session={dropped} rejected_invalid_ohlc={invalid} {counts}{warn}{vol_note}", at=now)
+                 detail=f"final={len(final)} partial={len(partial)} dropped_non_session={dropped} rejected_invalid_ohlc={invalid} {counts}{warn}{vol_note}{rescue_note}", at=now)
         attempts.append((src.name, "ok"))
         return {"status": "partial" if (partial or invalid) else "ok", "rejected_invalid_ohlc": invalid, "source": src.name, "rows": len(keep), "attempts": attempts}
     return {"status": "failed", "source": None, "rows": 0, "attempts": attempts}

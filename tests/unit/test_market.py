@@ -372,3 +372,42 @@ def test_repair_also_fixes_flat_bars_whose_volume_was_already_filled(mk):
     r = get_daily(mk, CODE, date(2026, 3, 3), date(2026, 3, 3))[0]
     assert (r["close"], r["volume"], r["version"]) == ("10.2", "321", 2)
     assert repair_zero_volume(mk, FakeVolume({date(2026, 3, 3): "999"}), [CODE], date(2026, 3, 1), date(2026, 3, 31), now=t0 + timedelta(hours=2))[CODE]["need"] == 0   # 修好后不再是占位
+
+
+# ------------------------------------------------------------ 供应商缺收盘价（NaN）：补源整行兜底
+def nan_bar(d):
+    return DailyBar(CODE, date.fromisoformat(d), "10", "11", "9", "nan", "nan", "100")
+
+
+def test_invalid_ohlc_bar_is_rescued_from_fallback_source_with_adj_ratio_of_the_next_valid_bar(mk):
+    now = after_close(date(2026, 3, 6))
+    src = [FakeSource("yf", [nan_bar("2026-03-03"), DailyBar(CODE, date(2026, 3, 4), "10", "11", "9", "10", "9.5", "100"), nan_bar("2026-03-05")])]
+    vs = FakeVolume({date(2026, 3, 3): {"open": "9.8", "high": "10.4", "low": "9.6", "close": "10.2", "volume": "555"},
+                     date(2026, 3, 5): {"open": "10", "high": "10.9", "low": "9.9", "close": "10.8", "volume": "666"}})
+    res = collect_daily(mk, src, CODE, date(2026, 3, 3), date(2026, 3, 5), run_id="r1", now=now, volume_source=vs)
+    assert res["rejected_invalid_ohlc"] == [] and res["status"] == "ok"
+    got = {r["session_date"]: r for r in get_daily(mk, CODE, date(2026, 3, 1), date(2026, 3, 31))}
+    assert (got["2026-03-03"]["close"], got["2026-03-03"]["volume"], got["2026-03-03"]["quality"]) == ("10.2", "555", "ok")
+    assert Decimal(got["2026-03-03"]["adj_close"]) == Decimal("9.69")           # 紧随其后的 03-04 比例 9.5/10
+    assert Decimal(got["2026-03-05"]["adj_close"]) == Decimal("10.8")           # 其后没有有效日线：比例取 1（最新一根）
+    assert "rescued_by_futu=['2026-03-03', '2026-03-05']" in mk.execute("SELECT detail FROM collection_log WHERE kind='daily'").fetchone()["detail"]
+    collect_daily(mk, src, CODE, date(2026, 3, 3), date(2026, 3, 5), run_id="r2", now=now, volume_source=vs)
+    assert mk.execute("SELECT count(*) FROM quote_daily").fetchone()[0] == 3     # 重复采集：同内容不新增版本
+
+
+def test_invalid_bar_stays_a_gap_without_fallback_or_when_fallback_lacks_it_or_is_down_or_day_not_closed(mk):
+    now = after_close(date(2026, 3, 6))
+    res = collect_daily(mk, [FakeSource("yf", [bar("2026-03-03"), nan_bar("2026-03-04")])], CODE, date(2026, 3, 3), date(2026, 3, 4), now=now)
+    assert res["rejected_invalid_ohlc"] == ["2026-03-04"]                         # 没给补源：与以前一致
+    res = collect_daily(mk, [FakeSource("yf", [nan_bar("2026-03-04")])], CODE, date(2026, 3, 4), date(2026, 3, 4), now=now, volume_source=FakeVolume())
+    assert res["status"] == "failed" and not get_daily(mk, CODE, date(2026, 3, 4), date(2026, 3, 4))      # 补源没有该日
+    res = collect_daily(mk, [FakeSource("yf", [bar("2026-03-03"), nan_bar("2026-03-04")])], CODE, date(2026, 3, 3), date(2026, 3, 4), now=now,
+                        volume_source=FakeVolume(exc=ConnectionError("OpenD 未开")))
+    assert res["rejected_invalid_ohlc"] == ["2026-03-04"] and res["status"] == "partial"           # 补源不可用：仍是缺口，不影响其他行
+    bad_fb = FakeVolume({date(2026, 3, 4): {"open": "9", "high": "8", "low": "9", "close": "9", "volume": "1"}})
+    res = collect_daily(mk, [FakeSource("yf", [nan_bar("2026-03-04")])], CODE, date(2026, 3, 4), date(2026, 3, 4), now=now, volume_source=bad_fb)
+    assert res["status"] == "failed" and not get_daily(mk, CODE, date(2026, 3, 4), date(2026, 3, 4))      # 补源的 OHLC 也无效
+    early = cal.session("US", date(2026, 3, 4)).close_utc.replace(tzinfo=UTC) - timedelta(hours=2)
+    res = collect_daily(mk, [FakeSource("yf", [nan_bar("2026-03-04")])], CODE, date(2026, 3, 4), date(2026, 3, 4), now=early,
+                        volume_source=FakeVolume({date(2026, 3, 4): {"open": "9", "high": "10", "low": "8", "close": "9.5", "volume": "1"}}))
+    assert res["status"] == "failed" and not get_daily(mk, CODE, date(2026, 3, 4), date(2026, 3, 4))      # 当日还没收盘：不兜底
